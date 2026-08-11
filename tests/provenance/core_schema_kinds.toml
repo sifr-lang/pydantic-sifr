@@ -1,0 +1,467 @@
+# Generated from the pinned Core Schema literals and approved dispositions.
+# Do not edit by hand.
+
+[meta]
+schema_version = 1
+pydantic_commit = "f59e929c999e8b2efc7b12fd0bc1685c1a186be3"
+source_path = "pydantic-core/python/pydantic_core/core_schema.py"
+source_sha256 = "232c79b01712936cf0b2a5c23ed713a109039c11d1f28cb9d1642ddc7cc3bcf9"
+universe_sha256 = "b221bebe7c78f5ac2eeac3c47e51f9097fc5ca068e25f4d3e7a380d243faff49"
+schema_kind_count = 53
+field_kind_count = 4
+
+[[kind]]
+family = "field"
+name = "computed-field"
+class = "adapted"
+normal_form = "serialization-only computed field"
+owner_milestone = "ps_8"
+evidence = ["api/serialization"]
+
+[[kind]]
+family = "field"
+name = "dataclass-field"
+class = "adapted"
+normal_form = "the same declared record field metadata"
+owner_milestone = "ps_6"
+evidence = ["validators/dataclasses"]
+
+[[kind]]
+family = "field"
+name = "model-field"
+class = "adapted"
+normal_form = "declared model field metadata"
+owner_milestone = "ps_6"
+evidence = ["validators/model_fields"]
+
+[[kind]]
+family = "field"
+name = "typed-dict-field"
+class = "adapted"
+normal_form = "the same declared record field metadata"
+owner_milestone = "ps_6"
+evidence = ["validators/typed_dict"]
+
+[[kind]]
+family = "schema"
+name = "any"
+class = "not-applicable"
+normal_form = "No untyped runtime node exists; harness occurrences normalize to the smallest concrete child schema"
+owner_milestone = "ps_0"
+evidence = ["ps_0/disposition_audit"]
+
+[[kind]]
+family = "schema"
+name = "arguments"
+class = "not-applicable"
+normal_form = "Python call-signature validation is static Sifr call checking"
+owner_milestone = "ps_0"
+evidence = ["ps_0/disposition_audit"]
+
+[[kind]]
+family = "schema"
+name = "arguments-v3"
+class = "not-applicable"
+normal_form = "Python call-signature validation is static Sifr call checking"
+owner_milestone = "ps_0"
+evidence = ["ps_0/disposition_audit"]
+
+[[kind]]
+family = "schema"
+name = "bool"
+class = "same"
+normal_form = "bool scalar"
+owner_milestone = "ps_5"
+evidence = ["validators/numeric"]
+
+[[kind]]
+family = "schema"
+name = "bytes"
+class = "same"
+normal_form = "bytes scalar"
+owner_milestone = "ps_5"
+evidence = ["validators/text_bytes"]
+
+[[kind]]
+family = "schema"
+name = "call"
+class = "not-applicable"
+normal_form = "validate_call is replaced by ordinary typed Sifr calls"
+owner_milestone = "ps_0"
+evidence = ["ps_0/disposition_audit"]
+
+[[kind]]
+family = "schema"
+name = "callable"
+class = "not-applicable"
+normal_form = "Sifr functions are statically typed callbacks, not user-data values"
+owner_milestone = "ps_0"
+evidence = ["ps_0/disposition_audit"]
+
+[[kind]]
+family = "schema"
+name = "chain"
+class = "adapted"
+normal_form = "flattened typed sequential chain"
+owner_milestone = "ps_7"
+evidence = ["validators/control_composition"]
+
+[[kind]]
+family = "schema"
+name = "complex"
+class = "adapted"
+normal_form = "package-owned Complex scalar"
+owner_milestone = "ps_5"
+evidence = ["validators/complex"]
+
+[[kind]]
+family = "schema"
+name = "custom-error"
+class = "adapted"
+normal_form = "compositional ErrorOverride with static package code/message"
+owner_milestone = "ps_4"
+evidence = ["core/schema_contract"]
+
+[[kind]]
+family = "schema"
+name = "dataclass"
+class = "adapted"
+normal_form = "ordinary Sifr class; normalizes to the same model/record node"
+owner_milestone = "ps_6"
+evidence = ["validators/dataclasses"]
+
+[[kind]]
+family = "schema"
+name = "dataclass-args"
+class = "adapted"
+normal_form = "record input/field plan; no separate constructor-argument object"
+owner_milestone = "ps_6"
+evidence = ["validators/dataclasses"]
+
+[[kind]]
+family = "schema"
+name = "date"
+class = "same"
+normal_form = "date scalar"
+owner_milestone = "ps_5"
+evidence = ["validators/temporal"]
+
+[[kind]]
+family = "schema"
+name = "datetime"
+class = "adapted"
+normal_form = "lossless Sifr datetime with declared offset policy"
+owner_milestone = "ps_5"
+evidence = ["validators/temporal"]
+
+[[kind]]
+family = "schema"
+name = "decimal"
+class = "adapted"
+normal_form = "finite exact bigdecimal scalar"
+owner_milestone = "ps_5"
+evidence = ["validators/numeric", "core/decimal_digit_counting"]
+
+[[kind]]
+family = "schema"
+name = "default"
+class = "adapted"
+normal_form = "statically typed const or validated factory default"
+owner_milestone = "ps_6"
+evidence = ["validators/defaults"]
+
+[[kind]]
+family = "schema"
+name = "definition-ref"
+class = "same"
+normal_form = "typed definition reference"
+owner_milestone = "ps_7"
+evidence = ["validators/definitions_recursion"]
+
+[[kind]]
+family = "schema"
+name = "definitions"
+class = "same"
+normal_form = "definitions table"
+owner_milestone = "ps_7"
+evidence = ["validators/definitions_recursion"]
+
+[[kind]]
+family = "schema"
+name = "dict"
+class = "same"
+normal_form = "typed mapping"
+owner_milestone = "ps_5"
+evidence = ["validators/collections"]
+
+[[kind]]
+family = "schema"
+name = "enum"
+class = "adapted"
+normal_form = "enum variant tag plus declared scalar-value metadata"
+owner_milestone = "ps_7"
+evidence = ["validators/enum"]
+
+[[kind]]
+family = "schema"
+name = "float"
+class = "same"
+normal_form = "float scalar"
+owner_milestone = "ps_5"
+evidence = ["validators/numeric"]
+
+[[kind]]
+family = "schema"
+name = "fraction"
+class = "adapted"
+normal_form = "package-owned exact Fraction scalar"
+owner_milestone = "ps_5"
+evidence = ["core/fraction"]
+
+[[kind]]
+family = "schema"
+name = "frozenset"
+class = "adapted"
+normal_form = "immutable Sifr frozenset[T]"
+owner_milestone = "ps_5"
+evidence = ["validators/collections"]
+
+[[kind]]
+family = "schema"
+name = "function-after"
+class = "adapted"
+normal_form = "typed after callback"
+owner_milestone = "ps_7"
+evidence = ["validators/callbacks_context"]
+
+[[kind]]
+family = "schema"
+name = "function-before"
+class = "adapted"
+normal_form = "typed before callback"
+owner_milestone = "ps_7"
+evidence = ["validators/callbacks_context"]
+
+[[kind]]
+family = "schema"
+name = "function-plain"
+class = "adapted"
+normal_form = "typed plain callback"
+owner_milestone = "ps_7"
+evidence = ["validators/callbacks_context"]
+
+[[kind]]
+family = "schema"
+name = "function-wrap"
+class = "adapted"
+normal_form = "typed wrap callback"
+owner_milestone = "ps_7"
+evidence = ["validators/callbacks_context"]
+
+[[kind]]
+family = "schema"
+name = "generator"
+class = "adapted"
+normal_form = "ValidatedIterator[T]; next() returns Result[Option[T], ValidationError] and never hides deferred failure"
+owner_milestone = "ps_5"
+evidence = ["validators/generator"]
+
+[[kind]]
+family = "schema"
+name = "int"
+class = "adapted"
+normal_form = "exact/fixed integer plus locked Sifr JSON profile"
+owner_milestone = "ps_5"
+evidence = ["validators/numeric", "core/fixed_integer"]
+
+[[kind]]
+family = "schema"
+name = "invalid"
+class = "rejected"
+normal_form = "Static schema construction fails; no executable invalid node exists"
+owner_milestone = "ps_4"
+evidence = ["core/schema_contract"]
+
+[[kind]]
+family = "schema"
+name = "is-instance"
+class = "not-applicable"
+normal_form = "No runtime Python class identity or arbitrary object input"
+owner_milestone = "ps_0"
+evidence = ["ps_0/disposition_audit"]
+
+[[kind]]
+family = "schema"
+name = "is-subclass"
+class = "not-applicable"
+normal_form = "No runtime subclass reflection"
+owner_milestone = "ps_0"
+evidence = ["ps_0/disposition_audit"]
+
+[[kind]]
+family = "schema"
+name = "json"
+class = "adapted"
+normal_form = "embedded-JSON decoder wrapping a typed child schema"
+owner_milestone = "ps_5"
+evidence = ["validators/embedded_json"]
+
+[[kind]]
+family = "schema"
+name = "json-or-python"
+class = "adapted"
+normal_form = "JSON/structural-input branch; no Python branch"
+owner_milestone = "ps_7"
+evidence = ["validators/control_composition"]
+
+[[kind]]
+family = "schema"
+name = "lax-or-strict"
+class = "same"
+normal_form = "strict/lax branch selected by static default or call override"
+owner_milestone = "ps_7"
+evidence = ["validators/control_composition"]
+
+[[kind]]
+family = "schema"
+name = "list"
+class = "same"
+normal_form = "list collection"
+owner_milestone = "ps_5"
+evidence = ["validators/collections"]
+
+[[kind]]
+family = "schema"
+name = "literal"
+class = "same"
+normal_form = "literal sum node"
+owner_milestone = "ps_7"
+evidence = ["validators/literal"]
+
+[[kind]]
+family = "schema"
+name = "missing-sentinel"
+class = "not-applicable"
+normal_form = "Missing-input state normalizes to defaults/Option; no identity value enters T"
+owner_milestone = "ps_0"
+evidence = ["ps_0/disposition_audit"]
+
+[[kind]]
+family = "schema"
+name = "model"
+class = "adapted"
+normal_form = "ordinary Sifr class plus structural construction"
+owner_milestone = "ps_6"
+evidence = ["core/json_models", "api/base_model"]
+
+[[kind]]
+family = "schema"
+name = "model-fields"
+class = "adapted"
+normal_form = "record/model field plan"
+owner_milestone = "ps_6"
+evidence = ["validators/model_fields"]
+
+[[kind]]
+family = "schema"
+name = "multi-host-url"
+class = "adapted"
+normal_form = "package-owned ordered multi-host URL/DSN scalar"
+owner_milestone = "ps_10"
+evidence = ["core/multi_host_url_serialization", "api/networks"]
+
+[[kind]]
+family = "schema"
+name = "none"
+class = "same"
+normal_form = "none scalar"
+owner_milestone = "ps_5"
+evidence = ["validators/none"]
+
+[[kind]]
+family = "schema"
+name = "nullable"
+class = "same"
+normal_form = "nullable/optional control"
+owner_milestone = "ps_6"
+evidence = ["validators/nullable"]
+
+[[kind]]
+family = "schema"
+name = "set"
+class = "same"
+normal_form = "set collection"
+owner_milestone = "ps_5"
+evidence = ["validators/collections"]
+
+[[kind]]
+family = "schema"
+name = "str"
+class = "adapted"
+normal_form = "native string node and Rust-regex policy"
+owner_milestone = "ps_5"
+evidence = ["validators/text_bytes", "core/string_pipeline_order"]
+
+[[kind]]
+family = "schema"
+name = "tagged-union"
+class = "adapted"
+normal_form = "field/path or typed-callback discriminator"
+owner_milestone = "ps_7"
+evidence = ["validators/tagged_unions"]
+
+[[kind]]
+family = "schema"
+name = "time"
+class = "adapted"
+normal_form = "lossless Sifr time with declared offset policy"
+owner_milestone = "ps_5"
+evidence = ["validators/temporal"]
+
+[[kind]]
+family = "schema"
+name = "timedelta"
+class = "adapted"
+normal_form = "Sifr duration"
+owner_milestone = "ps_5"
+evidence = ["validators/temporal"]
+
+[[kind]]
+family = "schema"
+name = "tuple"
+class = "same"
+normal_form = "tuple product"
+owner_milestone = "ps_5"
+evidence = ["validators/collections"]
+
+[[kind]]
+family = "schema"
+name = "typed-dict"
+class = "adapted"
+normal_form = "fixed-layout Sifr record"
+owner_milestone = "ps_6"
+evidence = ["validators/typed_dict"]
+
+[[kind]]
+family = "schema"
+name = "union"
+class = "adapted"
+normal_form = "smart or left-to-right ordinary union"
+owner_milestone = "ps_7"
+evidence = ["validators/unions", "core/smart_union_ranking"]
+
+[[kind]]
+family = "schema"
+name = "url"
+class = "adapted"
+normal_form = "package-owned URL scalar"
+owner_milestone = "ps_5"
+evidence = ["validators/url"]
+
+[[kind]]
+family = "schema"
+name = "uuid"
+class = "adapted"
+normal_form = "package-owned UUID scalar"
+owner_milestone = "ps_5"
+evidence = ["validators/uuid"]

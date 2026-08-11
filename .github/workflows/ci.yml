@@ -1,0 +1,25 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  create-pr:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: pydantic/pydantic
+          ref: f59e929c999e8b2efc7b12fd0bc1685c1a186be3
+          path: .upstream/pydantic
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - run: scripts/run_all_tests.sh --profile create-pr
+
