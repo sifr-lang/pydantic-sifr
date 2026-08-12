@@ -96,6 +96,76 @@ fn strict_native_collection_kinds_do_not_coerce() {
 }
 
 #[test]
+fn strict_mapping_accepts_native_mapping_and_json_object_only_in_their_profiles() {
+    let schema = Schema::Mapping {
+        key: Box::new(Schema::String(StringConstraints::default())),
+        value: Box::new(Schema::exact_integer()),
+        constraints: CollectionConstraints::default(),
+    };
+    let native = build_native_input(
+        &NativeValue::Mapping(vec![(
+            NativeValue::String("one".to_owned()),
+            NativeValue::Integer("1".to_owned()),
+        )]),
+        JsonLimits::default(),
+    )
+    .unwrap_or_else(|error| panic!("native mapping failed: {error}"));
+    let native_output = validate(
+        &schema,
+        &native,
+        ValidationOptions {
+            strict: true,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("strict native mapping failed: {error}"));
+    assert!(matches!(root(&native_output), ValidatedValue::Mapping(_)));
+
+    let json = parse_json(br#"{"one":1}"#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON object failed: {error}"));
+    let mislabeled = require_error(validate(
+        &schema,
+        &json,
+        ValidationOptions {
+            strict: true,
+            profile: InputProfile::Native,
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(mislabeled.details()[0].code, "mapping_type");
+
+    let json_output = validate(
+        &schema,
+        &json,
+        ValidationOptions {
+            strict: true,
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("strict JSON mapping failed: {error}"));
+    assert!(matches!(root(&json_output), ValidatedValue::Mapping(_)));
+
+    let object = build_native_input(
+        &NativeValue::Object(vec![(
+            "one".to_owned(),
+            NativeValue::Integer("1".to_owned()),
+        )]),
+        JsonLimits::default(),
+    )
+    .unwrap_or_else(|error| panic!("native object failed: {error}"));
+    let object_error = require_error(validate(
+        &schema,
+        &object,
+        ValidationOptions {
+            strict: true,
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(object_error.details()[0].code, "mapping_type");
+}
+
+#[test]
 fn tuple_validates_each_declared_position() {
     let input = parse_json(br#"[1,"two"]"#, JsonLimits::default())
         .unwrap_or_else(|error| panic!("JSON input failed: {error}"));

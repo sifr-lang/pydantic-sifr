@@ -185,9 +185,10 @@ fn validate_mapping(
     })?;
     let length = match &input {
         InputValue::Object { kind, entries }
-            if state.options().profile != InputProfile::Native
-                || !state.options().strict
-                || *kind == ObjectKind::JsonObject =>
+            if !state.options().strict
+                || state.options().profile == InputProfile::Strings
+                || (state.options().profile == InputProfile::Json
+                    && *kind == ObjectKind::JsonObject) =>
         {
             entries.len()
         }
