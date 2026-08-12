@@ -20,6 +20,16 @@ pub enum NativeValue {
     },
     String(String),
     Bytes(Vec<u8>),
+    Date(String),
+    Time(String),
+    DateTime(String),
+    Duration(String),
+    Uuid(String),
+    Url(String),
+    Pattern {
+        source: String,
+        flags: u8,
+    },
     Fraction {
         numerator: String,
         denominator: String,
@@ -88,6 +98,19 @@ impl NativeBuilder {
                 self.add_string_bytes(value.len())?;
                 InputValue::Bytes(value.clone())
             }
+            NativeValue::Date(value) => self.push_special_text(value, InputValue::Date)?,
+            NativeValue::Time(value) => self.push_special_text(value, InputValue::Time)?,
+            NativeValue::DateTime(value) => self.push_special_text(value, InputValue::DateTime)?,
+            NativeValue::Duration(value) => self.push_special_text(value, InputValue::Duration)?,
+            NativeValue::Uuid(value) => self.push_special_text(value, InputValue::Uuid)?,
+            NativeValue::Url(value) => self.push_special_text(value, InputValue::Url)?,
+            NativeValue::Pattern { source, flags } => {
+                self.add_string_bytes(source.len())?;
+                InputValue::Pattern {
+                    source: source.clone(),
+                    flags: *flags,
+                }
+            }
             NativeValue::Fraction {
                 numerator,
                 denominator,
@@ -137,6 +160,15 @@ impl NativeBuilder {
         } else {
             Ok(())
         }
+    }
+
+    fn push_special_text(
+        &mut self,
+        value: &str,
+        constructor: fn(String) -> InputValue,
+    ) -> Result<InputValue, NativeInputError> {
+        self.add_string_bytes(value.len())?;
+        Ok(constructor(value.to_owned()))
     }
 
     fn push_sequence(

@@ -39,5 +39,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "special_validation"
+path = "fuzz_targets/special_validation.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
 members = ["."]

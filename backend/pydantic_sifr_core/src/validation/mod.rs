@@ -244,6 +244,13 @@ fn check_input_limits(
             InputValue::Integer(value) | InputValue::Decimal(value) | InputValue::String(value) => {
                 value.len()
             }
+            InputValue::Date(value)
+            | InputValue::Time(value)
+            | InputValue::DateTime(value)
+            | InputValue::Duration(value)
+            | InputValue::Uuid(value)
+            | InputValue::Url(value) => value.len(),
+            InputValue::Pattern { source, .. } => source.len(),
             InputValue::Bytes(value) => value.len(),
             InputValue::Fraction {
                 numerator,

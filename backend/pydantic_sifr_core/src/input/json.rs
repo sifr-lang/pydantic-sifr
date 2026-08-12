@@ -37,6 +37,16 @@ pub enum InputValue {
     },
     String(String),
     Bytes(Vec<u8>),
+    Date(String),
+    Time(String),
+    DateTime(String),
+    Duration(String),
+    Uuid(String),
+    Url(String),
+    Pattern {
+        source: String,
+        flags: u8,
+    },
     Fraction {
         numerator: String,
         denominator: String,

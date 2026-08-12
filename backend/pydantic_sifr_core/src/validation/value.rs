@@ -45,6 +45,14 @@ pub struct PatternValue {
 }
 
 impl PatternValue {
+    pub(crate) const fn new(source: String, flags: u8, compiled: regex::Regex) -> Self {
+        Self {
+            source,
+            flags,
+            compiled,
+        }
+    }
+
     #[must_use]
     pub fn source(&self) -> &str {
         &self.source
