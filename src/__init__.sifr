@@ -1,0 +1,3 @@
+from .schema_contract import SCHEMA_PROGRAM_FORMAT_VERSION
+from .schema_contract import verify_schema
+from sifr.meta import StaticProgram as VerifiedSchemaProgram

@@ -1,0 +1,34 @@
+[package]
+name = "pydantic-sifr"
+version = "0.1.0-beta.1"
+edition = "2024"
+license = "MIT"
+description = "Native validation and serialization for Sifr"
+repository = "https://github.com/sifr-lang/pydantic-sifr"
+include = [
+  "Cargo.toml",
+  "Cargo.lock",
+  "sifr.toml",
+  "src/**/*.sifr",
+  "src/lib.rs",
+  "README.md",
+  "LICENSE",
+  "THIRD_PARTY_LICENSES.md",
+]
+
+[package.metadata.sifr]
+manifest = "sifr.toml"
+
+[workspace]
+resolver = "2"
+members = ["backend/pydantic_sifr_core"]
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+dbg_macro = "deny"
+print_stdout = "deny"
+print_stderr = "deny"
+unwrap_used = "deny"
+expect_used = "deny"

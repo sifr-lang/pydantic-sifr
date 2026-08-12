@@ -23,13 +23,28 @@ if [[ -d .upstream/pydantic ]]; then
     --upstream .upstream/pydantic --check
   python3 scripts/provenance/generate_core_schema_kinds.py \
     --upstream .upstream/pydantic --check
+  python3 scripts/check_core_kind_binding.py
 else
   echo "missing .upstream/pydantic; clone the pinned source before running gates" >&2
   exit 2
 fi
 
+sifr_bin="${SIFR_BIN:-sifr}"
+if [[ "$("${sifr_bin}" --version)" != "sifr 0.1.0-beta.16" ]]; then
+  echo "PS4 requires released sifr 0.1.0-beta.16" >&2
+  exit 2
+fi
+"${sifr_bin}" fmt --check src
+"${sifr_bin}" check src/__init__.sifr
+"${sifr_bin}" test src
+
 if [[ -f Cargo.toml ]]; then
   cargo fmt --check
+  if cargo tree -p pydantic_sifr_core --edges normal --format '{p}' \
+    | grep -Eq '^(pyo3|pythonize) '; then
+    echo "production dependency graph contains Python bindings" >&2
+    exit 1
+  fi
   CARGO_BUILD_JOBS=6 cargo test --workspace --all-targets
   CARGO_BUILD_JOBS=6 cargo clippy --workspace --all-targets -- -D warnings
 fi
@@ -39,4 +54,3 @@ if [[ "${profile}" == "merge" && -x scripts/run_merge_only_tests.sh ]]; then
 fi
 
 echo "${profile} gate passed"
-

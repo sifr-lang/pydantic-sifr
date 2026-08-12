@@ -14,7 +14,11 @@ EXCLUDED_PREFIXES = ("target/", "tests/provenance/")
 
 def main() -> int:
     result = subprocess.run(
-        ["git", "ls-files"], cwd=ROOT, check=True, capture_output=True, text=True
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     failures: list[str] = []
     for relative in result.stdout.splitlines():
@@ -38,4 +42,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

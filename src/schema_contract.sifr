@@ -1,0 +1,46 @@
+from .errors import SchemaIssue, SchemaIssueArgs
+
+
+SCHEMA_PROGRAM_FORMAT_VERSION: int = 1
+STRUCTURAL_CONTRACT_VERSION: int = 1
+STRUCTURAL_CALL_VERSION: int = 1
+CALLBACK_ABI_VERSION: int = 1
+
+
+class SchemaProgramPayload:
+    schema_program_version: int
+    structural_contract_version: int
+    structural_call_version: int
+    callback_abi_version: int
+    feature_bitmap: int
+    canonical_shape_identity: str
+
+
+class SchemaOutcome:
+    status: str
+    value: SchemaProgramPayload | None
+    issues: list[SchemaIssue]
+
+
+@const_eval
+@metadata("sifr.meta.issue_template", ("schema_identity_missing", ["problem"]))
+def verify_schema(shape: dict[str, str]) -> SchemaOutcome:
+    identity: str | None = shape["canonical_identity"]
+    if identity is None:
+        issue: SchemaIssue = SchemaIssue(
+            "pydantic_sifr",
+            "schema_identity_missing",
+            "fatal",
+            SchemaIssueArgs("structural shape has no canonical identity"),
+            [],
+        )
+        return SchemaOutcome("failed", None, [issue])
+    program: SchemaProgramPayload = SchemaProgramPayload(
+        1,
+        1,
+        1,
+        1,
+        0,
+        identity,
+    )
+    return SchemaOutcome("produced", program, [])

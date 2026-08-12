@@ -1,0 +1,11 @@
+from .schema_contract import verify_schema
+
+
+@const_specialize("schema_contract", "verify_schema")
+class SchemaContractProbe:
+    value: int
+
+
+def test_static_schema_contract() -> None:
+    probe: SchemaContractProbe = SchemaContractProbe(1)
+    assert probe.value == 1
