@@ -15,7 +15,10 @@ fn parses_exact_integers_and_nested_input_into_checked_arena() {
     let root = arena
         .get(arena.root())
         .unwrap_or_else(|| panic!("root must exist"));
-    let InputValue::Object(fields) = root else {
+    let InputValue::Object {
+        entries: fields, ..
+    } = root
+    else {
         panic!("expected object root");
     };
     let exact_id = fields
@@ -50,6 +53,8 @@ fn rejects_duplicate_keys_and_resource_limit_exhaustion() {
         max_depth: 2,
         max_nodes: 8,
         max_string_bytes: 4,
+        max_integer_digits: 32,
+        max_collection_items: 8,
     };
     let limited = require_error(parse_json(br#"{"long": "value"}"#, limits));
     assert_eq!(limited.code, "input_limit_exceeded");
@@ -63,6 +68,8 @@ proptest! {
             max_depth: 32,
             max_nodes: 4096,
             max_string_bytes: 65_536,
+            max_integer_digits: 4_300,
+            max_collection_items: 4_096,
         }));
         prop_assert!(result.is_ok());
     }

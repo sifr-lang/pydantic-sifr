@@ -25,5 +25,26 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "scalar_validation"
+path = "fuzz_targets/scalar_validation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "collection_validation"
+path = "fuzz_targets/collection_validation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "special_validation"
+path = "fuzz_targets/special_validation.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
 members = ["."]

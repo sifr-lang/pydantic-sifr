@@ -5,7 +5,24 @@ use jiter::JsonValue;
 
 use crate::{Arena, ArenaError, ArenaId};
 
+const HARD_MAX_DEPTH: usize = 256;
+
 pub type InputId = ArenaId;
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SequenceKind {
+    JsonArray,
+    List,
+    Tuple,
+    Set,
+    FrozenSet,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObjectKind {
+    JsonObject,
+    Object,
+}
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum InputValue {
@@ -13,9 +30,36 @@ pub enum InputValue {
     Bool(bool),
     Integer(String),
     Float(f64),
+    Decimal(String),
+    Complex {
+        real: f64,
+        imaginary: f64,
+    },
     String(String),
-    Array(Vec<InputId>),
-    Object(Vec<(String, InputId)>),
+    Bytes(Vec<u8>),
+    Date(String),
+    Time(String),
+    DateTime(String),
+    Duration(String),
+    Uuid(String),
+    Url(String),
+    Pattern {
+        source: String,
+        flags: u8,
+    },
+    Fraction {
+        numerator: String,
+        denominator: String,
+    },
+    Sequence {
+        kind: SequenceKind,
+        items: Vec<InputId>,
+    },
+    Object {
+        kind: ObjectKind,
+        entries: Vec<(String, InputId)>,
+    },
+    Mapping(Vec<(InputId, InputId)>),
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,6 +69,10 @@ pub struct InputArena {
 }
 
 impl InputArena {
+    pub(crate) const fn from_parts(root: InputId, values: Arena<InputValue>) -> Self {
+        Self { root, values }
+    }
+
     #[must_use]
     pub const fn root(&self) -> InputId {
         self.root
@@ -52,6 +100,8 @@ pub struct JsonLimits {
     pub max_depth: usize,
     pub max_nodes: usize,
     pub max_string_bytes: usize,
+    pub max_integer_digits: usize,
+    pub max_collection_items: usize,
 }
 
 impl Default for JsonLimits {
@@ -61,6 +111,8 @@ impl Default for JsonLimits {
             max_depth: 128,
             max_nodes: 1_000_000,
             max_string_bytes: 64 * 1024 * 1024,
+            max_integer_digits: 4_300,
+            max_collection_items: 1_000_000,
         }
     }
 }
@@ -71,6 +123,7 @@ pub fn parse_json(data: &[u8], limits: JsonLimits) -> Result<InputArena, JsonInp
     if data.len() > limits.max_input_bytes {
         return Err(JsonInputError::limit("maximum input bytes"));
     }
+    validate_integer_digits(data, limits.max_integer_digits)?;
     let parsed = JsonValue::parse(data, false).map_err(|error| {
         let position = error.get_position(data);
         JsonInputError {
@@ -95,8 +148,62 @@ pub fn parse_json(data: &[u8], limits: JsonLimits) -> Result<InputArena, JsonInp
 }
 
 fn validate_limits(limits: JsonLimits) -> Result<(), JsonInputError> {
-    if limits.max_input_bytes == 0 || limits.max_depth == 0 || limits.max_nodes == 0 {
+    if limits.max_input_bytes == 0
+        || limits.max_depth == 0
+        || limits.max_nodes == 0
+        || limits.max_integer_digits == 0
+        || limits.max_collection_items == 0
+        || limits.max_string_bytes == 0
+        || limits.max_depth > HARD_MAX_DEPTH
+    {
         return Err(JsonInputError::limit("limits must be greater than zero"));
+    }
+    Ok(())
+}
+
+fn validate_integer_digits(data: &[u8], limit: usize) -> Result<(), JsonInputError> {
+    let mut index = 0;
+    let mut in_string = false;
+    let mut escaped = false;
+    while index < data.len() {
+        let byte = data[index];
+        if in_string {
+            if escaped {
+                escaped = false;
+            } else if byte == b'\\' {
+                escaped = true;
+            } else if byte == b'"' {
+                in_string = false;
+            }
+            index += 1;
+            continue;
+        }
+        if byte == b'"' {
+            in_string = true;
+            index += 1;
+            continue;
+        }
+        let start = if byte == b'-' { index + 1 } else { index };
+        if data.get(start).is_some_and(u8::is_ascii_digit) {
+            let mut end = start;
+            while data.get(end).is_some_and(u8::is_ascii_digit) {
+                end += 1;
+            }
+            let is_integer = !matches!(data.get(end), Some(b'.' | b'e' | b'E'));
+            if is_integer && end - start > limit {
+                return Err(JsonInputError {
+                    code: "json_integer_limit",
+                    message: format!("integer digit limit exceeded: {limit}"),
+                    offset: index,
+                    line: 1,
+                    column: index + 1,
+                    path: Vec::new(),
+                });
+            }
+            index = end;
+            continue;
+        }
+        index += 1;
     }
     Ok(())
 }
@@ -131,6 +238,9 @@ impl BuildState {
                 InputValue::String(value.to_string())
             }
             JsonValue::Array(values) => {
+                if values.len() > self.limits.max_collection_items {
+                    return Err(JsonInputError::at_limit("maximum collection items", path));
+                }
                 let mut children = Vec::with_capacity(values.len());
                 for (index, child) in values.iter().enumerate() {
                     path.push(index.to_string());
@@ -138,9 +248,15 @@ impl BuildState {
                     path.pop();
                     children.push(child_id);
                 }
-                InputValue::Array(children)
+                InputValue::Sequence {
+                    kind: SequenceKind::JsonArray,
+                    items: children,
+                }
             }
             JsonValue::Object(entries) => {
+                if entries.len() > self.limits.max_collection_items {
+                    return Err(JsonInputError::at_limit("maximum collection items", path));
+                }
                 let mut keys = BTreeSet::new();
                 let mut children = Vec::with_capacity(entries.len());
                 for (key, child) in entries.iter() {
@@ -160,7 +276,10 @@ impl BuildState {
                     path.pop();
                     children.push((key.to_string(), child_id));
                 }
-                InputValue::Object(children)
+                InputValue::Object {
+                    kind: ObjectKind::JsonObject,
+                    entries: children,
+                }
             }
         };
         self.arena.push(owned).map_err(JsonInputError::arena)

@@ -54,6 +54,10 @@ impl<T> Arena<T> {
     pub fn values(&self) -> &[T] {
         &self.values
     }
+
+    pub(crate) fn into_values(self) -> Vec<T> {
+        self.values
+    }
 }
 
 impl<T> Default for Arena<T> {
