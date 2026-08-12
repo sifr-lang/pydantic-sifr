@@ -1,4 +1,5 @@
 mod collections;
+mod construction;
 mod error;
 mod models;
 mod scalars;
@@ -7,6 +8,10 @@ mod special;
 mod value;
 
 pub use collections::{ValidatedIterator, validated_iterator};
+pub use construction::{
+    validate_and_construct, validate_json_and_construct, validate_native_and_construct,
+    validate_strings_and_construct,
+};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
 pub use schema::{
     AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, CollectionConstraints,

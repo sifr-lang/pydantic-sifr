@@ -226,7 +226,7 @@ pub struct UrlConstraints {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AliasSegment {
-    Field(String),
+    Field(&'static str),
     Index(usize),
 }
 
@@ -237,9 +237,9 @@ pub struct AliasPath {
 
 impl AliasPath {
     #[must_use]
-    pub fn field(name: impl Into<String>) -> Self {
+    pub fn field(name: &'static str) -> Self {
         Self {
-            segments: vec![AliasSegment::Field(name.into())],
+            segments: vec![AliasSegment::Field(name)],
         }
     }
 }
@@ -262,8 +262,9 @@ impl PartialEq for FieldDefault {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelField {
-    pub name: String,
+    pub name: &'static str,
     pub schema: Schema,
+    pub input: bool,
     pub default: Option<FieldDefault>,
     pub validation_aliases: Vec<AliasPath>,
     pub metadata: BTreeMap<String, String>,
@@ -271,10 +272,11 @@ pub struct ModelField {
 
 impl ModelField {
     #[must_use]
-    pub fn required(name: impl Into<String>, schema: Schema) -> Self {
+    pub fn required(name: &'static str, schema: Schema) -> Self {
         Self {
-            name: name.into(),
+            name,
             schema,
+            input: true,
             default: None,
             validation_aliases: Vec::new(),
             metadata: BTreeMap::new(),
@@ -287,14 +289,14 @@ pub enum ExtraPolicy {
     Ignore,
     Forbid,
     Allow {
-        destination: String,
+        destination: &'static str,
         value_schema: Box<Schema>,
     },
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelSchema {
-    pub name: String,
+    pub name: &'static str,
     pub fields: Vec<ModelField>,
     pub extra: ExtraPolicy,
     pub populate_by_name: bool,

@@ -14,13 +14,13 @@ fn default_name() -> NativeValue {
     NativeValue::String("default".to_owned())
 }
 
-fn required(name: &str, schema: Schema) -> ModelField {
+fn required(name: &'static str, schema: Schema) -> ModelField {
     ModelField::required(name, schema)
 }
 
 fn model(fields: Vec<ModelField>, extra: ExtraPolicy) -> Schema {
     Schema::Model(ModelSchema {
-        name: "User".to_owned(),
+        name: "User",
         fields,
         extra,
         populate_by_name: false,
@@ -40,7 +40,7 @@ fn field_value<'a>(arena: &'a ValidatedArena, name: &str) -> &'a ValidatedValue 
     let (_, id) = model
         .fields()
         .iter()
-        .find(|(field, _)| field == name)
+        .find(|(field, _)| *field == name)
         .unwrap_or_else(|| panic!("missing field {name}"));
     arena
         .get(*id)
@@ -64,8 +64,9 @@ fn model_distinguishes_required_defaulted_and_nullable_fields() {
             required("id", Schema::exact_integer()),
             name,
             ModelField {
-                name: "status".to_owned(),
+                name: "status",
                 schema: Schema::String(StringConstraints::default()),
+                input: true,
                 default: Some(FieldDefault::Static(NativeValue::String("new".to_owned()))),
                 validation_aliases: Vec::new(),
                 metadata: BTreeMap::new(),
@@ -126,9 +127,9 @@ fn aliases_and_alias_paths_select_values_and_control_error_locations() {
     field.validation_aliases = vec![
         AliasPath {
             segments: vec![
-                AliasSegment::Field("payload".to_owned()),
+                AliasSegment::Field("payload"),
                 AliasSegment::Index(0),
-                AliasSegment::Field("value".to_owned()),
+                AliasSegment::Field("value"),
             ],
         },
         AliasPath::field("id"),
@@ -209,7 +210,7 @@ fn extra_policies_ignore_forbid_or_validate_typed_values() {
         &model(
             vec![required("id", Schema::exact_integer())],
             ExtraPolicy::Allow {
-                destination: "extras".to_owned(),
+                destination: "extras",
                 value_schema: Box::new(Schema::exact_integer()),
             },
         ),
@@ -226,7 +227,7 @@ fn extra_policies_ignore_forbid_or_validate_typed_values() {
 #[test]
 fn nested_model_errors_aggregate_with_stable_field_locations() {
     let child = ModelSchema {
-        name: "Child".to_owned(),
+        name: "Child",
         fields: vec![
             required("left", Schema::exact_integer()),
             required("right", Schema::exact_integer()),
@@ -380,7 +381,7 @@ fn field_metadata_and_name_population_are_static_schema_inputs() {
     field.validation_aliases = vec![AliasPath::field("id")];
     field.metadata = BTreeMap::from([("description".to_owned(), "stable id".to_owned())]);
     let schema = Schema::Model(ModelSchema {
-        name: "User".to_owned(),
+        name: "User",
         fields: vec![field.clone()],
         extra: ExtraPolicy::Ignore,
         populate_by_name: true,

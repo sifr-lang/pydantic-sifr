@@ -26,5 +26,6 @@ pub use validation::{
     PatternCompileError, PatternSchema, PatternValue, RelativeTimeConstraint, Schema,
     StringConstraints, StringPattern, TemporalKind, TemporalSchema, TimeValue, UrlConstraints,
     ValidatedArena, ValidatedIterator, ValidatedValue, ValidationError, ValidationLimits,
-    ValidationOptions, ValueId, validate, validated_iterator,
+    ValidationOptions, ValueId, validate, validate_and_construct, validate_json_and_construct,
+    validate_native_and_construct, validate_strings_and_construct, validated_iterator,
 };

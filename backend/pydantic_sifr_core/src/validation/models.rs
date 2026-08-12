@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{InputId, InputValue, JsonLimits, ObjectKind, build_native_input};
 
@@ -49,17 +49,18 @@ pub(crate) fn validate_model(
         ));
     }
 
-    let mut fields = Vec::with_capacity(schema.fields.len());
+    let input_fields: Vec<&ModelField> = schema.fields.iter().filter(|field| field.input).collect();
+    let mut fields = BTreeMap::new();
     let mut consumed = BTreeSet::new();
     let mut errors = None;
     let mut validated_field_count = 0;
-    for (field_index, field) in schema.fields.iter().enumerate() {
+    for (field_index, field) in input_fields.iter().enumerate() {
         match select_field(state, schema, field, input_id, &entries) {
             Some((value_id, entry_index, location)) => {
                 consumed.insert(entry_index);
                 match state.validate_node(&field.schema, value_id, depth + 1) {
                     Ok(value) => {
-                        fields.push((field.name.clone(), value));
+                        fields.insert(field.name, value);
                         validated_field_count += 1;
                     }
                     Err(error) => collect_error(
@@ -70,7 +71,9 @@ pub(crate) fn validate_model(
                 }
             }
             None => match validate_default(state, field, depth) {
-                Ok(Some(value)) => fields.push((field.name.clone(), value)),
+                Ok(Some(value)) => {
+                    fields.insert(field.name, value);
+                }
                 Ok(None) => collect_error(
                     &mut errors,
                     ValidationError::one(
@@ -81,12 +84,12 @@ pub(crate) fn validate_model(
                 ),
                 Err(error) => collect_error(
                     &mut errors,
-                    error.at(LocationItem::Field(field.name.clone())),
+                    error.at(LocationItem::Field(field.name.to_owned())),
                     state.options().limits.max_errors,
                 ),
             },
         }
-        let has_more_fields = field_index + 1 < schema.fields.len();
+        let has_more_fields = field_index + 1 < input_fields.len();
         let has_possible_extras =
             !matches!(schema.extra, ExtraPolicy::Ignore) && consumed.len() < entries.len();
         if stop_after_error_cap(state, &mut errors, has_more_fields || has_possible_extras) {
@@ -112,9 +115,35 @@ pub(crate) fn validate_model(
     if let Some(error) = errors {
         return Err(error);
     }
+    if let ExtraPolicy::Allow { destination, .. } = &schema.extra {
+        let mut entries = Vec::with_capacity(extras.len());
+        for (name, value) in &extras {
+            let key = state.push(ValidatedValue::String(name.clone()))?;
+            entries.push((key, *value));
+        }
+        let mapping = state.push(ValidatedValue::Mapping(entries))?;
+        fields.insert(*destination, mapping);
+    }
+    let ordered_fields = schema
+        .fields
+        .iter()
+        .map(|field| {
+            fields
+                .get(field.name)
+                .copied()
+                .map(|value| (field.name, value))
+                .ok_or_else(|| {
+                    type_error(
+                        "schema_invalid",
+                        "A non-input model field has no value source",
+                        "default or extra destination field",
+                    )
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     state.push(ValidatedValue::Model(ModelValue::new(
-        schema.name.clone(),
-        fields,
+        schema.name,
+        ordered_fields,
         extras,
         validated_field_count,
     )))
@@ -138,9 +167,13 @@ fn select_field(
         entries
             .iter()
             .enumerate()
-            .find(|(_, (name, _))| name == &field.name)
+            .find(|(_, (name, _))| name == field.name)
             .map(|(index, (_, value))| {
-                (*value, index, vec![LocationItem::Field(field.name.clone())])
+                (
+                    *value,
+                    index,
+                    vec![LocationItem::Field(field.name.to_owned())],
+                )
             })
     } else {
         None
@@ -177,13 +210,13 @@ fn location_for_alias(
     alias: &AliasPath,
 ) -> Vec<LocationItem> {
     if !model.location_by_alias {
-        return vec![LocationItem::Field(field.name.clone())];
+        return vec![LocationItem::Field(field.name.to_owned())];
     }
     alias
         .segments
         .iter()
         .map(|segment| match segment {
-            AliasSegment::Field(name) => LocationItem::Field(name.clone()),
+            AliasSegment::Field(name) => LocationItem::Field((*name).to_owned()),
             AliasSegment::Index(index) => LocationItem::Index(*index),
         })
         .collect()
@@ -196,9 +229,9 @@ fn missing_location(model: &ModelSchema, field: &ModelField) -> LocationItem {
             .first()
             .and_then(|path| path.segments.first())
     {
-        return LocationItem::Field(name.clone());
+        return LocationItem::Field((*name).to_owned());
     }
-    LocationItem::Field(field.name.clone())
+    LocationItem::Field(field.name.to_owned())
 }
 
 fn at_path(mut error: ValidationError, path: &[LocationItem]) -> ValidationError {

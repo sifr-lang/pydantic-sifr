@@ -166,7 +166,7 @@ fn validate_tuple(
     if let Some(error) = errors {
         Err(error)
     } else {
-        state.push(ValidatedValue::Sequence(values))
+        state.push(ValidatedValue::Tuple(values))
     }
 }
 
@@ -573,6 +573,7 @@ fn canonical_key(
             key.extend(canonical_key(state, *child, usage)?);
         }
         ValidatedValue::Sequence(_)
+        | ValidatedValue::Tuple(_)
         | ValidatedValue::Mapping(_)
         | ValidatedValue::Set(_)
         | ValidatedValue::FrozenSet(_)

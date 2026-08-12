@@ -92,7 +92,7 @@ fn strict_native_collection_kinds_do_not_coerce() {
 
     let lax = validate(&tuple, &input, ValidationOptions::default())
         .unwrap_or_else(|error| panic!("lax tuple conversion failed: {error}"));
-    assert!(matches!(root(&lax), ValidatedValue::Sequence(_)));
+    assert!(matches!(root(&lax), ValidatedValue::Tuple(_)));
 }
 
 #[test]
@@ -218,7 +218,7 @@ fn tuple_validates_each_declared_position() {
         },
     )
     .unwrap_or_else(|error| panic!("tuple failed: {error}"));
-    let ValidatedValue::Sequence(items) = root(&output) else {
+    let ValidatedValue::Tuple(items) = root(&output) else {
         panic!("expected validated tuple sequence");
     };
     assert_eq!(items.len(), 2);

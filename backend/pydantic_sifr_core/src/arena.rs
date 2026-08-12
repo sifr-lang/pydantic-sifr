@@ -50,6 +50,10 @@ impl<T> Arena<T> {
         self.values.get(id.raw() as usize)
     }
 
+    pub(crate) fn get_mut(&mut self, id: ArenaId) -> Option<&mut T> {
+        self.values.get_mut(id.raw() as usize)
+    }
+
     #[must_use]
     pub fn values(&self) -> &[T] {
         &self.values
