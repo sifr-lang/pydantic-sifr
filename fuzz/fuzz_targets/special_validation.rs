@@ -3,7 +3,8 @@
 use libfuzzer_sys::fuzz_target;
 use pydantic_sifr_core::{
     ClockSnapshot, InputProfile, JsonLimits, PatternSchema, RelativeTimeConstraint, Schema,
-    TemporalKind, TemporalSchema, ValidationLimits, ValidationOptions, parse_json, validate,
+    TemporalKind, TemporalSchema, UrlConstraints, ValidationLimits, ValidationOptions, parse_json,
+    validate,
 };
 
 fuzz_target!(|data: &[u8]| {
@@ -39,7 +40,10 @@ fuzz_target!(|data: &[u8]| {
             relative: None,
         }),
         4 => Schema::Uuid { version: Some(4) },
-        5 => Schema::Url,
+        5 => Schema::Url(UrlConstraints {
+            max_length: Some(4_096),
+            allowed_schemes: vec!["https".to_owned()],
+        }),
         _ => Schema::Pattern(PatternSchema {
             case_insensitive: selector & 8 != 0,
             multi_line: selector & 16 != 0,

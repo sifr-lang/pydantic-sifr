@@ -8,7 +8,7 @@ use crate::InputValue;
 use super::{
     ClockSnapshot, DateTimeValue, DateValue, DurationValue, ErrorDetail, InputProfile,
     PatternSchema, PatternValue, RelativeTimeConstraint, Schema, TemporalKind, TemporalSchema,
-    TimeValue, ValidatedValue, ValidationError,
+    TimeValue, UrlConstraints, ValidatedValue, ValidationError,
 };
 
 const FLAG_CASE_INSENSITIVE: u8 = 1;
@@ -25,7 +25,7 @@ pub(crate) fn validate_special(
     let result = match schema {
         Schema::Temporal(schema) => validate_temporal(schema, input, strict, profile, clock),
         Schema::Uuid { version } => validate_uuid(input, strict, profile, *version),
-        Schema::Url => validate_url(input, strict, profile),
+        Schema::Url(constraints) => validate_url(input, strict, profile, constraints),
         Schema::Pattern(schema) => validate_pattern(input, strict, profile, schema),
         _ => return None,
     };
@@ -201,12 +201,26 @@ fn validate_url(
     input: &InputValue,
     strict: bool,
     profile: InputProfile,
+    constraints: &UrlConstraints,
 ) -> Result<ValidatedValue, ValidationError> {
     let source = match input {
         InputValue::Url(value) => value.as_str(),
         InputValue::String(value) if !strict || profile != InputProfile::Native => value.as_str(),
         _ => return Err(type_error("url_type", "Input must be a URL", "url")),
     };
+    if constraints
+        .max_length
+        .is_some_and(|maximum| source.chars().count() > maximum)
+    {
+        return Err(ValidationError::one(
+            ErrorDetail::new("url_too_long", "URL is too long")
+                .expected("URL within the configured length")
+                .context(
+                    "max_length",
+                    constraints.max_length.unwrap_or_default().to_string(),
+                ),
+        ));
+    }
     let value = Url::parse(source).map_err(|error| {
         ValidationError::one(
             ErrorDetail::new("url_parsing", "Input must be a valid absolute URL")
@@ -219,6 +233,18 @@ fn validate_url(
             "url_scheme",
             "URL scheme does not support hierarchical URLs",
             "hierarchical url",
+        ));
+    }
+    if !constraints.allowed_schemes.is_empty()
+        && !constraints
+            .allowed_schemes
+            .iter()
+            .any(|scheme| scheme == value.scheme())
+    {
+        return Err(ValidationError::one(
+            ErrorDetail::new("url_scheme", "URL scheme is not allowed")
+                .expected("configured URL scheme")
+                .context("scheme", value.scheme()),
         ));
     }
     Ok(ValidatedValue::Url(value.to_string()))

@@ -3,7 +3,7 @@ use num_bigint::BigInt;
 use num_complex::Complex64;
 use num_rational::BigRational;
 use pydantic_sifr_core::{
-    BytesConstraints, ComplexConstraints, DecimalConstraints, FloatConstraints,
+    BytesConstraints, BytesJsonMode, ComplexConstraints, DecimalConstraints, FloatConstraints,
     FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, JsonLimits, NativeValue,
     Schema, StringConstraints, StringPattern, ValidatedArena, ValidatedValue, ValidationError,
     ValidationOptions, build_native_input, parse_json, validate,
@@ -409,4 +409,40 @@ fn strict_json_accepts_json_native_representations_for_extended_scalars() {
     )
     .unwrap_or_else(|error| panic!("strict JSON bytes failed: {error}"));
     assert_eq!(root(&bytes), &ValidatedValue::Bytes(b"abc".to_vec()));
+}
+
+#[test]
+fn json_bytes_base64_policy_decodes_and_rejects_invalid_input() {
+    let schema = Schema::Bytes(BytesConstraints {
+        json_mode: BytesJsonMode::Base64,
+        ..BytesConstraints::default()
+    });
+    let encoded = parse_json(br#""AAEC_f7_""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON base64 input failed: {error}"));
+    let decoded = validate(
+        &schema,
+        &encoded,
+        ValidationOptions {
+            strict: true,
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("base64 bytes validation failed: {error}"));
+    assert_eq!(
+        root(&decoded),
+        &ValidatedValue::Bytes(vec![0, 1, 2, 253, 254, 255])
+    );
+
+    let invalid = parse_json(br#""not base64""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON base64 input failed: {error}"));
+    let error = require_validation_error(validate(
+        &schema,
+        &invalid,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(first_code(&error), "bytes_base64");
 }

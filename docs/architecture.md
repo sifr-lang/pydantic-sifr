@@ -50,3 +50,42 @@ Malformed schemas return stable package diagnostics during specialization.
 Malformed JSON returns typed runtime errors with stable codes and source
 locations. Separate property and fuzz targets exercise JSON and program
 envelopes under explicit resource limits.
+
+## Shared validation engine
+
+The backend validates all scalar and collection schemas through one recursive
+engine. `ValidationOptions` selects native, JSON, or strings input. The same
+options carry strict mode, resource limits, and one clock snapshot. A schema
+does not select a second runtime or a fallback path.
+
+The scalar layer keeps exact integers as `BigInt`, decimals as `BigDecimal`,
+and fractions as normalized `BigRational` values. Fixed integer schemas check
+their declared signed or unsigned range. Complex values use two finite `f64`
+components unless the schema allows non-finite components.
+
+String validation applies conversion, trimming, ASCII policy, Unicode length,
+pattern matching, and case conversion in that order. Pattern compilation uses
+bounded Rust regex settings. Bytes use their exact native value. JSON text can
+use explicit UTF-8 or URL-safe base64 decoding.
+
+Temporal values preserve their components and declared offset. Past and future
+checks compare with the clock snapshot from the validation call. UUID schemas
+can require a version. URL schemas can limit source length and allowed schemes
+before they return one canonical absolute URL.
+
+The collection layer keeps lists, tuples, sets, frozen sets, objects, and
+generic mappings distinct at the native boundary. It validates children into
+one move-owned output arena. It records stable field, item, and mapping-key
+locations. Aggregate errors stop at the configured limit and mark truncation.
+
+`ValidatedIterator` keeps the input arena borrowed. It validates one item for
+each call to `next`. A deferred failure includes the original item index. The
+iterator applies length and resource checks without collecting values in
+silence.
+
+## PS5 compatibility ledger
+
+`tests/compatibility/ps5.toml` classifies every required PS5 fixture family as
+the same or adapted. Each row names executable local evidence and describes
+every adapted semantic difference. A unit gate checks total coverage against
+the pinned upstream anchor ledger.

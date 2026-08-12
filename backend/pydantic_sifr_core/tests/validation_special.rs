@@ -1,8 +1,8 @@
 use pydantic_sifr_core::{
     ClockSnapshot, CollectionConstraints, InputProfile, JsonLimits, NativeValue, PatternSchema,
     RelativeTimeConstraint, Schema, StringConstraints, TemporalKind, TemporalSchema,
-    ValidatedArena, ValidatedValue, ValidationError, ValidationOptions, build_native_input,
-    parse_json, validate,
+    UrlConstraints, ValidatedArena, ValidatedValue, ValidationError, ValidationOptions,
+    build_native_input, parse_json, validate,
 };
 
 fn require_error(result: Result<ValidatedArena, ValidationError>) -> ValidationError {
@@ -147,7 +147,7 @@ fn url_validation_returns_a_canonical_absolute_url() {
     )
     .unwrap_or_else(|error| panic!("JSON URL failed: {error}"));
     let output = validate(
-        &Schema::Url,
+        &Schema::Url(UrlConstraints::default()),
         &input,
         ValidationOptions {
             strict: true,
@@ -167,7 +167,7 @@ fn url_pattern_and_relative_schema_rejections_are_typed() {
     let opaque = parse_json(br#""data:text/plain,hello""#, JsonLimits::default())
         .unwrap_or_else(|error| panic!("JSON opaque URL failed: {error}"));
     let url_error = require_error(validate(
-        &Schema::Url,
+        &Schema::Url(UrlConstraints::default()),
         &opaque,
         ValidationOptions {
             profile: InputProfile::Json,
@@ -371,4 +371,55 @@ fn collection_identity_distinguishes_naive_and_explicit_utc_temporals() {
         panic!("expected temporal mapping");
     };
     assert_eq!(entries.len(), 2);
+}
+
+#[test]
+fn url_validation_enforces_source_length_and_allowed_schemes() {
+    let https = parse_json(br#""https://example.com/path""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON URL failed: {error}"));
+    let constraints = UrlConstraints {
+        max_length: Some(24),
+        allowed_schemes: vec!["https".to_owned()],
+    };
+    validate(
+        &Schema::Url(constraints.clone()),
+        &https,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("constrained URL failed: {error}"));
+
+    let too_long = require_error(validate(
+        &Schema::Url(UrlConstraints {
+            max_length: Some(23),
+            ..constraints.clone()
+        }),
+        &https,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(too_long.details()[0].code, "url_too_long");
+
+    let http = parse_json(br#""http://example.com/path""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON URL failed: {error}"));
+    let wrong_scheme = require_error(validate(
+        &Schema::Url(constraints),
+        &http,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(wrong_scheme.details()[0].code, "url_scheme");
+    assert_eq!(
+        wrong_scheme.details()[0]
+            .context
+            .get("scheme")
+            .map(String::as_str),
+        Some("http")
+    );
 }

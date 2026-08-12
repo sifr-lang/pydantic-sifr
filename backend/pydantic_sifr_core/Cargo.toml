@@ -7,6 +7,7 @@ description = "Native execution core for pydantic-sifr"
 repository = "https://github.com/sifr-lang/pydantic-sifr"
 
 [dependencies]
+base64 = { version = "=0.22.1", default-features = false, features = ["alloc"] }
 bigdecimal = { version = "=0.4.10", default-features = false, features = ["std"] }
 jiter = { version = "=0.16.0", default-features = false, features = ["num-bigint"] }
 num-bigint = { version = "=0.4.8", default-features = false, features = ["std"] }

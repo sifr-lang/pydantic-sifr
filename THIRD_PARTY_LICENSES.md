@@ -7,6 +7,9 @@ feature.
 The production backend uses speedate 0.17.0 from the Pydantic project.
 speedate is available under the MIT license.
 
+The production backend uses base64 0.22.1. The crate is available under the
+MIT or Apache-2.0 licenses.
+
 The production backend uses url 2.5.8 and uuid 1.24.0. These crates are
 available under the MIT or Apache-2.0 licenses. The url dependency uses idna
 and ICU4X crates. ICU4X data and components include material under the

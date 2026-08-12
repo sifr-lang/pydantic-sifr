@@ -19,11 +19,11 @@ pub use schema::{
     SchemaVerificationError, VerifiedSchemaProgram, verify_program,
 };
 pub use validation::{
-    BytesConstraints, ClockSnapshot, CollectionConstraints, ComplexConstraints, DateTimeValue,
-    DateValue, DecimalConstraints, DurationValue, ErrorDetail, FloatConstraints,
+    BytesConstraints, BytesJsonMode, ClockSnapshot, CollectionConstraints, ComplexConstraints,
+    DateTimeValue, DateValue, DecimalConstraints, DurationValue, ErrorDetail, FloatConstraints,
     FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, LocationItem,
     PatternCompileError, PatternSchema, PatternValue, RelativeTimeConstraint, Schema,
-    StringConstraints, StringPattern, TemporalKind, TemporalSchema, TimeValue, ValidatedArena,
-    ValidatedIterator, ValidatedValue, ValidationError, ValidationLimits, ValidationOptions,
-    ValueId, validate, validated_iterator,
+    StringConstraints, StringPattern, TemporalKind, TemporalSchema, TimeValue, UrlConstraints,
+    ValidatedArena, ValidatedIterator, ValidatedValue, ValidationError, ValidationLimits,
+    ValidationOptions, ValueId, validate, validated_iterator,
 };

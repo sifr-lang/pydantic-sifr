@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use base64::Engine;
 use bigdecimal::BigDecimal;
 use num_bigint::BigInt;
 use num_complex::Complex64;
@@ -9,8 +10,8 @@ use num_traits::{Signed, Zero};
 use crate::InputValue;
 
 use super::{
-    BytesConstraints, ComplexConstraints, DecimalConstraints, ErrorDetail, FloatConstraints,
-    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, Schema,
+    BytesConstraints, BytesJsonMode, ComplexConstraints, DecimalConstraints, ErrorDetail,
+    FloatConstraints, FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, Schema,
     StringConstraints, ValidatedValue, ValidationError, ValidationOptions,
 };
 
@@ -801,7 +802,7 @@ fn validate_bytes(
     let value = match input {
         InputValue::Bytes(value) => value.clone(),
         InputValue::String(value) if !strict || profile != InputProfile::Native => {
-            value.as_bytes().to_vec()
+            decode_text_bytes(value, profile, constraints.json_mode)?
         }
         _ => return Err(type_error("bytes_type", "Input must be bytes", "bytes")),
     };
@@ -812,6 +813,25 @@ fn validate_bytes(
         "bytes",
     )?;
     Ok(ValidatedValue::Bytes(value))
+}
+
+fn decode_text_bytes(
+    value: &str,
+    profile: InputProfile,
+    json_mode: BytesJsonMode,
+) -> Result<Vec<u8>, ValidationError> {
+    if profile != InputProfile::Json || json_mode == BytesJsonMode::Utf8 {
+        return Ok(value.as_bytes().to_vec());
+    }
+    base64::engine::general_purpose::URL_SAFE
+        .decode(value)
+        .map_err(|error| {
+            ValidationError::one(
+                ErrorDetail::new("bytes_base64", "Input must use valid URL-safe base64")
+                    .expected("URL-safe base64 without whitespace")
+                    .context("error", error.to_string()),
+            )
+        })
 }
 
 pub(crate) fn validate_length(

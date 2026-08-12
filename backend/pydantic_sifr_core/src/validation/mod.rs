@@ -8,10 +8,10 @@ mod value;
 pub use collections::{ValidatedIterator, validated_iterator};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
 pub use schema::{
-    BytesConstraints, CollectionConstraints, ComplexConstraints, DecimalConstraints,
+    BytesConstraints, BytesJsonMode, CollectionConstraints, ComplexConstraints, DecimalConstraints,
     FloatConstraints, FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget,
     PatternCompileError, PatternSchema, RelativeTimeConstraint, Schema, StringConstraints,
-    StringPattern, TemporalKind, TemporalSchema,
+    StringPattern, TemporalKind, TemporalSchema, UrlConstraints,
 };
 pub use value::{
     DateTimeValue, DateValue, DurationValue, PatternValue, TimeValue, ValidatedArena,

@@ -168,10 +168,18 @@ pub struct StringConstraints {
     pub coerce_numbers_to_str: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum BytesJsonMode {
+    #[default]
+    Utf8,
+    Base64,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct BytesConstraints {
     pub min_length: Option<usize>,
     pub max_length: Option<usize>,
+    pub json_mode: BytesJsonMode,
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
@@ -207,6 +215,12 @@ pub struct PatternSchema {
     pub dot_matches_new_line: bool,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct UrlConstraints {
+    pub max_length: Option<usize>,
+    pub allowed_schemes: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Schema {
     None,
@@ -225,7 +239,7 @@ pub enum Schema {
     Uuid {
         version: Option<u8>,
     },
-    Url,
+    Url(UrlConstraints),
     Pattern(PatternSchema),
     List {
         item: Box<Self>,
