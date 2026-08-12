@@ -4,7 +4,8 @@ use num_rational::BigRational;
 use std::collections::{BTreeMap, BTreeSet};
 
 use sifr_runtime::interop::structural::{
-    ShapeIdentity, binary_container, primitive, tuple, unary_container,
+    NominalField, ShapeIdentity, binary_container, metadata, nominal_record, primitive, tuple,
+    unary_container,
 };
 
 use crate::NativeValue;
@@ -455,7 +456,18 @@ impl Schema {
                 unary_container("set", item.structural_identity_at(depth + 1)?)
             }
             Self::FrozenSet { item, .. } => {
-                unary_container("frozenset", item.structural_identity_at(depth + 1)?)
+                let item = item.structural_identity_at(depth + 1)?;
+                nominal_record(
+                    "sifr.collections.frozenset",
+                    &[item],
+                    &[NominalField {
+                        name: "_values",
+                        identity: unary_container("set", item),
+                        required: true,
+                        default_identity: None,
+                    }],
+                    metadata(&[]),
+                )
             }
             Self::EmbeddedJson(inner) => inner.structural_identity_at(depth + 1)?,
         };

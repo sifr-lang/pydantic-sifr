@@ -6,7 +6,6 @@ use pydantic_sifr_core::{
     ValidationOptions, validate_json_and_construct, validate_native_and_construct,
     validate_strings_and_construct,
 };
-use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::{
     ConstructToken, NodeId, NominalField, ShapeIdentity, StructuralConstruct,
     StructuralContractError, StructuralEdgeKind, StructuralKind, StructuralSource, StructuralType,
@@ -15,7 +14,7 @@ use sifr_runtime::interop::structural::{
 
 #[derive(Debug, Eq, PartialEq)]
 struct User {
-    id: SifrInt,
+    id: i64,
     name: String,
     note: Option<String>,
 }
@@ -26,7 +25,7 @@ impl StructuralType for User {
             "User",
             &[],
             &[
-                nominal_field::<SifrInt>("id"),
+                nominal_field::<i64>("id"),
                 nominal_field::<String>("name"),
                 nominal_field::<Option<String>>("note"),
             ],
@@ -43,7 +42,7 @@ impl StructuralConstruct for User {
     ) -> Result<Self, StructuralContractError> {
         let nodes = record_nodes(source, node, "User", &["id", "name", "note"])?;
         Ok(Self {
-            id: SifrInt::structural_construct_at(source, nodes[0], token)?,
+            id: i64::structural_construct_at(source, nodes[0], token)?,
             name: String::structural_construct_at(source, nodes[1], token)?,
             note: Option::<String>::structural_construct_at(source, nodes[2], token)?,
         })
@@ -52,46 +51,41 @@ impl StructuralConstruct for User {
 
 #[derive(Debug, Eq, PartialEq)]
 struct WithExtras {
-    id: SifrInt,
-    extras: HashMap<String, SifrInt>,
+    id: i64,
+    extras: HashMap<String, i64>,
 }
 
 #[derive(Debug, Eq, PartialEq)]
-struct FrozenStrings(HashSet<String>);
+struct SifrFrozenStrings {
+    values: HashSet<String>,
+}
 
-impl StructuralType for FrozenStrings {
+impl StructuralType for SifrFrozenStrings {
     fn shape_identity() -> ShapeIdentity {
-        unary_container("frozenset", String::shape_identity())
+        nominal_record(
+            "sifr.collections.frozenset",
+            &[String::shape_identity()],
+            &[NominalField {
+                name: "_values",
+                identity: unary_container("set", String::shape_identity()),
+                required: true,
+                default_identity: None,
+            }],
+            metadata(&[]),
+        )
     }
 }
 
-impl StructuralConstruct for FrozenStrings {
+impl StructuralConstruct for SifrFrozenStrings {
     fn structural_construct_at<Source: StructuralSource>(
         source: &mut Source,
         node: NodeId,
         token: ConstructToken,
     ) -> Result<Self, StructuralContractError> {
-        let description = source.node(node)?;
-        if description.kind() != StructuralKind::FrozenSet {
-            return Err(StructuralContractError::KindMismatch);
-        }
-        let nodes = description
-            .edges()
-            .iter()
-            .enumerate()
-            .map(|(index, edge)| {
-                if edge.kind() == StructuralEdgeKind::Index(index) {
-                    Ok(edge.node())
-                } else {
-                    Err(StructuralContractError::MemberMismatch)
-                }
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        nodes
-            .into_iter()
-            .map(|node| String::structural_construct_at(source, node, token))
-            .collect::<Result<HashSet<_>, _>>()
-            .map(Self)
+        let nodes = record_nodes(source, node, "sifr.collections.frozenset", &["_values"])?;
+        Ok(Self {
+            values: HashSet::<String>::structural_construct_at(source, nodes[0], token)?,
+        })
     }
 }
 
@@ -101,8 +95,8 @@ impl StructuralType for WithExtras {
             "WithExtras",
             &[],
             &[
-                nominal_field::<SifrInt>("id"),
-                nominal_field::<HashMap<String, SifrInt>>("extras"),
+                nominal_field::<i64>("id"),
+                nominal_field::<HashMap<String, i64>>("extras"),
             ],
             metadata(&[]),
         )
@@ -117,8 +111,8 @@ impl StructuralConstruct for WithExtras {
     ) -> Result<Self, StructuralContractError> {
         let nodes = record_nodes(source, node, "WithExtras", &["id", "extras"])?;
         Ok(Self {
-            id: SifrInt::structural_construct_at(source, nodes[0], token)?,
-            extras: HashMap::<String, SifrInt>::structural_construct_at(source, nodes[1], token)?,
+            id: i64::structural_construct_at(source, nodes[0], token)?,
+            extras: HashMap::<String, i64>::structural_construct_at(source, nodes[1], token)?,
         })
     }
 }
@@ -170,7 +164,13 @@ fn user_schema() -> Schema {
             "User",
             User::shape_identity(),
             vec![
-                ModelField::required("id", Schema::exact_integer()),
+                ModelField::required(
+                    "id",
+                    Schema::Integer {
+                        target: IntegerTarget::I64,
+                        constraints: IntegerConstraints::default(),
+                    },
+                ),
                 ModelField::required("name", Schema::String(StringConstraints::default())),
                 ModelField::required(
                     "note",
@@ -203,7 +203,7 @@ fn json_native_and_strings_entry_points_construct_the_target_directly() {
     assert_eq!(
         json,
         User {
-            id: SifrInt::from_i64(1),
+            id: 1,
             name: "Ada".to_owned(),
             note: None,
         }
@@ -223,7 +223,7 @@ fn json_native_and_strings_entry_points_construct_the_target_directly() {
         },
     )
     .unwrap_or_else(|error| panic!("native construction failed: {error}"));
-    assert_eq!(native.id, SifrInt::from_i64(2));
+    assert_eq!(native.id, 2);
     assert_eq!(native.note.as_deref(), Some("native"));
 
     let strings = validate_strings_and_construct::<User>(
@@ -237,7 +237,7 @@ fn json_native_and_strings_entry_points_construct_the_target_directly() {
         ValidationOptions::default(),
     )
     .unwrap_or_else(|error| panic!("strings construction failed: {error}"));
-    assert_eq!(strings.id, SifrInt::from_i64(3));
+    assert_eq!(strings.id, 3);
     assert_eq!(strings.name, "Sam");
 }
 
@@ -248,12 +248,21 @@ fn typed_extra_destination_constructs_without_an_intermediate_model_tree() {
             "WithExtras",
             WithExtras::shape_identity(),
             vec![
-                ModelField::required("id", Schema::exact_integer()),
+                ModelField::required(
+                    "id",
+                    Schema::Integer {
+                        target: IntegerTarget::I64,
+                        constraints: IntegerConstraints::default(),
+                    },
+                ),
                 ModelField {
                     name: "extras",
                     schema: Schema::Mapping {
                         key: Box::new(Schema::String(StringConstraints::default())),
-                        value: Box::new(Schema::exact_integer()),
+                        value: Box::new(Schema::Integer {
+                            target: IntegerTarget::I64,
+                            constraints: IntegerConstraints::default(),
+                        }),
                         constraints: pydantic_sifr_core::CollectionConstraints::default(),
                     },
                     input: false,
@@ -264,7 +273,10 @@ fn typed_extra_destination_constructs_without_an_intermediate_model_tree() {
             ],
             ExtraPolicy::Allow {
                 destination: "extras",
-                value_schema: Box::new(Schema::exact_integer()),
+                value_schema: Box::new(Schema::Integer {
+                    target: IntegerTarget::I64,
+                    constraints: IntegerConstraints::default(),
+                }),
             },
             false,
             true,
@@ -283,9 +295,9 @@ fn typed_extra_destination_constructs_without_an_intermediate_model_tree() {
         },
     )
     .unwrap_or_else(|error| panic!("extra construction failed: {error}"));
-    assert_eq!(value.id, SifrInt::from_i64(4));
-    assert_eq!(value.extras["score"], SifrInt::from_i64(8));
-    assert_eq!(value.extras["rank"], SifrInt::from_i64(9));
+    assert_eq!(value.id, 4);
+    assert_eq!(value.extras["score"], 8);
+    assert_eq!(value.extras["rank"], 9);
 }
 
 #[test]
@@ -424,17 +436,17 @@ fn set_and_frozenset_have_distinct_satisfiable_contracts() {
         item: Box::new(Schema::String(StringConstraints::default())),
         constraints: pydantic_sifr_core::CollectionConstraints::default(),
     };
-    let frozen = validate_json_and_construct::<FrozenStrings>(
+    let frozen = validate_json_and_construct::<SifrFrozenStrings>(
         &prepared(&frozen_schema),
         br#"["a","b","a"]"#,
         JsonLimits::default(),
         ValidationOptions::default(),
     )
     .unwrap_or_else(|error| panic!("frozenset construction failed: {error}"));
-    assert_eq!(frozen.0.len(), 2);
+    assert_eq!(frozen.values.len(), 2);
     assert_ne!(
         <HashSet<String> as StructuralType>::shape_identity(),
-        FrozenStrings::shape_identity()
+        SifrFrozenStrings::shape_identity()
     );
 }
 

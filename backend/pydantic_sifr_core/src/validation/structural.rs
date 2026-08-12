@@ -8,7 +8,9 @@ use sifr_runtime::interop::structural::{
 
 use crate::{Arena, ArenaId};
 
-use super::{ValidatedArena, ValidatedValue, ValueId};
+use super::{ModelValue, ValidatedArena, ValidatedValue, ValueId};
+
+const SIFR_FROZENSET_NOMINAL_IDENTITY: &str = "sifr.collections.frozenset";
 
 impl ValidatedArena {
     pub(crate) fn prepare_structural(
@@ -126,6 +128,15 @@ fn expand_specialized_values(
                     push(values, ValidatedValue::String(source))?,
                     unsigned(values, u128::from(flags), 8)?,
                 ])
+            }
+            ValidatedValue::FrozenSet(items) => {
+                let values_field = push(values, ValidatedValue::Set(items))?;
+                ValidatedValue::Model(ModelValue::new(
+                    SIFR_FROZENSET_NOMINAL_IDENTITY,
+                    vec![("_values", values_field)],
+                    Vec::new(),
+                    1,
+                ))
             }
             other => other,
         };
