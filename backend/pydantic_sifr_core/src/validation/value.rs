@@ -70,6 +70,10 @@ impl PatternValue {
     pub fn is_match(&self, value: &str) -> bool {
         self.compiled.is_match(value)
     }
+
+    pub(super) fn into_parts(self) -> (String, u8) {
+        (self.source, self.flags)
+    }
 }
 
 impl PartialEq for PatternValue {

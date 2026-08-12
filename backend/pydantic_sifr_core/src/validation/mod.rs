@@ -18,8 +18,8 @@ pub use schema::{
     AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, CollectionConstraints,
     ComplexConstraints, DecimalConstraints, ExtraPolicy, FieldDefault, FloatConstraints,
     FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, ModelField, ModelSchema,
-    PatternCompileError, PatternSchema, RelativeTimeConstraint, Schema, StringConstraints,
-    StringPattern, TemporalKind, TemporalSchema, UrlConstraints,
+    PatternCompileError, PatternSchema, PreparedSchema, RelativeTimeConstraint, Schema,
+    StringConstraints, StringPattern, TemporalKind, TemporalSchema, UrlConstraints,
 };
 pub use value::{
     DateTimeValue, DateValue, DurationValue, ModelValue, PatternValue, TimeValue, ValidatedArena,

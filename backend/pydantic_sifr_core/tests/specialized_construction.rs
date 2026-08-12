@@ -1,7 +1,7 @@
 use pydantic_sifr_core::{
     ComplexConstraints, DecimalConstraints, FractionConstraints, JsonLimits, NativeValue,
-    PatternSchema, Schema, TemporalKind, TemporalSchema, UrlConstraints, ValidationOptions,
-    validate_json_and_construct, validate_native_and_construct,
+    PatternSchema, PreparedSchema, Schema, TemporalKind, TemporalSchema, UrlConstraints,
+    ValidationOptions, validate_json_and_construct, validate_native_and_construct,
 };
 use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::{
@@ -200,6 +200,10 @@ fn tuple_nodes<S: StructuralSource>(
         .collect()
 }
 
+fn prepared(schema: &Schema) -> PreparedSchema<'_> {
+    PreparedSchema::new(schema).unwrap_or_else(|error| panic!("schema preparation failed: {error}"))
+}
+
 #[derive(Debug, Eq, PartialEq)]
 struct DecimalText(String);
 
@@ -247,7 +251,7 @@ impl StructuralConstruct for UuidBytes {
 #[test]
 fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     let decimal = validate_native_and_construct::<DecimalText>(
-        &Schema::Decimal(DecimalConstraints::default()),
+        &prepared(&Schema::Decimal(DecimalConstraints::default())),
         &NativeValue::Decimal("12.340".to_owned()),
         JsonLimits::default(),
         ValidationOptions {
@@ -259,7 +263,7 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     assert_eq!(decimal, DecimalText("12.340".to_owned()));
 
     let fraction = validate_native_and_construct::<FractionParts>(
-        &Schema::Fraction(FractionConstraints::default()),
+        &prepared(&Schema::Fraction(FractionConstraints::default())),
         &NativeValue::Fraction {
             numerator: "6".to_owned(),
             denominator: "-8".to_owned(),
@@ -277,7 +281,7 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     );
 
     let complex = validate_native_and_construct::<ComplexParts>(
-        &Schema::Complex(ComplexConstraints::default()),
+        &prepared(&Schema::Complex(ComplexConstraints::default())),
         &NativeValue::Complex {
             real: 3.0,
             imaginary: 4.0,
@@ -292,7 +296,7 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     assert_eq!(complex, ComplexParts(3.0, 4.0));
 
     let date = validate_json_and_construct::<DateParts>(
-        &temporal(TemporalKind::Date),
+        &prepared(&temporal(TemporalKind::Date)),
         br#""2024-02-29""#,
         JsonLimits::default(),
         ValidationOptions::default(),
@@ -301,7 +305,7 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     assert_eq!(date, DateParts(2024, 2, 29));
 
     let time = validate_json_and_construct::<TimeParts>(
-        &temporal(TemporalKind::Time),
+        &prepared(&temporal(TemporalKind::Time)),
         br#""12:34:56.123456+02:00""#,
         JsonLimits::default(),
         ValidationOptions::default(),
@@ -310,7 +314,7 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     assert_eq!(time, TimeParts(12, 34, 56, 123_456, Some(7_200)));
 
     let datetime = validate_json_and_construct::<DateTimeParts>(
-        &temporal(TemporalKind::DateTime),
+        &prepared(&temporal(TemporalKind::DateTime)),
         br#""2024-02-29T12:34:56Z""#,
         JsonLimits::default(),
         ValidationOptions::default(),
@@ -322,7 +326,7 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     );
 
     let duration = validate_json_and_construct::<DurationParts>(
-        &temporal(TemporalKind::Duration),
+        &prepared(&temporal(TemporalKind::Duration)),
         br#""P2DT3H4M5.6S""#,
         JsonLimits::default(),
         ValidationOptions::default(),
@@ -331,7 +335,7 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     assert_eq!(duration, DurationParts(true, 2, 11_045, 600_000));
 
     let uuid = validate_json_and_construct::<UuidBytes>(
-        &Schema::Uuid { version: Some(4) },
+        &prepared(&Schema::Uuid { version: Some(4) }),
         br#""550e8400-e29b-41d4-a716-446655440000""#,
         JsonLimits::default(),
         ValidationOptions::default(),
@@ -340,7 +344,7 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     assert_eq!(uuid.0.len(), 16);
 
     let url = validate_json_and_construct::<String>(
-        &Schema::Url(UrlConstraints::default()),
+        &prepared(&Schema::Url(UrlConstraints::default())),
         br#""https://EXAMPLE.com/a/../b""#,
         JsonLimits::default(),
         ValidationOptions::default(),
@@ -349,11 +353,11 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     assert_eq!(url, "https://example.com/b");
 
     let pattern = validate_native_and_construct::<PatternParts>(
-        &Schema::Pattern(PatternSchema {
+        &prepared(&Schema::Pattern(PatternSchema {
             case_insensitive: true,
             multi_line: false,
             dot_matches_new_line: false,
-        }),
+        })),
         &NativeValue::Pattern {
             source: "^abc$".to_owned(),
             flags: 0,

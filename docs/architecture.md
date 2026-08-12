@@ -85,20 +85,21 @@ silence.
 
 ## Typed construction boundary
 
-The core derives the structural shape identity from the static schema. A model
-schema stores the exact compiler-owned identity. It does not copy the target
-identity at runtime. Construction fails before node access if the schema and
-target identities differ.
+`PreparedSchema` derives the structural shape identity once from the static
+schema. A model schema stores the exact compiler-owned identity. It does not
+copy the target identity at runtime. Typed construction accepts only this
+prepared object. Construction fails before node access if the schema and target
+identities differ.
 
 Ordinary validation does not build structural edge arrays or move-state
 tables. Typed construction prepares those views only after validation succeeds.
 Specialized values add crate-neutral component nodes to the same validated
 arena. They do not create another model tree.
 
-Model schemas reject duplicate fields and invalid non-input fields before they
-read user data. An allowed-extra destination must be one declared, non-input
-mapping field. Its key type is `str`, and its value schema must match the extra
-value schema.
+`ModelSchema::new` rejects duplicate fields and invalid non-input fields before
+the schema can validate user data. An allowed-extra destination must be one
+declared, non-input mapping field. Its key type is `str`, and its value schema
+must match the extra value schema.
 
 The backend pins the Sifr 0.1.0-beta.16 structural runtime by its exact source
 commit. The Sifr package release contains this Rust source and lockfile. The

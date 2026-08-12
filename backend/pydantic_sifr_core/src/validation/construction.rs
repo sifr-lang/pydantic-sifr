@@ -6,29 +6,27 @@ use crate::{
 };
 
 use super::{
-    ErrorDetail, InputProfile, LocationItem, Schema, ValidationError, ValidationOptions, validate,
+    ErrorDetail, InputProfile, LocationItem, PreparedSchema, ValidationError, ValidationOptions,
+    validate,
 };
 
 pub fn validate_and_construct<T>(
-    schema: &Schema,
+    schema: &PreparedSchema<'_>,
     input: &InputArena,
     options: ValidationOptions,
 ) -> Result<T, ValidationError>
 where
     T: StructuralConstruct,
 {
-    let mut arena = validate(schema, input, options)?;
-    let shape = schema
-        .structural_identity()
-        .map_err(schema_construction_error)?;
+    let mut arena = validate(schema.schema(), input, options)?;
     arena
-        .prepare_structural(shape)
+        .prepare_structural(schema.structural_identity())
         .map_err(construction_error)?;
     structural_construct(arena).map_err(construction_error)
 }
 
 pub fn validate_json_and_construct<T>(
-    schema: &Schema,
+    schema: &PreparedSchema<'_>,
     input: &[u8],
     json_limits: JsonLimits,
     mut options: ValidationOptions,
@@ -42,7 +40,7 @@ where
 }
 
 pub fn validate_native_and_construct<T>(
-    schema: &Schema,
+    schema: &PreparedSchema<'_>,
     input: &NativeValue,
     input_limits: JsonLimits,
     mut options: ValidationOptions,
@@ -56,7 +54,7 @@ where
 }
 
 pub fn validate_strings_and_construct<T>(
-    schema: &Schema,
+    schema: &PreparedSchema<'_>,
     input: &NativeValue,
     input_limits: JsonLimits,
     mut options: ValidationOptions,
@@ -79,17 +77,6 @@ fn construction_error(
         )
         .expected("verified target structural shape")
         .context("error", error.to_string()),
-    )
-}
-
-fn schema_construction_error(error: &'static str) -> ValidationError {
-    ValidationError::one(
-        ErrorDetail::new(
-            "schema_construction_unsupported",
-            "Schema cannot construct a structural target",
-        )
-        .expected("supported static structural schema")
-        .context("error", error),
     )
 }
 

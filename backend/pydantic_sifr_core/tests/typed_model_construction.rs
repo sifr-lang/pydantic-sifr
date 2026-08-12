@@ -1,15 +1,16 @@
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 use pydantic_sifr_core::{
     ExtraPolicy, InputProfile, IntegerConstraints, IntegerTarget, JsonLimits, ModelField,
-    ModelSchema, NativeValue, Schema, StringConstraints, ValidatedArena, ValidationOptions,
-    validate_json_and_construct, validate_native_and_construct, validate_strings_and_construct,
+    ModelSchema, NativeValue, PreparedSchema, Schema, StringConstraints, ValidatedArena,
+    ValidationOptions, validate_json_and_construct, validate_native_and_construct,
+    validate_strings_and_construct,
 };
 use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::{
     ConstructToken, NodeId, NominalField, ShapeIdentity, StructuralConstruct,
     StructuralContractError, StructuralEdgeKind, StructuralKind, StructuralSource, StructuralType,
-    metadata, nominal_record,
+    metadata, nominal_record, unary_container,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -55,6 +56,45 @@ struct WithExtras {
     extras: HashMap<String, SifrInt>,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+struct FrozenStrings(HashSet<String>);
+
+impl StructuralType for FrozenStrings {
+    fn shape_identity() -> ShapeIdentity {
+        unary_container("frozenset", String::shape_identity())
+    }
+}
+
+impl StructuralConstruct for FrozenStrings {
+    fn structural_construct_at<Source: StructuralSource>(
+        source: &mut Source,
+        node: NodeId,
+        token: ConstructToken,
+    ) -> Result<Self, StructuralContractError> {
+        let description = source.node(node)?;
+        if description.kind() != StructuralKind::FrozenSet {
+            return Err(StructuralContractError::KindMismatch);
+        }
+        let nodes = description
+            .edges()
+            .iter()
+            .enumerate()
+            .map(|(index, edge)| {
+                if edge.kind() == StructuralEdgeKind::Index(index) {
+                    Ok(edge.node())
+                } else {
+                    Err(StructuralContractError::MemberMismatch)
+                }
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        nodes
+            .into_iter()
+            .map(|node| String::structural_construct_at(source, node, token))
+            .collect::<Result<HashSet<_>, _>>()
+            .map(Self)
+    }
+}
+
 impl StructuralType for WithExtras {
     fn shape_identity() -> ShapeIdentity {
         nominal_record(
@@ -92,6 +132,10 @@ fn nominal_field<T: StructuralType>(name: &'static str) -> NominalField<'static>
     }
 }
 
+fn prepared(schema: &Schema) -> PreparedSchema<'_> {
+    PreparedSchema::new(schema).unwrap_or_else(|error| panic!("schema preparation failed: {error}"))
+}
+
 fn record_nodes<Source: StructuralSource>(
     source: &Source,
     node: NodeId,
@@ -121,21 +165,24 @@ fn record_nodes<Source: StructuralSource>(
 }
 
 fn user_schema() -> Schema {
-    Schema::Model(ModelSchema {
-        name: "User",
-        structural_identity: User::shape_identity(),
-        fields: vec![
-            ModelField::required("id", Schema::exact_integer()),
-            ModelField::required("name", Schema::String(StringConstraints::default())),
-            ModelField::required(
-                "note",
-                Schema::Nullable(Box::new(Schema::String(StringConstraints::default()))),
-            ),
-        ],
-        extra: ExtraPolicy::Ignore,
-        populate_by_name: false,
-        location_by_alias: true,
-    })
+    Schema::Model(
+        ModelSchema::new(
+            "User",
+            User::shape_identity(),
+            vec![
+                ModelField::required("id", Schema::exact_integer()),
+                ModelField::required("name", Schema::String(StringConstraints::default())),
+                ModelField::required(
+                    "note",
+                    Schema::Nullable(Box::new(Schema::String(StringConstraints::default()))),
+                ),
+            ],
+            ExtraPolicy::Ignore,
+            false,
+            true,
+        )
+        .unwrap_or_else(|error| panic!("user schema failed: {error}")),
+    )
 }
 
 #[test]
@@ -143,8 +190,11 @@ fn json_native_and_strings_entry_points_construct_the_target_directly() {
     fn assert_structural_source<T: StructuralSource>() {}
     assert_structural_source::<ValidatedArena>();
 
+    let schema = user_schema();
+    let prepared = PreparedSchema::new(&schema)
+        .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
     let json = validate_json_and_construct::<User>(
-        &user_schema(),
+        &prepared,
         br#"{"id":1,"name":"Ada","note":null}"#,
         JsonLimits::default(),
         ValidationOptions::default(),
@@ -160,7 +210,7 @@ fn json_native_and_strings_entry_points_construct_the_target_directly() {
     );
 
     let native = validate_native_and_construct::<User>(
-        &user_schema(),
+        &prepared,
         &NativeValue::Object(vec![
             ("id".to_owned(), NativeValue::Integer("2".to_owned())),
             ("name".to_owned(), NativeValue::String("Lin".to_owned())),
@@ -177,7 +227,7 @@ fn json_native_and_strings_entry_points_construct_the_target_directly() {
     assert_eq!(native.note.as_deref(), Some("native"));
 
     let strings = validate_strings_and_construct::<User>(
-        &user_schema(),
+        &prepared,
         &NativeValue::Object(vec![
             ("id".to_owned(), NativeValue::String("3".to_owned())),
             ("name".to_owned(), NativeValue::String("Sam".to_owned())),
@@ -193,33 +243,38 @@ fn json_native_and_strings_entry_points_construct_the_target_directly() {
 
 #[test]
 fn typed_extra_destination_constructs_without_an_intermediate_model_tree() {
-    let schema = Schema::Model(ModelSchema {
-        name: "WithExtras",
-        structural_identity: WithExtras::shape_identity(),
-        fields: vec![
-            ModelField::required("id", Schema::exact_integer()),
-            ModelField {
-                name: "extras",
-                schema: Schema::Mapping {
-                    key: Box::new(Schema::String(StringConstraints::default())),
-                    value: Box::new(Schema::exact_integer()),
-                    constraints: pydantic_sifr_core::CollectionConstraints::default(),
+    let schema = Schema::Model(
+        ModelSchema::new(
+            "WithExtras",
+            WithExtras::shape_identity(),
+            vec![
+                ModelField::required("id", Schema::exact_integer()),
+                ModelField {
+                    name: "extras",
+                    schema: Schema::Mapping {
+                        key: Box::new(Schema::String(StringConstraints::default())),
+                        value: Box::new(Schema::exact_integer()),
+                        constraints: pydantic_sifr_core::CollectionConstraints::default(),
+                    },
+                    input: false,
+                    default: None,
+                    validation_aliases: Vec::new(),
+                    metadata: BTreeMap::new(),
                 },
-                input: false,
-                default: None,
-                validation_aliases: Vec::new(),
-                metadata: BTreeMap::new(),
+            ],
+            ExtraPolicy::Allow {
+                destination: "extras",
+                value_schema: Box::new(Schema::exact_integer()),
             },
-        ],
-        extra: ExtraPolicy::Allow {
-            destination: "extras",
-            value_schema: Box::new(Schema::exact_integer()),
-        },
-        populate_by_name: false,
-        location_by_alias: true,
-    });
+            false,
+            true,
+        )
+        .unwrap_or_else(|error| panic!("extra schema failed: {error}")),
+    );
+    let prepared = PreparedSchema::new(&schema)
+        .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
     let value = validate_json_and_construct::<WithExtras>(
-        &schema,
+        &prepared,
         br#"{"id":4,"score":8,"rank":9}"#,
         JsonLimits::default(),
         ValidationOptions {
@@ -236,7 +291,7 @@ fn typed_extra_destination_constructs_without_an_intermediate_model_tree() {
 #[test]
 fn structural_shape_mismatch_is_rejected_before_node_construction() {
     let result = validate_json_and_construct::<String>(
-        &Schema::exact_integer(),
+        &prepared(&Schema::exact_integer()),
         b"1",
         JsonLimits::default(),
         ValidationOptions::default(),
@@ -270,7 +325,7 @@ fn every_fixed_width_integer_constructs_with_its_declared_width() {
     };
     assert_eq!(
         validate_json_and_construct::<i8>(
-            &schema(cases[0].0),
+            &prepared(&schema(cases[0].0)),
             cases[0].1.as_bytes(),
             JsonLimits::default(),
             ValidationOptions::default(),
@@ -280,7 +335,7 @@ fn every_fixed_width_integer_constructs_with_its_declared_width() {
     );
     assert_eq!(
         validate_json_and_construct::<i16>(
-            &schema(cases[1].0),
+            &prepared(&schema(cases[1].0)),
             cases[1].1.as_bytes(),
             JsonLimits::default(),
             ValidationOptions::default(),
@@ -290,7 +345,7 @@ fn every_fixed_width_integer_constructs_with_its_declared_width() {
     );
     assert_eq!(
         validate_json_and_construct::<i32>(
-            &schema(cases[2].0),
+            &prepared(&schema(cases[2].0)),
             cases[2].1.as_bytes(),
             JsonLimits::default(),
             ValidationOptions::default(),
@@ -300,7 +355,7 @@ fn every_fixed_width_integer_constructs_with_its_declared_width() {
     );
     assert_eq!(
         validate_json_and_construct::<i64>(
-            &schema(cases[3].0),
+            &prepared(&schema(cases[3].0)),
             cases[3].1.as_bytes(),
             JsonLimits::default(),
             ValidationOptions::default(),
@@ -310,7 +365,7 @@ fn every_fixed_width_integer_constructs_with_its_declared_width() {
     );
     assert_eq!(
         validate_json_and_construct::<u8>(
-            &schema(cases[4].0),
+            &prepared(&schema(cases[4].0)),
             cases[4].1.as_bytes(),
             JsonLimits::default(),
             ValidationOptions::default(),
@@ -320,7 +375,7 @@ fn every_fixed_width_integer_constructs_with_its_declared_width() {
     );
     assert_eq!(
         validate_json_and_construct::<u16>(
-            &schema(cases[5].0),
+            &prepared(&schema(cases[5].0)),
             cases[5].1.as_bytes(),
             JsonLimits::default(),
             ValidationOptions::default(),
@@ -330,7 +385,7 @@ fn every_fixed_width_integer_constructs_with_its_declared_width() {
     );
     assert_eq!(
         validate_json_and_construct::<u32>(
-            &schema(cases[6].0),
+            &prepared(&schema(cases[6].0)),
             cases[6].1.as_bytes(),
             JsonLimits::default(),
             ValidationOptions::default(),
@@ -340,7 +395,7 @@ fn every_fixed_width_integer_constructs_with_its_declared_width() {
     );
     assert_eq!(
         validate_json_and_construct::<u64>(
-            &schema(cases[7].0),
+            &prepared(&schema(cases[7].0)),
             cases[7].1.as_bytes(),
             JsonLimits::default(),
             ValidationOptions::default(),
@@ -348,4 +403,52 @@ fn every_fixed_width_integer_constructs_with_its_declared_width() {
         .unwrap_or_else(|error| panic!("u64 construction failed: {error}")),
         64
     );
+}
+
+#[test]
+fn set_and_frozenset_have_distinct_satisfiable_contracts() {
+    let set_schema = Schema::Set {
+        item: Box::new(Schema::String(StringConstraints::default())),
+        constraints: pydantic_sifr_core::CollectionConstraints::default(),
+    };
+    let set = validate_json_and_construct::<HashSet<String>>(
+        &prepared(&set_schema),
+        br#"["a","b","a"]"#,
+        JsonLimits::default(),
+        ValidationOptions::default(),
+    )
+    .unwrap_or_else(|error| panic!("set construction failed: {error}"));
+    assert_eq!(set.len(), 2);
+
+    let frozen_schema = Schema::FrozenSet {
+        item: Box::new(Schema::String(StringConstraints::default())),
+        constraints: pydantic_sifr_core::CollectionConstraints::default(),
+    };
+    let frozen = validate_json_and_construct::<FrozenStrings>(
+        &prepared(&frozen_schema),
+        br#"["a","b","a"]"#,
+        JsonLimits::default(),
+        ValidationOptions::default(),
+    )
+    .unwrap_or_else(|error| panic!("frozenset construction failed: {error}"));
+    assert_eq!(frozen.0.len(), 2);
+    assert_ne!(
+        <HashSet<String> as StructuralType>::shape_identity(),
+        FrozenStrings::shape_identity()
+    );
+}
+
+#[test]
+fn prepared_schema_rejects_unbounded_static_nesting() {
+    let mut schema = Schema::String(StringConstraints::default());
+    for _ in 0..258 {
+        schema = Schema::List {
+            item: Box::new(schema),
+            constraints: pydantic_sifr_core::CollectionConstraints::default(),
+        };
+    }
+    let error = PreparedSchema::new(&schema)
+        .err()
+        .unwrap_or_else(|| panic!("deep static schema must fail preparation"));
+    assert_eq!(error.details()[0].code, "schema_invalid");
 }

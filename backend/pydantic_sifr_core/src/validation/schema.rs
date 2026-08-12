@@ -1,13 +1,17 @@
 use bigdecimal::BigDecimal;
 use num_bigint::BigInt;
 use num_rational::BigRational;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use sifr_runtime::interop::structural::{
     ShapeIdentity, binary_container, primitive, tuple, unary_container,
 };
 
 use crate::NativeValue;
+
+use super::ValidationError;
+
+const MAX_SCHEMA_DEPTH: usize = 256;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PatternCompileError {
@@ -300,12 +304,58 @@ pub enum ExtraPolicy {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelSchema {
-    pub name: &'static str,
-    pub structural_identity: ShapeIdentity,
-    pub fields: Vec<ModelField>,
-    pub extra: ExtraPolicy,
-    pub populate_by_name: bool,
-    pub location_by_alias: bool,
+    pub(crate) name: &'static str,
+    pub(crate) structural_identity: ShapeIdentity,
+    pub(crate) fields: Vec<ModelField>,
+    pub(crate) extra: ExtraPolicy,
+    pub(crate) populate_by_name: bool,
+    pub(crate) location_by_alias: bool,
+}
+
+impl ModelSchema {
+    pub fn new(
+        name: &'static str,
+        structural_identity: ShapeIdentity,
+        fields: Vec<ModelField>,
+        extra: ExtraPolicy,
+        populate_by_name: bool,
+        location_by_alias: bool,
+    ) -> Result<Self, ValidationError> {
+        verify_model_fields(&fields, &extra)?;
+        Ok(Self {
+            name,
+            structural_identity,
+            fields,
+            extra,
+            populate_by_name,
+            location_by_alias,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PreparedSchema<'schema> {
+    schema: &'schema Schema,
+    structural_identity: ShapeIdentity,
+}
+
+impl<'schema> PreparedSchema<'schema> {
+    pub fn new(schema: &'schema Schema) -> Result<Self, ValidationError> {
+        Ok(Self {
+            schema,
+            structural_identity: schema.structural_identity_at(0)?,
+        })
+    }
+
+    #[must_use]
+    pub const fn schema(&self) -> &'schema Schema {
+        self.schema
+    }
+
+    #[must_use]
+    pub const fn structural_identity(&self) -> ShapeIdentity {
+        self.structural_identity
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -364,7 +414,13 @@ impl Schema {
         }
     }
 
-    pub(crate) fn structural_identity(&self) -> Result<ShapeIdentity, &'static str> {
+    fn structural_identity_at(&self, depth: usize) -> Result<ShapeIdentity, ValidationError> {
+        if depth > MAX_SCHEMA_DEPTH {
+            return Err(schema_error(
+                "Schema nesting exceeds the static preparation limit",
+                "bounded static schema",
+            ));
+        }
         let identity = match self {
             Self::None => primitive("None"),
             Self::Bool => primitive("bool"),
@@ -377,29 +433,89 @@ impl Schema {
             Self::Pattern(_) => primitive("pydantic_sifr.Pattern"),
             Self::Bytes(_) | Self::Uuid { .. } => primitive("bytes"),
             Self::Temporal(schema) => primitive(schema.structural_name()),
-            Self::Nullable(inner) => unary_container("optional", inner.structural_identity()?),
+            Self::Nullable(inner) => {
+                unary_container("optional", inner.structural_identity_at(depth + 1)?)
+            }
             Self::Model(model) => model.structural_identity,
             Self::List { item, .. } | Self::Generator { item, .. } => {
-                unary_container("list", item.structural_identity()?)
+                unary_container("list", item.structural_identity_at(depth + 1)?)
             }
             Self::Tuple(items) => tuple(
                 &items
                     .iter()
-                    .map(Self::structural_identity)
+                    .map(|item| item.structural_identity_at(depth + 1))
                     .collect::<Result<Vec<_>, _>>()?,
             ),
             Self::Mapping { key, value, .. } => binary_container(
                 "mapping",
-                key.structural_identity()?,
-                value.structural_identity()?,
+                key.structural_identity_at(depth + 1)?,
+                value.structural_identity_at(depth + 1)?,
             ),
-            Self::Set { item, .. } | Self::FrozenSet { item, .. } => {
-                unary_container("set", item.structural_identity()?)
+            Self::Set { item, .. } => {
+                unary_container("set", item.structural_identity_at(depth + 1)?)
             }
-            Self::EmbeddedJson(inner) => inner.structural_identity()?,
+            Self::FrozenSet { item, .. } => {
+                unary_container("frozenset", item.structural_identity_at(depth + 1)?)
+            }
+            Self::EmbeddedJson(inner) => inner.structural_identity_at(depth + 1)?,
         };
         Ok(identity)
     }
+}
+
+fn verify_model_fields(fields: &[ModelField], extra: &ExtraPolicy) -> Result<(), ValidationError> {
+    let mut names = BTreeSet::new();
+    for field in fields {
+        if !names.insert(field.name) {
+            return Err(schema_error(
+                "Model field names must be unique",
+                "unique model fields",
+            ));
+        }
+    }
+    let destination = match extra {
+        ExtraPolicy::Allow {
+            destination,
+            value_schema,
+        } => {
+            let Some(field) = fields.iter().find(|field| field.name == *destination) else {
+                return Err(schema_error(
+                    "Extra destination must name a declared field",
+                    "declared extra destination",
+                ));
+            };
+            if field.input || field.default.is_some() || !extra_field_matches(field, value_schema) {
+                return Err(schema_error(
+                    "Extra destination must be one non-input mapping field without a default",
+                    "typed extra destination",
+                ));
+            }
+            Some(*destination)
+        }
+        ExtraPolicy::Ignore | ExtraPolicy::Forbid => None,
+    };
+    if fields
+        .iter()
+        .any(|field| !field.input && field.default.is_none() && Some(field.name) != destination)
+    {
+        return Err(schema_error(
+            "A non-input field needs a default or must be the extra destination",
+            "non-input field value source",
+        ));
+    }
+    Ok(())
+}
+
+fn extra_field_matches(field: &ModelField, value_schema: &Schema) -> bool {
+    matches!(
+        &field.schema,
+        Schema::Mapping { key, value, .. }
+            if matches!(key.as_ref(), Schema::String(_)) && value.as_ref() == value_schema
+    )
+}
+
+fn schema_error(message: &'static str, expected: &'static str) -> ValidationError {
+    super::scalars::type_error("schema_invalid", message, expected)
 }
 
 impl IntegerTarget {

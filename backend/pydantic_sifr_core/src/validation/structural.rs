@@ -83,26 +83,28 @@ fn expand_specialized_values(
     let original_len = values.len();
     for index in 0..original_len {
         let id = ArenaId::from_usize(index).map_err(|_| StructuralContractError::InvalidNode)?;
-        let Some(value) = values.get(id).cloned() else {
+        let Some(slot) = values.get_mut(id) else {
             return Err(StructuralContractError::InvalidNode);
         };
+        let value = std::mem::replace(slot, ValidatedValue::None);
         let replacement = match value {
             ValidatedValue::Fraction(value) => {
-                let numerator = push(values, ValidatedValue::ExactInt(value.numer().clone()))?;
-                let denominator = push(values, ValidatedValue::ExactInt(value.denom().clone()))?;
-                Some(ValidatedValue::Tuple(vec![numerator, denominator]))
+                let (numerator, denominator) = value.into_raw();
+                let numerator = push(values, ValidatedValue::ExactInt(numerator))?;
+                let denominator = push(values, ValidatedValue::ExactInt(denominator))?;
+                ValidatedValue::Tuple(vec![numerator, denominator])
             }
             ValidatedValue::Complex(value) => {
                 let real = push(values, ValidatedValue::Float(value.re))?;
                 let imaginary = push(values, ValidatedValue::Float(value.im))?;
-                Some(ValidatedValue::Tuple(vec![real, imaginary]))
+                ValidatedValue::Tuple(vec![real, imaginary])
             }
-            ValidatedValue::Date(value) => Some(ValidatedValue::Tuple(vec![
+            ValidatedValue::Date(value) => ValidatedValue::Tuple(vec![
                 signed(values, i128::from(value.year), 16)?,
                 unsigned(values, u128::from(value.month), 8)?,
                 unsigned(values, u128::from(value.day), 8)?,
-            ])),
-            ValidatedValue::Time(value) => Some(time_tuple(values, &value)?),
+            ]),
+            ValidatedValue::Time(value) => time_tuple(values, &value)?,
             ValidatedValue::DateTime(value) => {
                 let year = signed(values, i128::from(value.date.year), 16)?;
                 let month = unsigned(values, u128::from(value.date.month), 8)?;
@@ -110,26 +112,27 @@ fn expand_specialized_values(
                 let date = push(values, ValidatedValue::Tuple(vec![year, month, day]))?;
                 let time_value = time_tuple(values, &value.time)?;
                 let time = push(values, time_value)?;
-                Some(ValidatedValue::Tuple(vec![date, time]))
+                ValidatedValue::Tuple(vec![date, time])
             }
-            ValidatedValue::Duration(value) => Some(ValidatedValue::Tuple(vec![
+            ValidatedValue::Duration(value) => ValidatedValue::Tuple(vec![
                 push(values, ValidatedValue::Bool(value.positive))?,
                 unsigned(values, u128::from(value.days), 32)?,
                 unsigned(values, u128::from(value.seconds), 32)?,
                 unsigned(values, u128::from(value.microseconds), 32)?,
-            ])),
-            ValidatedValue::Pattern(value) => Some(ValidatedValue::Tuple(vec![
-                push(values, ValidatedValue::String(value.source().to_owned()))?,
-                unsigned(values, u128::from(value.flags()), 8)?,
-            ])),
-            _ => None,
+            ]),
+            ValidatedValue::Pattern(value) => {
+                let (source, flags) = value.into_parts();
+                ValidatedValue::Tuple(vec![
+                    push(values, ValidatedValue::String(source))?,
+                    unsigned(values, u128::from(flags), 8)?,
+                ])
+            }
+            other => other,
         };
-        if let Some(replacement) = replacement {
-            let Some(slot) = values.get_mut(id) else {
-                return Err(StructuralContractError::InvalidNode);
-            };
-            *slot = replacement;
-        }
+        let Some(slot) = values.get_mut(id) else {
+            return Err(StructuralContractError::InvalidNode);
+        };
+        *slot = replacement;
     }
     Ok(())
 }

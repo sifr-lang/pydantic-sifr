@@ -2,7 +2,7 @@
 
 use libfuzzer_sys::fuzz_target;
 use pydantic_sifr_core::{
-    CollectionConstraints, JsonLimits, Schema, StringConstraints, ValidationOptions,
+    CollectionConstraints, JsonLimits, PreparedSchema, Schema, StringConstraints, ValidationOptions,
     validate_json_and_construct,
 };
 
@@ -17,18 +17,26 @@ fuzz_target!(|data: &[u8]| {
     };
     let options = ValidationOptions::default();
     if data.first().is_some_and(|selector| selector & 1 == 0) {
+        let schema = Schema::String(StringConstraints::default());
+        let Ok(schema) = PreparedSchema::new(&schema) else {
+            return;
+        };
         let _ = validate_json_and_construct::<String>(
-            &Schema::String(StringConstraints::default()),
+            &schema,
             data,
             limits,
             options,
         );
     } else {
-        let _ = validate_json_and_construct::<Vec<String>>(
-            &Schema::List {
+        let schema = Schema::List {
                 item: Box::new(Schema::String(StringConstraints::default())),
                 constraints: CollectionConstraints::default(),
-            },
+            };
+        let Ok(schema) = PreparedSchema::new(&schema) else {
+            return;
+        };
+        let _ = validate_json_and_construct::<Vec<String>>(
+            &schema,
             data,
             limits,
             options,
