@@ -1,7 +1,8 @@
 use pydantic_sifr_core::{
-    ClockSnapshot, InputProfile, JsonLimits, NativeValue, PatternSchema, RelativeTimeConstraint,
-    Schema, TemporalKind, TemporalSchema, ValidatedArena, ValidatedValue, ValidationError,
-    ValidationOptions, build_native_input, parse_json, validate,
+    ClockSnapshot, CollectionConstraints, InputProfile, JsonLimits, NativeValue, PatternSchema,
+    RelativeTimeConstraint, Schema, StringConstraints, TemporalKind, TemporalSchema,
+    ValidatedArena, ValidatedValue, ValidationError, ValidationOptions, build_native_input,
+    parse_json, validate,
 };
 
 fn require_error(result: Result<ValidatedArena, ValidationError>) -> ValidationError {
@@ -296,4 +297,78 @@ fn strict_native_special_schemas_reject_plain_strings() {
         },
     ));
     assert_eq!(error.details()[0].code, "temporal_type");
+}
+
+#[test]
+fn collection_identity_distinguishes_naive_and_explicit_utc_temporals() {
+    for (schema, values) in [
+        (
+            temporal(TemporalKind::Time, None),
+            vec![
+                NativeValue::Time("12:00:00".to_owned()),
+                NativeValue::Time("12:00:00Z".to_owned()),
+            ],
+        ),
+        (
+            temporal(TemporalKind::DateTime, None),
+            vec![
+                NativeValue::DateTime("2024-01-01T00:00:00".to_owned()),
+                NativeValue::DateTime("2024-01-01T00:00:00Z".to_owned()),
+            ],
+        ),
+    ] {
+        let input = build_native_input(&NativeValue::Set(values), JsonLimits::default())
+            .unwrap_or_else(|error| panic!("native temporal set failed: {error}"));
+        let output = validate(
+            &Schema::Set {
+                item: Box::new(schema),
+                constraints: CollectionConstraints {
+                    min_length: Some(2),
+                    max_length: Some(2),
+                },
+            },
+            &input,
+            ValidationOptions {
+                strict: true,
+                ..ValidationOptions::default()
+            },
+        )
+        .unwrap_or_else(|error| panic!("temporal set validation failed: {error}"));
+        let ValidatedValue::Set(items) = root(&output) else {
+            panic!("expected temporal set");
+        };
+        assert_eq!(items.len(), 2);
+    }
+
+    let mapping = build_native_input(
+        &NativeValue::Mapping(vec![
+            (
+                NativeValue::DateTime("2024-01-01T00:00:00".to_owned()),
+                NativeValue::String("naive".to_owned()),
+            ),
+            (
+                NativeValue::DateTime("2024-01-01T00:00:00Z".to_owned()),
+                NativeValue::String("utc".to_owned()),
+            ),
+        ]),
+        JsonLimits::default(),
+    )
+    .unwrap_or_else(|error| panic!("native temporal mapping failed: {error}"));
+    let output = validate(
+        &Schema::Mapping {
+            key: Box::new(temporal(TemporalKind::DateTime, None)),
+            value: Box::new(Schema::String(StringConstraints::default())),
+            constraints: CollectionConstraints::default(),
+        },
+        &mapping,
+        ValidationOptions {
+            strict: true,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("temporal mapping validation failed: {error}"));
+    let ValidatedValue::Mapping(entries) = root(&output) else {
+        panic!("expected temporal mapping");
+    };
+    assert_eq!(entries.len(), 2);
 }

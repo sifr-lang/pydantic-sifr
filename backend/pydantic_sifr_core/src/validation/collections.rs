@@ -531,6 +531,7 @@ fn canonical_key(
             key.push(10);
             key.extend([value.hour, value.minute, value.second]);
             key.extend(value.microsecond.to_be_bytes());
+            key.push(u8::from(value.offset_seconds.is_some()));
             key.extend(value.offset_seconds.unwrap_or_default().to_be_bytes());
         }
         ValidatedValue::DateTime(value) => {
@@ -539,6 +540,7 @@ fn canonical_key(
             key.extend([value.date.month, value.date.day]);
             key.extend([value.time.hour, value.time.minute, value.time.second]);
             key.extend(value.time.microsecond.to_be_bytes());
+            key.push(u8::from(value.time.offset_seconds.is_some()));
             key.extend(value.time.offset_seconds.unwrap_or_default().to_be_bytes());
         }
         ValidatedValue::Duration(value) => {
