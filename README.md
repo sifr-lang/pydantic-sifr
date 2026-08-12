@@ -16,12 +16,15 @@ one deterministic program record from the compiler's structural shape. The
 compiler seals that record for the concrete target type. Runtime package code
 cannot construct or change the sealed program.
 
-The Python-free Rust backend checks the contract tuple, compact node indices,
-schema kinds, definition references, error overrides, and the canonical
-payload hash before it accepts input. JSON parsing uses jiter 0.16.0 without
-its Python feature. The parser stores exact integers as decimal text in a
-checked move-owned arena. Syntax errors and resource limits return typed
-errors.
+The Sifr const function verifies node indices, schema kinds, references, and
+error overrides. Invalid schemas fail during checking. The compiler then seals
+the canonical bytes, program identity, and concrete shape identity.
+
+The Python-free Rust backend checks only that sealed envelope before it accepts
+input. It does not parse or verify the schema graph again. JSON parsing uses
+jiter 0.16.0 without its Python feature. The parser stores exact integers as
+decimal text in a checked move-owned arena. Syntax errors and resource limits
+return typed errors.
 
 ## Development gates
 

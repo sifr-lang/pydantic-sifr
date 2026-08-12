@@ -179,46 +179,20 @@ impl SchemaKind {
         Self::Uuid,
     ];
 
-    #[must_use]
-    pub const fn is_rejected(self) -> bool {
-        matches!(
-            self,
-            Self::Any
-                | Self::Arguments
-                | Self::ArgumentsV3
-                | Self::Call
-                | Self::Callable
-                | Self::Invalid
-                | Self::IsInstance
-                | Self::IsSubclass
-                | Self::MissingSentinel
-        )
-    }
+    pub const UNAVAILABLE: [Self; 9] = [
+        Self::Any,
+        Self::Arguments,
+        Self::ArgumentsV3,
+        Self::Call,
+        Self::Callable,
+        Self::Invalid,
+        Self::IsInstance,
+        Self::IsSubclass,
+        Self::MissingSentinel,
+    ];
 
     #[must_use]
-    pub const fn expected_children(self) -> ChildCount {
-        match self {
-            Self::CustomError
-            | Self::Default
-            | Self::FrozenSet
-            | Self::Generator
-            | Self::Json
-            | Self::List
-            | Self::Model
-            | Self::Nullable
-            | Self::Set => ChildCount::Exact(1),
-            Self::Dict | Self::JsonOrPython | Self::LaxOrStrict => ChildCount::Exact(2),
-            Self::Chain | Self::Definitions | Self::TaggedUnion | Self::Tuple | Self::Union => {
-                ChildCount::AtLeast(1)
-            }
-            Self::DefinitionRef => ChildCount::Exact(0),
-            _ => ChildCount::Exact(0),
-        }
+    pub fn is_unavailable(self) -> bool {
+        Self::UNAVAILABLE.contains(&self)
     }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ChildCount {
-    Exact(usize),
-    AtLeast(usize),
 }

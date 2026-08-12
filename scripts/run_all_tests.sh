@@ -37,14 +37,12 @@ fi
 "${sifr_bin}" fmt --check src
 "${sifr_bin}" check src/__init__.sifr
 "${sifr_bin}" test src
+python3 scripts/check_sifr_schema_failures.py --sifr-bin "${sifr_bin}"
+python3 scripts/check_static_program_roundtrip.py --sifr-bin "${sifr_bin}"
 
 if [[ -f Cargo.toml ]]; then
   cargo fmt --check
-  if cargo tree -p pydantic_sifr_core --edges normal --format '{p}' \
-    | grep -Eq '^(pyo3|pythonize) '; then
-    echo "production dependency graph contains Python bindings" >&2
-    exit 1
-  fi
+  python3 scripts/check_python_free_graph.py
   CARGO_BUILD_JOBS=6 cargo test --workspace --all-targets
   CARGO_BUILD_JOBS=6 cargo clippy --workspace --all-targets -- -D warnings
 fi

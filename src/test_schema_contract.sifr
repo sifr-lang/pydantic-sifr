@@ -2,6 +2,9 @@ from .schema_contract import verify_schema
 
 
 @const_specialize("schema_contract", "verify_schema")
+@metadata("field", "value", "pydantic.error.package", "example")
+@metadata("field", "value", "pydantic.error.code", "positive")
+@metadata("field", "value", "pydantic.error.message", "Must be positive")
 class SchemaContractProbe:
     value: int
 

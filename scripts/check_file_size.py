@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 LIMIT = 900
-EXCLUDED_SUFFIXES = {".md", ".mdx", ".toml", ".lock"}
+EXCLUDED_SUFFIXES = {".md", ".mdx", ".lock"}
 EXCLUDED_PREFIXES = ("target/", "tests/provenance/")
 
 

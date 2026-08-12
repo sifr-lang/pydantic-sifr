@@ -3,22 +3,30 @@
 The package has two release-synchronized components.
 
 - Sifr source owns deterministic schema derivation and static specialization.
-- The `pydantic_sifr_core` Rust crate owns verified program loading, input
-  arenas, JSON parsing, error registries, and execution-plan foundations.
+- The `pydantic_sifr_core` Rust crate owns envelope checks, input arenas, JSON
+  parsing, the runtime error registry, and execution-plan foundations.
 
 ## Static program boundary
 
 `verify_schema` is a deterministic `@const_eval` function. It consumes the
-compiler's canonical structural shape. It returns the current contract tuple,
-feature bitmap, and canonical shape identity. `@const_specialize` causes the
-compiler to seal that value for one concrete type in check, test, build, and
-editor modes.
+compiler's canonical structural shape. It builds a compact, deterministic node
+array. It checks node ranges, arity, definitions, references, and error
+overrides. It returns the contract tuple, feature bitmap, shape identity, root,
+and nodes.
+
+`@const_specialize` runs that function in check, test, build, and editor modes.
+It reports invalid schemas before runtime. The compiler seals the successful
+result for one concrete type.
 
 The native core accepts only `VerifiedSchemaProgram`. Its fields are private.
-The loader checks format version 1, all other contract versions, the shape
-identity, the feature bitmap, node indices, node arity, definition identities,
-error declarations, direct cycles, and the SHA-256 payload identity. It does
-not interpret an older format.
+It compares all contract versions, the feature bitmap, program identity, shape
+identity, and payload size with the generated bridge. It does not decode,
+traverse, compile, or semantically verify the schema graph. No older format or
+runtime fallback exists.
+
+The round-trip gate emits a representative specialization with the released
+Sifr compiler. It compares the exact bytes and identity with checked-in
+fixtures. A Rust test accepts the same fixture through the envelope checker.
 
 ## Input boundary
 
@@ -38,6 +46,7 @@ Built-in errors have fixed codes, messages, and context keys. A custom code
 must be package-qualified. A custom declaration must register one exact
 message and context set. An override cannot change a built-in declaration.
 
-Malformed schemas and JSON return typed errors with stable codes and source
-locations. Property tests and the fuzz target exercise arbitrary bytes under
-explicit resource limits.
+Malformed schemas return stable package diagnostics during specialization.
+Malformed JSON returns typed runtime errors with stable codes and source
+locations. Separate property and fuzz targets exercise JSON and program
+envelopes under explicit resource limits.

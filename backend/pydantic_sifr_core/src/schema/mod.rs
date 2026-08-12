@@ -1,36 +1,14 @@
-mod canonical;
 mod kind;
 mod verify;
 
-pub use canonical::canonical_payload;
 pub use kind::SchemaKind;
-pub use verify::{SchemaVerificationError, VerifiedSchemaProgram, load_program, verify_program};
+pub use verify::{SchemaVerificationError, VerifiedSchemaProgram, verify_program};
 
-use crate::ErrorOverride;
+/// Maximum accepted size of one compiler-sealed schema payload.
+pub const MAX_PROGRAM_BYTES: usize = 4 * 1024 * 1024;
 
-#[derive(
-    Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, serde::Deserialize, serde::Serialize,
-)]
-#[serde(transparent)]
-pub struct NodeIndex(u32);
-
-impl NodeIndex {
-    #[must_use]
-    pub const fn new(value: u32) -> Self {
-        Self(value)
-    }
-
-    #[must_use]
-    pub const fn raw(self) -> u32 {
-        self.0
-    }
-
-    pub fn as_usize(self) -> Result<usize, SchemaVerificationError> {
-        usize::try_from(self.0).map_err(|_| SchemaVerificationError::IndexOutOfRange(self))
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+/// Versions carried by the package-owned static schema program.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ContractVersions {
     pub schema_program: u16,
     pub structural_contract: u16,
@@ -47,30 +25,21 @@ impl ContractVersions {
     };
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct ProgramHeader {
+/// Header copied from a compiler-sealed `sifr.meta.StaticProgram`.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct ProgramHeader<'a> {
     pub versions: ContractVersions,
     pub feature_bitmap: u64,
-    pub shape_identity: String,
-    pub payload_sha256: String,
+    pub shape_identity: &'a str,
+    pub program_identity: [u8; 32],
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct SchemaNode {
-    pub kind: SchemaKind,
-    #[serde(default)]
-    pub children: Vec<NodeIndex>,
-    #[serde(default)]
-    pub definition: Option<String>,
-    #[serde(default)]
-    pub reference: Option<String>,
-    #[serde(default)]
-    pub error_override: Option<ErrorOverride>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
-pub struct SchemaProgram {
-    pub header: ProgramHeader,
-    pub root: NodeIndex,
-    pub nodes: Vec<SchemaNode>,
+/// Borrowed view of an immutable compiler-emitted schema program.
+///
+/// The Sifr compiler owns construction and sealing. The core only checks the
+/// envelope. It does not decode or semantically verify the schema graph.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CompilerProgramEnvelope<'a> {
+    pub header: ProgramHeader<'a>,
+    pub canonical_bytes: &'a [u8],
 }

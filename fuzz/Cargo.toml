@@ -18,5 +18,12 @@ test = false
 doc = false
 bench = false
 
+[[bin]]
+name = "schema_envelope"
+path = "fuzz_targets/schema_envelope.rs"
+test = false
+doc = false
+bench = false
+
 [workspace]
 members = ["."]

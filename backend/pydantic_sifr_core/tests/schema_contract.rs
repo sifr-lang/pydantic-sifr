@@ -2,36 +2,45 @@ use std::collections::BTreeSet;
 
 use proptest::prelude::*;
 use pydantic_sifr_core::{
-    ContractVersions, ErrorOverride, ErrorRegistry, NodeIndex, ProgramHeader, SchemaKind,
-    SchemaNode, SchemaProgram, SchemaVerificationError, canonical_payload, load_program,
-    verify_program,
+    CompilerProgramEnvelope, ContractVersions, ErrorOverride, ErrorRegistry, ExecutionPlan,
+    ProgramHeader, SchemaKind, SchemaVerificationError, verify_program,
 };
-use sha2::{Digest, Sha256};
 
-fn node(kind: SchemaKind, children: Vec<NodeIndex>) -> SchemaNode {
-    SchemaNode {
-        kind,
-        children,
-        definition: None,
-        reference: None,
-        error_override: None,
-    }
+const SHAPE_IDENTITY: &str = "class:main.SchemaContractProbe:args[]:meta[]:fields[value:int:required:pydantic.error.package:str=str:7:example,pydantic.error.code:str=str:8:positive,pydantic.error.message:str=str:16:Must be positive]";
+const PROGRAM_IDENTITY_HEX: &str =
+    "d6591c059d855809f03be42c991d73a91a42e50c6c141810b3e6195c8efdca72";
+const SIFR_PROGRAM_TEXT: &str =
+    include_str!("../../../tests/static_program/schema_contract_program.txt");
+
+fn sifr_program_bytes() -> &'static [u8] {
+    SIFR_PROGRAM_TEXT
+        .strip_suffix('\n')
+        .unwrap_or(SIFR_PROGRAM_TEXT)
+        .as_bytes()
 }
 
-fn program(nodes: Vec<SchemaNode>) -> SchemaProgram {
-    let mut program = SchemaProgram {
+fn program_identity() -> [u8; 32] {
+    let bytes = hex::decode(PROGRAM_IDENTITY_HEX)
+        .unwrap_or_else(|error| panic!("invalid test identity: {error}"));
+    bytes
+        .try_into()
+        .unwrap_or_else(|_| panic!("test identity must contain 32 bytes"))
+}
+
+fn envelope<'a>(
+    bytes: &'a [u8],
+    identity: [u8; 32],
+    shape_identity: &'a str,
+) -> CompilerProgramEnvelope<'a> {
+    CompilerProgramEnvelope {
         header: ProgramHeader {
             versions: ContractVersions::CURRENT,
             feature_bitmap: 0,
-            shape_identity: "fixture.Model{id:int}".to_owned(),
-            payload_sha256: "0".repeat(64),
+            shape_identity,
+            program_identity: identity,
         },
-        root: NodeIndex::new(0),
-        nodes,
-    };
-    let payload = canonical_payload(&program).unwrap_or_else(|error| panic!("{error}"));
-    program.header.payload_sha256 = hex::encode(Sha256::digest(payload));
-    program
+        canonical_bytes: bytes,
+    }
 }
 
 #[test]
@@ -108,64 +117,77 @@ fn core_schema_kind_universe_is_complete_and_unique() {
 }
 
 #[test]
-fn malformed_program_bytes_return_stable_decode_error() {
-    let error = load_program(b"{\"header\":", &ErrorRegistry::default());
-    assert!(matches!(
-        error,
-        Err(SchemaVerificationError::Decode {
-            line: 1,
-            column: 10,
-            ..
-        })
-    ));
-}
-
-#[test]
-fn verifies_canonical_format_one_program() {
+fn verifies_exact_sifr_emitted_program_envelope() {
+    let identity = program_identity();
     let verified = verify_program(
-        program(vec![node(SchemaKind::Int, Vec::new())]),
-        &ErrorRegistry::default(),
+        envelope(sifr_program_bytes(), identity, SHAPE_IDENTITY),
+        identity,
+        SHAPE_IDENTITY,
     )
     .unwrap_or_else(|error| panic!("{error}"));
-    assert!(!verified.canonical_payload().is_empty());
-    assert_eq!(verified.program().header.versions.schema_program, 1);
+    assert_eq!(verified.canonical_bytes(), sifr_program_bytes());
+    assert!(
+        std::str::from_utf8(verified.canonical_bytes())
+            .is_ok_and(|text| text.contains("schema_program_version=int:1"))
+    );
+    let plan = ExecutionPlan::from_verified(&verified);
+    assert_eq!(plan.program_identity(), identity);
+    assert_eq!(plan.operations().len(), 2);
 }
 
 #[test]
-fn rejects_hash_mismatch_and_unavailable_kinds() {
-    let mut wrong_hash = program(vec![node(SchemaKind::Int, Vec::new())]);
-    wrong_hash.header.payload_sha256 = "f".repeat(64);
+fn rejects_each_corrupt_envelope_field_with_stable_error() {
+    let identity = program_identity();
+    let mut wrong_version = envelope(sifr_program_bytes(), identity, SHAPE_IDENTITY);
+    wrong_version.header.versions.schema_program = 2;
+    assert!(matches!(
+        verify_program(wrong_version, identity, SHAPE_IDENTITY),
+        Err(SchemaVerificationError::ContractVersionMismatch { .. })
+    ));
+
+    let mut wrong_feature = envelope(sifr_program_bytes(), identity, SHAPE_IDENTITY);
+    wrong_feature.header.feature_bitmap = 1;
     assert_eq!(
-        verify_program(wrong_hash, &ErrorRegistry::default()),
-        Err(SchemaVerificationError::PayloadHashMismatch)
+        verify_program(wrong_feature, identity, SHAPE_IDENTITY),
+        Err(SchemaVerificationError::UnsupportedFeatures(1))
     );
 
-    let rejected = program(vec![node(SchemaKind::Invalid, Vec::new())]);
-    assert!(matches!(
-        verify_program(rejected, &ErrorRegistry::default()),
-        Err(SchemaVerificationError::RejectedKind { .. })
-    ));
+    assert_eq!(
+        verify_program(
+            envelope(sifr_program_bytes(), [0; 32], SHAPE_IDENTITY),
+            identity,
+            SHAPE_IDENTITY,
+        ),
+        Err(SchemaVerificationError::ProgramIdentityMismatch)
+    );
+    assert_eq!(
+        verify_program(
+            envelope(sifr_program_bytes(), identity, "class:other.Model"),
+            identity,
+            SHAPE_IDENTITY,
+        ),
+        Err(SchemaVerificationError::ShapeIdentityMismatch)
+    );
+    assert_eq!(
+        verify_program(
+            envelope(&[], identity, SHAPE_IDENTITY),
+            identity,
+            SHAPE_IDENTITY
+        ),
+        Err(SchemaVerificationError::EmptyProgram)
+    );
 }
 
 #[test]
-fn rejects_unknown_features_and_unreachable_nodes() {
-    let mut unknown_feature = program(vec![node(SchemaKind::Int, Vec::new())]);
-    unknown_feature.header.feature_bitmap = 1;
-    let payload = canonical_payload(&unknown_feature).unwrap_or_else(|error| panic!("{error}"));
-    unknown_feature.header.payload_sha256 = hex::encode(Sha256::digest(payload));
-    assert!(matches!(
-        verify_program(unknown_feature, &ErrorRegistry::default()),
-        Err(SchemaVerificationError::UnsupportedFeatures(1))
-    ));
-
-    let unreachable = program(vec![
-        node(SchemaKind::Int, Vec::new()),
-        node(SchemaKind::Str, Vec::new()),
-    ]);
-    assert!(matches!(
-        verify_program(unreachable, &ErrorRegistry::default()),
-        Err(SchemaVerificationError::UnreachableNode(_))
-    ));
+fn large_payload_check_is_iterative_and_stack_bounded() {
+    let identity = program_identity();
+    let payload = vec![b'x'; 1_000_000];
+    let result = verify_program(
+        envelope(&payload, identity, SHAPE_IDENTITY),
+        identity,
+        SHAPE_IDENTITY,
+    );
+    assert!(result.is_ok());
 }
 
 #[test]
@@ -177,13 +199,7 @@ fn custom_errors_are_package_qualified_and_compositional() {
     };
     let registry =
         ErrorRegistry::new([declaration.clone()]).unwrap_or_else(|error| panic!("{error}"));
-    let mut custom = node(SchemaKind::CustomError, vec![NodeIndex::new(1)]);
-    custom.error_override = Some(declaration);
-    let verified = verify_program(
-        program(vec![custom, node(SchemaKind::Int, Vec::new())]),
-        &registry,
-    );
-    assert!(verified.is_ok());
+    assert_eq!(registry.custom(&declaration.code), Some(&declaration));
 
     let collision = ErrorOverride {
         code: "json_invalid".to_owned(),
@@ -193,29 +209,32 @@ fn custom_errors_are_package_qualified_and_compositional() {
     assert!(ErrorRegistry::new([collision]).is_err());
 }
 
-#[test]
-fn rejects_dangling_references_and_direct_cycles() {
-    let mut reference = node(SchemaKind::DefinitionRef, Vec::new());
-    reference.reference = Some("missing".to_owned());
-    assert!(matches!(
-        verify_program(program(vec![reference]), &ErrorRegistry::default()),
-        Err(SchemaVerificationError::DanglingDefinition(_))
-    ));
-
-    let cyclic = node(SchemaKind::List, vec![NodeIndex::new(0)]);
-    assert!(matches!(
-        verify_program(program(vec![cyclic]), &ErrorRegistry::default()),
-        Err(SchemaVerificationError::DirectCycle(_))
-    ));
-}
-
 proptest! {
     #[test]
-    fn malformed_schema_bytes_never_panic(bytes in proptest::collection::vec(any::<u8>(), 0..4096)) {
+    fn plausible_compiler_envelopes_verify_without_graph_parsing(
+        payload in proptest::collection::vec(any::<u8>(), 1..4096),
+        identity in any::<[u8; 32]>(),
+        shape in "[a-zA-Z][a-zA-Z0-9_.:{}\\[\\]-]{0,127}",
+    ) {
+        let verified = verify_program(envelope(&payload, identity, &shape), identity, &shape);
+        prop_assert!(verified.is_ok());
+    }
+
+    #[test]
+    fn arbitrary_envelope_fields_never_panic(
+        payload in proptest::collection::vec(any::<u8>(), 0..8192),
+        identity in any::<[u8; 32]>(),
+        expected_identity in any::<[u8; 32]>(),
+        shape in ".{0,512}",
+        expected_shape in ".{0,512}",
+        schema_version in any::<u16>(),
+        features in any::<u64>(),
+    ) {
+        let mut candidate = envelope(&payload, identity, &shape);
+        candidate.header.versions.schema_program = schema_version;
+        candidate.header.feature_bitmap = features;
         let result = std::panic::catch_unwind(|| {
-            if let Ok(program) = serde_json::from_slice::<SchemaProgram>(&bytes) {
-                let _ = verify_program(program, &ErrorRegistry::default());
-            }
+            let _ = verify_program(candidate, expected_identity, &expected_shape);
         });
         prop_assert!(result.is_ok());
     }
