@@ -3,6 +3,10 @@ use num_bigint::BigInt;
 use num_rational::BigRational;
 use std::collections::BTreeMap;
 
+use sifr_runtime::interop::structural::{
+    ShapeIdentity, binary_container, primitive, tuple, unary_container,
+};
+
 use crate::NativeValue;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -297,6 +301,7 @@ pub enum ExtraPolicy {
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelSchema {
     pub name: &'static str,
+    pub structural_identity: ShapeIdentity,
     pub fields: Vec<ModelField>,
     pub extra: ExtraPolicy,
     pub populate_by_name: bool,
@@ -356,6 +361,70 @@ impl Schema {
         Self::Integer {
             target: IntegerTarget::Exact,
             constraints: IntegerConstraints::default(),
+        }
+    }
+
+    pub(crate) fn structural_identity(&self) -> Result<ShapeIdentity, &'static str> {
+        let identity = match self {
+            Self::None => primitive("None"),
+            Self::Bool => primitive("bool"),
+            Self::Integer { target, .. } => primitive(target.structural_name()),
+            Self::Float(_) => primitive("f64"),
+            Self::Decimal(_) => primitive("bigdecimal"),
+            Self::Fraction(_) => primitive("pydantic_sifr.Fraction"),
+            Self::Complex(_) => primitive("pydantic_sifr.Complex"),
+            Self::String(_) | Self::Url(_) => primitive("str"),
+            Self::Pattern(_) => primitive("pydantic_sifr.Pattern"),
+            Self::Bytes(_) | Self::Uuid { .. } => primitive("bytes"),
+            Self::Temporal(schema) => primitive(schema.structural_name()),
+            Self::Nullable(inner) => unary_container("optional", inner.structural_identity()?),
+            Self::Model(model) => model.structural_identity,
+            Self::List { item, .. } | Self::Generator { item, .. } => {
+                unary_container("list", item.structural_identity()?)
+            }
+            Self::Tuple(items) => tuple(
+                &items
+                    .iter()
+                    .map(Self::structural_identity)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            Self::Mapping { key, value, .. } => binary_container(
+                "mapping",
+                key.structural_identity()?,
+                value.structural_identity()?,
+            ),
+            Self::Set { item, .. } | Self::FrozenSet { item, .. } => {
+                unary_container("set", item.structural_identity()?)
+            }
+            Self::EmbeddedJson(inner) => inner.structural_identity()?,
+        };
+        Ok(identity)
+    }
+}
+
+impl IntegerTarget {
+    const fn structural_name(self) -> &'static str {
+        match self {
+            Self::Exact => "int",
+            Self::I8 => "i8",
+            Self::I16 => "i16",
+            Self::I32 => "i32",
+            Self::I64 => "i64",
+            Self::U8 => "u8",
+            Self::U16 => "u16",
+            Self::U32 => "u32",
+            Self::U64 => "u64",
+        }
+    }
+}
+
+impl TemporalSchema {
+    const fn structural_name(&self) -> &'static str {
+        match self.kind {
+            TemporalKind::Date => "pydantic_sifr.Date",
+            TemporalKind::Time => "pydantic_sifr.Time",
+            TemporalKind::DateTime => "pydantic_sifr.DateTime",
+            TemporalKind::Duration => "pydantic_sifr.Duration",
         }
     }
 }

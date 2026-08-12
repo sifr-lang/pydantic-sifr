@@ -29,6 +29,16 @@ const BUILT_INS: &[BuiltInError] = &[
         message: "Schema program could not be loaded",
         context: &[],
     },
+    BuiltInError {
+        code: "internal_construction",
+        message: "Validated value does not match the target structural type",
+        context: &["error"],
+    },
+    BuiltInError {
+        code: "schema_construction_unsupported",
+        message: "Schema cannot construct a structural target",
+        context: &["error"],
+    },
 ];
 
 #[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]

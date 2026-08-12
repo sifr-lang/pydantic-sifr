@@ -1,9 +1,9 @@
 use std::collections::{BTreeMap, HashMap};
 
 use pydantic_sifr_core::{
-    ExtraPolicy, InputProfile, JsonLimits, ModelField, ModelSchema, NativeValue, Schema,
-    StringConstraints, ValidatedArena, ValidationOptions, validate_json_and_construct,
-    validate_native_and_construct, validate_strings_and_construct,
+    ExtraPolicy, InputProfile, IntegerConstraints, IntegerTarget, JsonLimits, ModelField,
+    ModelSchema, NativeValue, Schema, StringConstraints, ValidatedArena, ValidationOptions,
+    validate_json_and_construct, validate_native_and_construct, validate_strings_and_construct,
 };
 use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::{
@@ -123,6 +123,7 @@ fn record_nodes<Source: StructuralSource>(
 fn user_schema() -> Schema {
     Schema::Model(ModelSchema {
         name: "User",
+        structural_identity: User::shape_identity(),
         fields: vec![
             ModelField::required("id", Schema::exact_integer()),
             ModelField::required("name", Schema::String(StringConstraints::default())),
@@ -194,6 +195,7 @@ fn json_native_and_strings_entry_points_construct_the_target_directly() {
 fn typed_extra_destination_constructs_without_an_intermediate_model_tree() {
     let schema = Schema::Model(ModelSchema {
         name: "WithExtras",
+        structural_identity: WithExtras::shape_identity(),
         fields: vec![
             ModelField::required("id", Schema::exact_integer()),
             ModelField {
@@ -229,4 +231,121 @@ fn typed_extra_destination_constructs_without_an_intermediate_model_tree() {
     assert_eq!(value.id, SifrInt::from_i64(4));
     assert_eq!(value.extras["score"], SifrInt::from_i64(8));
     assert_eq!(value.extras["rank"], SifrInt::from_i64(9));
+}
+
+#[test]
+fn structural_shape_mismatch_is_rejected_before_node_construction() {
+    let result = validate_json_and_construct::<String>(
+        &Schema::exact_integer(),
+        b"1",
+        JsonLimits::default(),
+        ValidationOptions::default(),
+    );
+    let error = match result {
+        Ok(_) => panic!("integer schema must not construct a string target"),
+        Err(error) => error,
+    };
+    assert_eq!(error.details()[0].code, "internal_construction");
+    assert_eq!(
+        error.details()[0].context.get("error").map(String::as_str),
+        Some("structural shape identity mismatch")
+    );
+}
+
+#[test]
+fn every_fixed_width_integer_constructs_with_its_declared_width() {
+    let cases: &[(IntegerTarget, &str)] = &[
+        (IntegerTarget::I8, "-8"),
+        (IntegerTarget::I16, "-16"),
+        (IntegerTarget::I32, "-32"),
+        (IntegerTarget::I64, "-64"),
+        (IntegerTarget::U8, "8"),
+        (IntegerTarget::U16, "16"),
+        (IntegerTarget::U32, "32"),
+        (IntegerTarget::U64, "64"),
+    ];
+    let schema = |target| Schema::Integer {
+        target,
+        constraints: IntegerConstraints::default(),
+    };
+    assert_eq!(
+        validate_json_and_construct::<i8>(
+            &schema(cases[0].0),
+            cases[0].1.as_bytes(),
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("i8 construction failed: {error}")),
+        -8
+    );
+    assert_eq!(
+        validate_json_and_construct::<i16>(
+            &schema(cases[1].0),
+            cases[1].1.as_bytes(),
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("i16 construction failed: {error}")),
+        -16
+    );
+    assert_eq!(
+        validate_json_and_construct::<i32>(
+            &schema(cases[2].0),
+            cases[2].1.as_bytes(),
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("i32 construction failed: {error}")),
+        -32
+    );
+    assert_eq!(
+        validate_json_and_construct::<i64>(
+            &schema(cases[3].0),
+            cases[3].1.as_bytes(),
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("i64 construction failed: {error}")),
+        -64
+    );
+    assert_eq!(
+        validate_json_and_construct::<u8>(
+            &schema(cases[4].0),
+            cases[4].1.as_bytes(),
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("u8 construction failed: {error}")),
+        8
+    );
+    assert_eq!(
+        validate_json_and_construct::<u16>(
+            &schema(cases[5].0),
+            cases[5].1.as_bytes(),
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("u16 construction failed: {error}")),
+        16
+    );
+    assert_eq!(
+        validate_json_and_construct::<u32>(
+            &schema(cases[6].0),
+            cases[6].1.as_bytes(),
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("u32 construction failed: {error}")),
+        32
+    );
+    assert_eq!(
+        validate_json_and_construct::<u64>(
+            &schema(cases[7].0),
+            cases[7].1.as_bytes(),
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("u64 construction failed: {error}")),
+        64
+    );
 }

@@ -18,7 +18,12 @@ where
     T: StructuralConstruct,
 {
     let mut arena = validate(schema, input, options)?;
-    arena.set_shape(T::shape_identity());
+    let shape = schema
+        .structural_identity()
+        .map_err(schema_construction_error)?;
+    arena
+        .prepare_structural(shape)
+        .map_err(construction_error)?;
     structural_construct(arena).map_err(construction_error)
 }
 
@@ -74,6 +79,17 @@ fn construction_error(
         )
         .expected("verified target structural shape")
         .context("error", error.to_string()),
+    )
+}
+
+fn schema_construction_error(error: &'static str) -> ValidationError {
+    ValidationError::one(
+        ErrorDetail::new(
+            "schema_construction_unsupported",
+            "Schema cannot construct a structural target",
+        )
+        .expected("supported static structural schema")
+        .context("error", error),
     )
 }
 

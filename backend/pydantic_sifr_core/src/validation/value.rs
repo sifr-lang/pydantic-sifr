@@ -2,11 +2,8 @@ use bigdecimal::BigDecimal;
 use num_bigint::BigInt;
 use num_complex::Complex64;
 use num_rational::BigRational;
-use num_traits::ToPrimitive;
-use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::{
-    NodeId, ShapeIdentity, StructuralContractError, StructuralEdgeKind, StructuralKind,
-    StructuralNodeEdge, StructuralNodeRef, StructuralScalar, StructuralSource, primitive,
+    ShapeIdentity, StructuralKind, StructuralNodeEdge, primitive,
 };
 
 use crate::{Arena, ArenaError, ArenaId};
@@ -83,7 +80,7 @@ impl PartialEq for PatternValue {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ModelValue {
-    name: &'static str,
+    pub(super) name: &'static str,
     fields: Vec<(&'static str, ValueId)>,
     extras: Vec<(String, ValueId)>,
     validated_field_count: usize,
@@ -155,23 +152,23 @@ pub enum ValidatedValue {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValidatedArena {
-    root: ValueId,
-    values: Arena<ValidatedValue>,
-    shape: ShapeIdentity,
-    edges: Vec<Vec<StructuralNodeEdge<'static>>>,
-    moved: Vec<bool>,
+    pub(super) root: ValueId,
+    pub(super) values: Arena<ValidatedValue>,
+    pub(super) shape: ShapeIdentity,
+    pub(super) descriptions: Option<Vec<(StructuralKind, Option<&'static str>)>>,
+    pub(super) edges: Option<Vec<Vec<StructuralNodeEdge<'static>>>>,
+    pub(super) moved: Vec<bool>,
 }
 
 impl ValidatedArena {
     pub(crate) fn new(root: ValueId, values: Arena<ValidatedValue>) -> Self {
-        let edges = build_structural_edges(&values);
-        let moved = vec![false; values.len()];
         Self {
             root,
             values,
             shape: primitive("pydantic_sifr.untyped"),
-            edges,
-            moved,
+            descriptions: None,
+            edges: None,
+            moved: Vec::new(),
         }
     }
 
@@ -197,10 +194,6 @@ impl ValidatedArena {
 
     pub(crate) fn into_parts(self) -> (ValueId, Vec<ValidatedValue>) {
         (self.root, self.values.into_values())
-    }
-
-    pub(crate) fn set_shape(&mut self, shape: ShapeIdentity) {
-        self.shape = shape;
     }
 }
 
@@ -231,189 +224,6 @@ impl ValidatedValue {
         }
         Ok(())
     }
-}
-
-impl StructuralSource for ValidatedArena {
-    fn shape_identity(&self) -> ShapeIdentity {
-        self.shape
-    }
-
-    fn root(&self) -> NodeId {
-        node_id(self.root)
-    }
-
-    fn node(&self, id: NodeId) -> Result<StructuralNodeRef<'_>, StructuralContractError> {
-        let index = usize::try_from(id.get()).map_err(|_| StructuralContractError::InvalidNode)?;
-        let value = self
-            .values
-            .values()
-            .get(index)
-            .ok_or(StructuralContractError::InvalidNode)?;
-        let edges = self
-            .edges
-            .get(index)
-            .ok_or(StructuralContractError::InvalidNode)?;
-        let (kind, nominal) = structural_description(value)?;
-        if edges.is_empty() && is_scalar_kind(kind) {
-            Ok(StructuralNodeRef::scalar(kind))
-        } else {
-            Ok(StructuralNodeRef::aggregate(kind, nominal, edges))
-        }
-    }
-
-    fn take_scalar(&mut self, id: NodeId) -> Result<StructuralScalar, StructuralContractError> {
-        let value_id = ArenaId::from_usize(id.get() as usize)
-            .map_err(|_| StructuralContractError::InvalidNode)?;
-        let moved = self
-            .moved
-            .get_mut(id.get() as usize)
-            .ok_or(StructuralContractError::InvalidNode)?;
-        if *moved {
-            return Err(StructuralContractError::AlreadyMoved);
-        }
-        let value = self
-            .values
-            .get_mut(value_id)
-            .ok_or(StructuralContractError::InvalidNode)?;
-        let scalar = take_structural_scalar(value)?;
-        *moved = true;
-        Ok(scalar)
-    }
-}
-
-fn build_structural_edges(values: &Arena<ValidatedValue>) -> Vec<Vec<StructuralNodeEdge<'static>>> {
-    values
-        .values()
-        .iter()
-        .map(|value| match value {
-            ValidatedValue::Sequence(items)
-            | ValidatedValue::Tuple(items)
-            | ValidatedValue::Set(items)
-            | ValidatedValue::FrozenSet(items) => items
-                .iter()
-                .enumerate()
-                .map(|(index, id)| {
-                    StructuralNodeEdge::new(StructuralEdgeKind::Index(index), node_id(*id))
-                })
-                .collect(),
-            ValidatedValue::Mapping(entries) => entries
-                .iter()
-                .enumerate()
-                .flat_map(|(index, (key, value))| {
-                    [
-                        StructuralNodeEdge::new(
-                            StructuralEdgeKind::MappingKey(index),
-                            node_id(*key),
-                        ),
-                        StructuralNodeEdge::new(
-                            StructuralEdgeKind::MappingValue(index),
-                            node_id(*value),
-                        ),
-                    ]
-                })
-                .collect(),
-            ValidatedValue::Nullable(Some(id)) => vec![StructuralNodeEdge::new(
-                StructuralEdgeKind::ActiveMember {
-                    name: "some",
-                    index: 0,
-                },
-                node_id(*id),
-            )],
-            ValidatedValue::Model(model) => model
-                .fields
-                .iter()
-                .map(|(name, id)| {
-                    StructuralNodeEdge::new(StructuralEdgeKind::RecordField(name), node_id(*id))
-                })
-                .collect(),
-            _ => Vec::new(),
-        })
-        .collect()
-}
-
-fn structural_description(
-    value: &ValidatedValue,
-) -> Result<(StructuralKind, Option<&'static str>), StructuralContractError> {
-    let description = match value {
-        ValidatedValue::None => (StructuralKind::None, None),
-        ValidatedValue::Bool(_) => (StructuralKind::Bool, None),
-        ValidatedValue::ExactInt(_) => (StructuralKind::ExactInteger, None),
-        ValidatedValue::FixedInt { kind, .. } if kind.starts_with('u') => {
-            (StructuralKind::UnsignedInteger, None)
-        }
-        ValidatedValue::FixedInt { .. } => (StructuralKind::SignedInteger, None),
-        ValidatedValue::Float(_) => (StructuralKind::Float, None),
-        ValidatedValue::String(_) => (StructuralKind::String, None),
-        ValidatedValue::Bytes(_) => (StructuralKind::Bytes, None),
-        ValidatedValue::Sequence(_) => (StructuralKind::Sequence, None),
-        ValidatedValue::Tuple(_) => (StructuralKind::Tuple, None),
-        ValidatedValue::Mapping(_) => (StructuralKind::Mapping, None),
-        ValidatedValue::Set(_) => (StructuralKind::Set, None),
-        ValidatedValue::FrozenSet(_) => (StructuralKind::FrozenSet, None),
-        ValidatedValue::Nullable(_) => (StructuralKind::Optional, None),
-        ValidatedValue::Model(model) => (StructuralKind::Record, Some(model.name)),
-        _ => return Err(StructuralContractError::KindMismatch),
-    };
-    Ok(description)
-}
-
-const fn is_scalar_kind(kind: StructuralKind) -> bool {
-    matches!(
-        kind,
-        StructuralKind::None
-            | StructuralKind::Bool
-            | StructuralKind::SignedInteger
-            | StructuralKind::UnsignedInteger
-            | StructuralKind::ExactInteger
-            | StructuralKind::Float
-            | StructuralKind::String
-            | StructuralKind::Bytes
-    )
-}
-
-fn take_structural_scalar(
-    value: &mut ValidatedValue,
-) -> Result<StructuralScalar, StructuralContractError> {
-    match std::mem::replace(value, ValidatedValue::None) {
-        ValidatedValue::None => Ok(StructuralScalar::None),
-        ValidatedValue::Bool(value) => Ok(StructuralScalar::Bool(value)),
-        ValidatedValue::ExactInt(value) => {
-            Ok(StructuralScalar::ExactInteger(SifrInt::from_bigint(value)))
-        }
-        ValidatedValue::FixedInt { kind, value } => fixed_integer_scalar(kind, &value),
-        ValidatedValue::Float(value) => Ok(StructuralScalar::Float(value)),
-        ValidatedValue::String(value) => Ok(StructuralScalar::String(value)),
-        ValidatedValue::Bytes(value) => Ok(StructuralScalar::Bytes(value)),
-        other => {
-            *value = other;
-            Err(StructuralContractError::ScalarMismatch)
-        }
-    }
-}
-
-fn fixed_integer_scalar(
-    kind: &'static str,
-    value: &BigInt,
-) -> Result<StructuralScalar, StructuralContractError> {
-    let width = kind
-        .trim_start_matches(['i', 'u'])
-        .parse::<u16>()
-        .map_err(|_| StructuralContractError::ScalarMismatch)?;
-    if kind.starts_with('u') {
-        value
-            .to_u128()
-            .map(|value| StructuralScalar::UnsignedInteger { value, width })
-            .ok_or(StructuralContractError::ScalarMismatch)
-    } else {
-        value
-            .to_i128()
-            .map(|value| StructuralScalar::SignedInteger { value, width })
-            .ok_or(StructuralContractError::ScalarMismatch)
-    }
-}
-
-const fn node_id(id: ValueId) -> NodeId {
-    NodeId::new(id.raw())
 }
 
 fn remap_id(id: ValueId, offset: usize) -> Result<ValueId, ArenaError> {

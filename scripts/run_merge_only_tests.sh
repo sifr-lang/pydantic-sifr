@@ -21,6 +21,8 @@ CARGO_BUILD_JOBS=6 \
 CARGO_BUILD_JOBS=6 \
   cargo check --manifest-path fuzz/Cargo.toml --bin special_validation
 CARGO_BUILD_JOBS=6 \
+  cargo check --manifest-path fuzz/Cargo.toml --bin typed_construction
+CARGO_BUILD_JOBS=6 \
   cargo run --manifest-path fuzz/Cargo.toml --bin scalar_validation -- \
   -seed_inputs=fuzz/corpus/scalar_validation/integer.json,fuzz/corpus/scalar_validation/string.json \
   -runs=1000
@@ -31,6 +33,9 @@ CARGO_BUILD_JOBS=6 \
 CARGO_BUILD_JOBS=6 \
   cargo run --manifest-path fuzz/Cargo.toml --bin special_validation -- \
   -seed_inputs=fuzz/corpus/special_validation/date.json,fuzz/corpus/special_validation/url.json \
+  -runs=1000
+CARGO_BUILD_JOBS=6 \
+  cargo run --manifest-path fuzz/Cargo.toml --bin typed_construction -- \
   -runs=1000
 
 echo "merge-only foundation tests passed"

@@ -6,6 +6,7 @@ use pydantic_sifr_core::{
     ModelField, ModelSchema, NativeValue, Schema, StringConstraints, ValidatedArena,
     ValidatedValue, ValidationError, ValidationOptions, build_native_input, parse_json, validate,
 };
+use sifr_runtime::interop::structural::primitive;
 
 static DEFAULT_CALLS: AtomicUsize = AtomicUsize::new(0);
 
@@ -18,9 +19,25 @@ fn required(name: &'static str, schema: Schema) -> ModelField {
     ModelField::required(name, schema)
 }
 
+fn extra_field(value: Schema) -> ModelField {
+    ModelField {
+        name: "extras",
+        schema: Schema::Mapping {
+            key: Box::new(Schema::String(StringConstraints::default())),
+            value: Box::new(value),
+            constraints: pydantic_sifr_core::CollectionConstraints::default(),
+        },
+        input: false,
+        default: None,
+        validation_aliases: Vec::new(),
+        metadata: BTreeMap::new(),
+    }
+}
+
 fn model(fields: Vec<ModelField>, extra: ExtraPolicy) -> Schema {
     Schema::Model(ModelSchema {
         name: "User",
+        structural_identity: primitive("test.User"),
         fields,
         extra,
         populate_by_name: false,
@@ -208,7 +225,10 @@ fn extra_policies_ignore_forbid_or_validate_typed_values() {
 
     let allowed = require_error(validate(
         &model(
-            vec![required("id", Schema::exact_integer())],
+            vec![
+                required("id", Schema::exact_integer()),
+                extra_field(Schema::exact_integer()),
+            ],
             ExtraPolicy::Allow {
                 destination: "extras",
                 value_schema: Box::new(Schema::exact_integer()),
@@ -228,6 +248,7 @@ fn extra_policies_ignore_forbid_or_validate_typed_values() {
 fn nested_model_errors_aggregate_with_stable_field_locations() {
     let child = ModelSchema {
         name: "Child",
+        structural_identity: primitive("test.Child"),
         fields: vec![
             required("left", Schema::exact_integer()),
             required("right", Schema::exact_integer()),
@@ -382,6 +403,7 @@ fn field_metadata_and_name_population_are_static_schema_inputs() {
     field.metadata = BTreeMap::from([("description".to_owned(), "stable id".to_owned())]);
     let schema = Schema::Model(ModelSchema {
         name: "User",
+        structural_identity: primitive("test.User"),
         fields: vec![field.clone()],
         extra: ExtraPolicy::Ignore,
         populate_by_name: true,
@@ -403,4 +425,74 @@ fn field_metadata_and_name_population_are_static_schema_inputs() {
         field_value(&output, "identifier"),
         ValidatedValue::ExactInt(_)
     ));
+}
+
+#[test]
+fn invalid_non_input_and_extra_destination_schemas_fail_before_input_validation() {
+    let input = parse_json(br#"{}"#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON model failed: {error}"));
+    let defaulted = ModelField {
+        name: "derived",
+        schema: Schema::String(StringConstraints::default()),
+        input: false,
+        default: Some(FieldDefault::Static(NativeValue::String(
+            "ready".to_owned(),
+        ))),
+        validation_aliases: Vec::new(),
+        metadata: BTreeMap::new(),
+    };
+    let output = validate(
+        &model(vec![defaulted], ExtraPolicy::Ignore),
+        &input,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("non-input default failed: {error}"));
+    assert!(matches!(
+        field_value(&output, "derived"),
+        ValidatedValue::String(value) if value == "ready"
+    ));
+
+    let missing_destination = require_error(validate(
+        &model(
+            vec![],
+            ExtraPolicy::Allow {
+                destination: "extras",
+                value_schema: Box::new(Schema::exact_integer()),
+            },
+        ),
+        &input,
+        ValidationOptions::default(),
+    ));
+    assert_eq!(missing_destination.details()[0].code, "schema_invalid");
+
+    let orphan = ModelField {
+        name: "orphan",
+        schema: Schema::String(StringConstraints::default()),
+        input: false,
+        default: None,
+        validation_aliases: Vec::new(),
+        metadata: BTreeMap::new(),
+    };
+    let orphan_error = require_error(validate(
+        &model(vec![orphan], ExtraPolicy::Ignore),
+        &input,
+        ValidationOptions::default(),
+    ));
+    assert_eq!(orphan_error.details()[0].code, "schema_invalid");
+
+    let duplicate_error = require_error(validate(
+        &model(
+            vec![
+                required("same", Schema::exact_integer()),
+                required("same", Schema::exact_integer()),
+            ],
+            ExtraPolicy::Ignore,
+        ),
+        &input,
+        ValidationOptions::default(),
+    ));
+    assert_eq!(duplicate_error.details()[0].code, "schema_invalid");
 }

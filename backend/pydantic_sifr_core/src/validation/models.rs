@@ -4,7 +4,8 @@ use crate::{InputId, InputValue, JsonLimits, ObjectKind, build_native_input};
 
 use super::{
     AliasPath, AliasSegment, ErrorDetail, ExtraPolicy, FieldDefault, InputProfile, LocationItem,
-    ModelField, ModelSchema, ModelValue, ValidatedValue, ValidationError, ValidationState, ValueId,
+    ModelField, ModelSchema, ModelValue, Schema, ValidatedValue, ValidationError, ValidationState,
+    ValueId,
     collections::{collect_error, stop_after_error_cap},
     validate_at_depth,
 };
@@ -15,6 +16,7 @@ pub(crate) fn validate_model(
     input_id: InputId,
     depth: usize,
 ) -> Result<ValueId, ValidationError> {
+    verify_model_schema(schema)?;
     let (kind, entries) = match state.input().get(input_id) {
         Some(InputValue::Object { kind, entries }) => (*kind, entries.clone()),
         Some(_) => {
@@ -49,47 +51,65 @@ pub(crate) fn validate_model(
         ));
     }
 
-    let input_fields: Vec<&ModelField> = schema.fields.iter().filter(|field| field.input).collect();
     let mut fields = BTreeMap::new();
     let mut consumed = BTreeSet::new();
     let mut errors = None;
     let mut validated_field_count = 0;
-    for (field_index, field) in input_fields.iter().enumerate() {
-        match select_field(state, schema, field, input_id, &entries) {
-            Some((value_id, entry_index, location)) => {
-                consumed.insert(entry_index);
-                match state.validate_node(&field.schema, value_id, depth + 1) {
-                    Ok(value) => {
+    for (field_index, field) in schema.fields.iter().enumerate() {
+        if !field.input {
+            if field.default.is_some() {
+                match validate_default(state, field, depth) {
+                    Ok(Some(value)) => {
                         fields.insert(field.name, value);
-                        validated_field_count += 1;
                     }
+                    Ok(None) => {}
                     Err(error) => collect_error(
                         &mut errors,
-                        at_path(error, &location),
+                        error.at(LocationItem::Field(field.name.to_owned())),
                         state.options().limits.max_errors,
                     ),
                 }
             }
-            None => match validate_default(state, field, depth) {
-                Ok(Some(value)) => {
-                    fields.insert(field.name, value);
+        } else {
+            match select_field(state, schema, field, input_id, &entries) {
+                Some((value_id, entry_index, location)) => {
+                    consumed.insert(entry_index);
+                    match state.validate_node(&field.schema, value_id, depth + 1) {
+                        Ok(value) => {
+                            fields.insert(field.name, value);
+                            validated_field_count += 1;
+                        }
+                        Err(error) => collect_error(
+                            &mut errors,
+                            at_path(error, &location),
+                            state.options().limits.max_errors,
+                        ),
+                    }
                 }
-                Ok(None) => collect_error(
-                    &mut errors,
-                    ValidationError::one(
-                        ErrorDetail::new("missing", "Field is required").expected("field value"),
-                    )
-                    .at(missing_location(schema, field)),
-                    state.options().limits.max_errors,
-                ),
-                Err(error) => collect_error(
-                    &mut errors,
-                    error.at(LocationItem::Field(field.name.to_owned())),
-                    state.options().limits.max_errors,
-                ),
-            },
+                None => match validate_default(state, field, depth) {
+                    Ok(Some(value)) => {
+                        fields.insert(field.name, value);
+                    }
+                    Ok(None) => collect_error(
+                        &mut errors,
+                        ValidationError::one(
+                            ErrorDetail::new("missing", "Field is required")
+                                .expected("field value"),
+                        )
+                        .at(missing_location(schema, field)),
+                        state.options().limits.max_errors,
+                    ),
+                    Err(error) => collect_error(
+                        &mut errors,
+                        error.at(LocationItem::Field(field.name.to_owned())),
+                        state.options().limits.max_errors,
+                    ),
+                },
+            }
         }
-        let has_more_fields = field_index + 1 < input_fields.len();
+        let has_more_fields = schema.fields[field_index + 1..]
+            .iter()
+            .any(|candidate| candidate.input || candidate.default.is_some());
         let has_possible_extras =
             !matches!(schema.extra, ExtraPolicy::Ignore) && consumed.len() < entries.len();
         if stop_after_error_cap(state, &mut errors, has_more_fields || has_possible_extras) {
@@ -147,6 +167,66 @@ pub(crate) fn validate_model(
         extras,
         validated_field_count,
     )))
+}
+
+fn verify_model_schema(schema: &ModelSchema) -> Result<(), ValidationError> {
+    let mut names = BTreeSet::new();
+    for field in &schema.fields {
+        if !names.insert(field.name) {
+            return Err(type_error(
+                "schema_invalid",
+                "Model field names must be unique",
+                "unique model fields",
+            ));
+        }
+    }
+    let destination = match &schema.extra {
+        ExtraPolicy::Allow {
+            destination,
+            value_schema,
+        } => {
+            let Some(field) = schema
+                .fields
+                .iter()
+                .find(|field| field.name == *destination)
+            else {
+                return Err(type_error(
+                    "schema_invalid",
+                    "Extra destination must name a declared field",
+                    "declared extra destination",
+                ));
+            };
+            if field.input || field.default.is_some() || !extra_field_matches(field, value_schema) {
+                return Err(type_error(
+                    "schema_invalid",
+                    "Extra destination must be one non-input mapping field without a default",
+                    "typed extra destination",
+                ));
+            }
+            Some(*destination)
+        }
+        ExtraPolicy::Ignore | ExtraPolicy::Forbid => None,
+    };
+    if schema
+        .fields
+        .iter()
+        .any(|field| !field.input && field.default.is_none() && Some(field.name) != destination)
+    {
+        return Err(type_error(
+            "schema_invalid",
+            "A non-input field needs a default or must be the extra destination",
+            "non-input field value source",
+        ));
+    }
+    Ok(())
+}
+
+fn extra_field_matches(field: &ModelField, value_schema: &Schema) -> bool {
+    matches!(
+        &field.schema,
+        Schema::Mapping { key, value, .. }
+            if matches!(key.as_ref(), Schema::String(_)) && value.as_ref() == value_schema
+    )
 }
 
 fn select_field(

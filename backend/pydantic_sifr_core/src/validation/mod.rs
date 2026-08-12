@@ -5,6 +5,7 @@ mod models;
 mod scalars;
 mod schema;
 mod special;
+mod structural;
 mod value;
 
 pub use collections::{ValidatedIterator, validated_iterator};
