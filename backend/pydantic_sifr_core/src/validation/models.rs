@@ -5,7 +5,8 @@ use crate::{InputId, InputValue, JsonLimits, ObjectKind, build_native_input};
 use super::{
     AliasPath, AliasSegment, ErrorDetail, ExtraPolicy, FieldDefault, InputProfile, LocationItem,
     ModelField, ModelSchema, ModelValue, ValidatedValue, ValidationError, ValidationState, ValueId,
-    collections::collect_error, validate_at,
+    collections::{collect_error, stop_after_error_cap},
+    validate_at_depth,
 };
 
 pub(crate) fn validate_model(
@@ -52,7 +53,7 @@ pub(crate) fn validate_model(
     let mut consumed = BTreeSet::new();
     let mut errors = None;
     let mut validated_field_count = 0;
-    for field in &schema.fields {
+    for (field_index, field) in schema.fields.iter().enumerate() {
         match select_field(state, schema, field, input_id, &entries) {
             Some((value_id, entry_index, location)) => {
                 consumed.insert(entry_index);
@@ -68,7 +69,7 @@ pub(crate) fn validate_model(
                     ),
                 }
             }
-            None => match validate_default(state, field) {
+            None => match validate_default(state, field, depth) {
                 Ok(Some(value)) => fields.push((field.name.clone(), value)),
                 Ok(None) => collect_error(
                     &mut errors,
@@ -85,15 +86,10 @@ pub(crate) fn validate_model(
                 ),
             },
         }
-        if errors
-            .as_ref()
-            .is_some_and(|error| error.is_full(state.options().limits.max_errors))
-        {
-            if (consumed.len() < entries.len() || fields.len() < schema.fields.len())
-                && let Some(error) = &mut errors
-            {
-                error.mark_truncated();
-            }
+        let has_more_fields = field_index + 1 < schema.fields.len();
+        let has_possible_extras =
+            !matches!(schema.extra, ExtraPolicy::Ignore) && consumed.len() < entries.len();
+        if stop_after_error_cap(state, &mut errors, has_more_fields || has_possible_extras) {
             break;
         }
     }
@@ -215,6 +211,7 @@ fn at_path(mut error: ValidationError, path: &[LocationItem]) -> ValidationError
 fn validate_default(
     state: &mut ValidationState<'_>,
     field: &ModelField,
+    depth: usize,
 ) -> Result<Option<ValueId>, ValidationError> {
     let Some(default) = &field.default else {
         return Ok(None);
@@ -244,7 +241,7 @@ fn validate_default(
     })?;
     let mut options = state.options();
     options.profile = InputProfile::Native;
-    let output = validate_at(&field.schema, &input, input.root(), options)?;
+    let output = validate_at_depth(&field.schema, &input, input.root(), options, depth + 1)?;
     state.import(output).map(Some)
 }
 
@@ -283,15 +280,8 @@ fn validate_extras(
                 }
             }
         }
-        if errors
-            .as_ref()
-            .is_some_and(|error| error.is_full(state.options().limits.max_errors))
-        {
-            if index + 1 < entries.len()
-                && let Some(error) = errors
-            {
-                error.mark_truncated();
-            }
+        let has_more = ((index + 1)..entries.len()).any(|next| !consumed.contains(&next));
+        if stop_after_error_cap(state, errors, has_more) {
             break;
         }
     }

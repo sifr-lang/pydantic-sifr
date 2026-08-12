@@ -266,7 +266,7 @@ fn validate_mapping(
     }
 }
 
-fn stop_after_error_cap(
+pub(crate) fn stop_after_error_cap(
     state: &ValidationState<'_>,
     errors: &mut Option<ValidationError>,
     has_more: bool,

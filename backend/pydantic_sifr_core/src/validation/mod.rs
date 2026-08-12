@@ -167,7 +167,7 @@ impl ValidationState<'_> {
             let value = if matches!(input, InputValue::Null) {
                 ValidatedValue::Nullable(None)
             } else {
-                let child = self.validate_node(inner, input_id, depth + 1)?;
+                let child = self.validate_node(inner, input_id, depth)?;
                 ValidatedValue::Nullable(Some(child))
             };
             return self.push(value);

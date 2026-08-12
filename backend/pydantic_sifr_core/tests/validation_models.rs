@@ -63,6 +63,13 @@ fn model_distinguishes_required_defaulted_and_nullable_fields() {
         vec![
             required("id", Schema::exact_integer()),
             name,
+            ModelField {
+                name: "status".to_owned(),
+                schema: Schema::String(StringConstraints::default()),
+                default: Some(FieldDefault::Static(NativeValue::String("new".to_owned()))),
+                validation_aliases: Vec::new(),
+                metadata: BTreeMap::new(),
+            },
             required(
                 "note",
                 Schema::Nullable(Box::new(Schema::String(StringConstraints::default()))),
@@ -89,6 +96,10 @@ fn model_distinguishes_required_defaulted_and_nullable_fields() {
     assert_eq!(
         field_value(&output, "note"),
         &ValidatedValue::Nullable(None)
+    );
+    assert_eq!(
+        field_value(&output, "status"),
+        &ValidatedValue::String("new".to_owned())
     );
     assert_eq!(root_model(&output).validated_field_count(), 2);
 
@@ -259,6 +270,53 @@ fn nested_model_errors_aggregate_with_stable_field_locations() {
 }
 
 #[test]
+fn error_cap_marks_truncation_only_when_unprocessed_errors_can_remain() {
+    let schema = model(
+        vec![
+            required("left", Schema::exact_integer()),
+            required("right", Schema::exact_integer()),
+        ],
+        ExtraPolicy::Forbid,
+    );
+    let input = parse_json(br#"{"left":"bad","right":null}"#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON model failed: {error}"));
+    let error = require_error(validate(
+        &schema,
+        &input,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            limits: pydantic_sifr_core::ValidationLimits {
+                max_errors: 2,
+                ..pydantic_sifr_core::ValidationLimits::default()
+            },
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(error.details().len(), 2);
+    assert!(!error.is_truncated());
+
+    let extra_first = parse_json(
+        br#"{"extra":false,"left":1,"right":2}"#,
+        JsonLimits::default(),
+    )
+    .unwrap_or_else(|error| panic!("JSON model failed: {error}"));
+    let extra_error = require_error(validate(
+        &schema,
+        &extra_first,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            limits: pydantic_sifr_core::ValidationLimits {
+                max_errors: 1,
+                ..pydantic_sifr_core::ValidationLimits::default()
+            },
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(extra_error.details().len(), 1);
+    assert!(!extra_error.is_truncated());
+}
+
+#[test]
 fn strict_native_and_strings_profiles_share_the_model_engine() {
     let schema = model(vec![required("enabled", Schema::Bool)], ExtraPolicy::Ignore);
     let native = build_native_input(
@@ -294,6 +352,26 @@ fn strict_native_and_strings_profiles_share_the_model_engine() {
         },
     ));
     assert_eq!(error.details()[0].code, "strings_type");
+
+    let typed_native = build_native_input(
+        &NativeValue::Object(vec![("enabled".to_owned(), NativeValue::Bool(true))]),
+        JsonLimits::default(),
+    )
+    .unwrap_or_else(|error| panic!("native model failed: {error}"));
+    let native_output = validate(
+        &schema,
+        &typed_native,
+        ValidationOptions {
+            strict: true,
+            profile: InputProfile::Native,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("strict native model failed: {error}"));
+    assert_eq!(
+        field_value(&native_output, "enabled"),
+        &ValidatedValue::Bool(true)
+    );
 }
 
 #[test]
