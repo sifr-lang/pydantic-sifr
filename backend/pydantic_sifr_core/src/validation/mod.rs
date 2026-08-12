@@ -82,6 +82,31 @@ fn validate_at(
     root: InputId,
     options: ValidationOptions,
 ) -> Result<ValidatedArena, ValidationError> {
+    validate_at_depth(schema, input, root, options, 0)
+}
+
+pub(crate) fn validate_at_depth(
+    schema: &Schema,
+    input: &InputArena,
+    root: InputId,
+    options: ValidationOptions,
+    start_depth: usize,
+) -> Result<ValidatedArena, ValidationError> {
+    validate_options(options)?;
+    if options.profile == InputProfile::Strings {
+        check_strings_profile(input, root)?;
+    }
+    check_input_limits(input, root, start_depth, options.limits)?;
+    let mut state = ValidationState {
+        input,
+        values: Arena::new(),
+        options,
+    };
+    let root = state.validate_node(schema, root, start_depth)?;
+    Ok(ValidatedArena::new(root, state.values))
+}
+
+pub(crate) fn validate_options(options: ValidationOptions) -> Result<(), ValidationError> {
     if options.limits.max_depth == 0
         || options.limits.max_collection_items == 0
         || options.limits.max_string_bytes == 0
@@ -90,23 +115,14 @@ fn validate_at(
         || options.limits.max_errors == 0
         || options.limits.max_depth > HARD_MAX_DEPTH
     {
-        return Err(scalars::type_error(
+        Err(scalars::type_error(
             "resource_limit",
             "Validation limits must be greater than zero",
             "positive limits",
-        ));
+        ))
+    } else {
+        Ok(())
     }
-    if options.profile == InputProfile::Strings {
-        check_strings_profile(input, root)?;
-    }
-    check_input_limits(input, root, options.limits)?;
-    let mut state = ValidationState {
-        input,
-        values: Arena::new(),
-        options,
-    };
-    let root = state.validate_node(schema, root, 0)?;
-    Ok(ValidatedArena::new(root, state.values))
 }
 
 pub(crate) struct ValidationState<'a> {
@@ -204,9 +220,10 @@ fn arena_validation_error(_error: crate::ArenaError) -> ValidationError {
 fn check_input_limits(
     input: &InputArena,
     root: InputId,
+    start_depth: usize,
     limits: ValidationLimits,
 ) -> Result<(), ValidationError> {
-    let mut pending = vec![(root, 0_usize)];
+    let mut pending = vec![(root, start_depth)];
     let mut string_bytes = 0_usize;
     while let Some((id, depth)) = pending.pop() {
         if depth > limits.max_depth {
@@ -232,12 +249,12 @@ fn check_input_limits(
                 numerator,
                 denominator,
             } => numerator.len().saturating_add(denominator.len()),
-            InputValue::Array(children) => {
-                check_collection_limit(children.len(), limits)?;
-                pending.extend(children.iter().map(|id| (*id, depth + 1)));
+            InputValue::Sequence { items, .. } => {
+                check_collection_limit(items.len(), limits)?;
+                pending.extend(items.iter().map(|id| (*id, depth + 1)));
                 0
             }
-            InputValue::Object(entries) => {
+            InputValue::Object { entries, .. } => {
                 check_collection_limit(entries.len(), limits)?;
                 for (key, id) in entries {
                     string_bytes = string_bytes.saturating_add(key.len());
@@ -287,8 +304,8 @@ fn check_strings_profile(input: &InputArena, root: InputId) -> Result<(), Valida
     while let Some(id) = pending.pop() {
         match input.get(id) {
             Some(InputValue::String(_)) => {}
-            Some(InputValue::Array(children)) => pending.extend(children),
-            Some(InputValue::Object(entries)) => {
+            Some(InputValue::Sequence { items, .. }) => pending.extend(items),
+            Some(InputValue::Object { entries, .. }) => {
                 pending.extend(entries.iter().map(|(_, value)| value));
             }
             Some(InputValue::Mapping(entries)) => {

@@ -9,6 +9,21 @@ const HARD_MAX_DEPTH: usize = 256;
 
 pub type InputId = ArenaId;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SequenceKind {
+    JsonArray,
+    List,
+    Tuple,
+    Set,
+    FrozenSet,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ObjectKind {
+    JsonObject,
+    Object,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum InputValue {
     Null,
@@ -26,8 +41,14 @@ pub enum InputValue {
         numerator: String,
         denominator: String,
     },
-    Array(Vec<InputId>),
-    Object(Vec<(String, InputId)>),
+    Sequence {
+        kind: SequenceKind,
+        items: Vec<InputId>,
+    },
+    Object {
+        kind: ObjectKind,
+        entries: Vec<(String, InputId)>,
+    },
     Mapping(Vec<(InputId, InputId)>),
 }
 
@@ -217,7 +238,10 @@ impl BuildState {
                     path.pop();
                     children.push(child_id);
                 }
-                InputValue::Array(children)
+                InputValue::Sequence {
+                    kind: SequenceKind::JsonArray,
+                    items: children,
+                }
             }
             JsonValue::Object(entries) => {
                 if entries.len() > self.limits.max_collection_items {
@@ -242,7 +266,10 @@ impl BuildState {
                     path.pop();
                     children.push((key.to_string(), child_id));
                 }
-                InputValue::Object(children)
+                InputValue::Object {
+                    kind: ObjectKind::JsonObject,
+                    entries: children,
+                }
             }
         };
         self.arena.push(owned).map_err(JsonInputError::arena)

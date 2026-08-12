@@ -2,7 +2,7 @@ use core::fmt;
 
 use crate::{Arena, ArenaError};
 
-use super::{InputArena, InputId, InputValue, JsonLimits};
+use super::{InputArena, InputId, InputValue, JsonLimits, ObjectKind, SequenceKind};
 
 const HARD_MAX_DEPTH: usize = 256;
 
@@ -24,7 +24,10 @@ pub enum NativeValue {
         numerator: String,
         denominator: String,
     },
-    Sequence(Vec<Self>),
+    List(Vec<Self>),
+    Tuple(Vec<Self>),
+    Set(Vec<Self>),
+    FrozenSet(Vec<Self>),
     Object(Vec<(String, Self)>),
     Mapping(Vec<(Self, Self)>),
 }
@@ -96,13 +99,11 @@ impl NativeBuilder {
                     denominator: denominator.clone(),
                 }
             }
-            NativeValue::Sequence(values) => {
-                self.check_collection(values.len())?;
-                let mut children = Vec::with_capacity(values.len());
-                for child in values {
-                    children.push(self.push(child, depth + 1)?);
-                }
-                InputValue::Array(children)
+            NativeValue::List(values) => self.push_sequence(values, SequenceKind::List, depth)?,
+            NativeValue::Tuple(values) => self.push_sequence(values, SequenceKind::Tuple, depth)?,
+            NativeValue::Set(values) => self.push_sequence(values, SequenceKind::Set, depth)?,
+            NativeValue::FrozenSet(values) => {
+                self.push_sequence(values, SequenceKind::FrozenSet, depth)?
             }
             NativeValue::Object(values) => {
                 self.check_collection(values.len())?;
@@ -111,7 +112,10 @@ impl NativeBuilder {
                     self.add_string_bytes(key.len())?;
                     children.push((key.clone(), self.push(child, depth + 1)?));
                 }
-                InputValue::Object(children)
+                InputValue::Object {
+                    kind: ObjectKind::Object,
+                    entries: children,
+                }
             }
             NativeValue::Mapping(values) => {
                 self.check_collection(values.len())?;
@@ -133,6 +137,23 @@ impl NativeBuilder {
         } else {
             Ok(())
         }
+    }
+
+    fn push_sequence(
+        &mut self,
+        values: &[NativeValue],
+        kind: SequenceKind,
+        depth: usize,
+    ) -> Result<InputValue, NativeInputError> {
+        self.check_collection(values.len())?;
+        let mut children = Vec::with_capacity(values.len());
+        for child in values {
+            children.push(self.push(child, depth + 1)?);
+        }
+        Ok(InputValue::Sequence {
+            kind,
+            items: children,
+        })
     }
 
     fn check_integer_digits(&self, value: &str) -> Result<(), NativeInputError> {

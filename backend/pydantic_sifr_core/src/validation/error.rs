@@ -76,7 +76,8 @@ impl ValidationError {
         if other.details.len() > remaining {
             self.truncated = true;
         }
-        self.details.extend(other.details.drain(..remaining));
+        let take = remaining.min(other.details.len());
+        self.details.extend(other.details.drain(..take));
         self.truncated |= other.truncated;
     }
 

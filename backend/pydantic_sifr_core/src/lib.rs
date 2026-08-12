@@ -11,7 +11,7 @@ pub use arena::{Arena, ArenaError, ArenaId};
 pub use errors::{BuiltInError, ErrorOverride, ErrorRegistry, RegistryError};
 pub use input::{
     InputArena, InputId, InputValue, JsonInputError, JsonLimits, NativeInputError, NativeValue,
-    build_native_input, parse_json,
+    ObjectKind, SequenceKind, build_native_input, parse_json,
 };
 pub use plan::{ExecutionPlan, PlanOp};
 pub use schema::{

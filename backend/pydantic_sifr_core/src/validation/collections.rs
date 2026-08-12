@@ -1,12 +1,14 @@
 use std::collections::BTreeSet;
 
 use crate::{
-    InputArena, InputId, InputValue, JsonLimits, NativeValue, build_native_input, parse_json,
+    InputArena, InputId, InputValue, JsonLimits, NativeValue, ObjectKind, SequenceKind,
+    build_native_input, parse_json,
 };
 
 use super::{
     CollectionConstraints, ErrorDetail, InputProfile, LocationItem, Schema, ValidatedArena,
     ValidatedValue, ValidationError, ValidationOptions, ValidationState, ValueId, validate_at,
+    validate_at_depth, validate_options,
 };
 
 pub(crate) fn validate_collection(
@@ -17,7 +19,13 @@ pub(crate) fn validate_collection(
 ) -> Result<ValueId, ValidationError> {
     match schema {
         Schema::List { item, constraints } => {
-            let children = sequence_input(state.input(), input_id, "list")?;
+            let children = sequence_input(
+                state.input(),
+                input_id,
+                "list",
+                SequenceKind::List,
+                state.options(),
+            )?;
             validate_length(children.len(), constraints, "list")?;
             let values = validate_items(state, item, &children, depth)?;
             state.push(ValidatedValue::Sequence(values))
@@ -39,7 +47,7 @@ pub(crate) fn validate_collection(
             "Generator schemas require validated_iterator",
             "lazy iterator entry point",
         )),
-        Schema::EmbeddedJson(inner) => validate_embedded_json(state, inner, input_id),
+        Schema::EmbeddedJson(inner) => validate_embedded_json(state, inner, input_id, depth),
         _ => Err(super::scalars::type_error(
             "schema_kind",
             "Validator is not available for this schema kind",
@@ -52,9 +60,22 @@ fn sequence_input(
     input: &InputArena,
     input_id: InputId,
     expected: &'static str,
+    expected_kind: SequenceKind,
+    options: ValidationOptions,
 ) -> Result<Vec<InputId>, ValidationError> {
     match input.get(input_id) {
-        Some(InputValue::Array(children)) => Ok(children.clone()),
+        Some(InputValue::Sequence { kind, items })
+            if options.profile != InputProfile::Native
+                || !options.strict
+                || *kind == expected_kind =>
+        {
+            Ok(items.clone())
+        }
+        Some(InputValue::Sequence { .. }) => Err(super::scalars::type_error(
+            "collection_type",
+            "Native collection kind does not match the schema",
+            expected,
+        )),
         Some(_) => Err(super::scalars::type_error(
             "collection_type",
             "Input must be a sequence",
@@ -111,7 +132,13 @@ fn validate_tuple(
     input_id: InputId,
     depth: usize,
 ) -> Result<ValueId, ValidationError> {
-    let children = sequence_input(state.input(), input_id, "tuple")?;
+    let children = sequence_input(
+        state.input(),
+        input_id,
+        "tuple",
+        SequenceKind::Tuple,
+        state.options(),
+    )?;
     if children.len() != schemas.len() {
         return Err(ValidationError::one(
             ErrorDetail::new("tuple_length", "Tuple length does not match the schema")
@@ -130,15 +157,7 @@ fn validate_tuple(
                 state.options().limits.max_errors,
             ),
         }
-        if errors
-            .as_ref()
-            .is_some_and(|error| error.is_full(state.options().limits.max_errors))
-        {
-            if index + 1 < children.len()
-                && let Some(error) = &mut errors
-            {
-                error.mark_truncated();
-            }
+        if stop_after_error_cap(state, &mut errors, index + 1 < children.len()) {
             break;
         }
     }
@@ -165,7 +184,13 @@ fn validate_mapping(
         )
     })?;
     let length = match &input {
-        InputValue::Object(entries) => entries.len(),
+        InputValue::Object { kind, entries }
+            if state.options().profile != InputProfile::Native
+                || !state.options().strict
+                || *kind == ObjectKind::JsonObject =>
+        {
+            entries.len()
+        }
         InputValue::Mapping(entries) => entries.len(),
         _ => {
             return Err(super::scalars::type_error(
@@ -180,14 +205,22 @@ fn validate_mapping(
     let mut seen = BTreeSet::new();
     let mut errors = None;
     match input {
-        InputValue::Object(entries) => {
+        InputValue::Object { entries, .. } => {
             for (index, (field, value_id)) in entries.into_iter().enumerate() {
                 let key = validate_object_key(state, key_schema, &field)
                     .map_err(|error| error.at(LocationItem::MappingKey(index)));
                 let value = state
                     .validate_node(value_schema, value_id, depth + 1)
                     .map_err(|error| error.at(LocationItem::Field(field)));
-                collect_mapping_entry(state, key, value, &mut output, &mut seen, &mut errors);
+                collect_mapping_entry(
+                    state,
+                    index,
+                    key,
+                    value,
+                    &mut output,
+                    &mut seen,
+                    &mut errors,
+                );
                 if stop_after_error_cap(state, &mut errors, index + 1 < length) {
                     break;
                 }
@@ -201,7 +234,15 @@ fn validate_mapping(
                 let value = state
                     .validate_node(value_schema, value_id, depth + 1)
                     .map_err(|error| error.at(LocationItem::Index(index)));
-                collect_mapping_entry(state, key, value, &mut output, &mut seen, &mut errors);
+                collect_mapping_entry(
+                    state,
+                    index,
+                    key,
+                    value,
+                    &mut output,
+                    &mut seen,
+                    &mut errors,
+                );
                 if stop_after_error_cap(state, &mut errors, index + 1 < length) {
                     break;
                 }
@@ -235,6 +276,7 @@ fn stop_after_error_cap(
 
 fn collect_mapping_entry(
     state: &ValidationState<'_>,
+    index: usize,
     key: Result<ValueId, ValidationError>,
     value: Result<ValueId, ValidationError>,
     output: &mut Vec<(ValueId, ValueId)>,
@@ -243,7 +285,7 @@ fn collect_mapping_entry(
 ) {
     let limit = state.options().limits.max_errors;
     match (key, value) {
-        (Ok(key), Ok(value)) => match canonical_key(state, key) {
+        (Ok(key), Ok(value)) => match canonical_key(state, key, KeyUse::Mapping) {
             Ok(identity) => {
                 if seen.insert(identity) {
                     output.push((key, value));
@@ -253,12 +295,13 @@ fn collect_mapping_entry(
                         ValidationError::one(ErrorDetail::new(
                             "mapping_key_duplicate",
                             "Validated mapping key is duplicated",
-                        )),
+                        ))
+                        .at(LocationItem::MappingKey(index)),
                         limit,
                     );
                 }
             }
-            Err(error) => collect_error(errors, error, limit),
+            Err(error) => collect_error(errors, error.at(LocationItem::MappingKey(index)), limit),
         },
         (Err(key_error), Ok(_)) => collect_error(errors, key_error, limit),
         (Ok(_), Err(value_error)) => collect_error(errors, value_error, limit),
@@ -297,15 +340,41 @@ fn validate_set(
     depth: usize,
     frozen: bool,
 ) -> Result<ValueId, ValidationError> {
-    let children = sequence_input(state.input(), input_id, "set")?;
+    let expected_kind = if frozen {
+        SequenceKind::FrozenSet
+    } else {
+        SequenceKind::Set
+    };
+    let children = sequence_input(
+        state.input(),
+        input_id,
+        "set",
+        expected_kind,
+        state.options(),
+    )?;
     let values = validate_items(state, item, &children, depth)?;
     let mut seen = BTreeSet::new();
     let mut unique = Vec::with_capacity(values.len());
-    for value in values {
-        let identity = canonical_key(state, value)?;
-        if seen.insert(identity) {
-            unique.push(value);
+    let mut errors = None;
+    for (index, value) in values.into_iter().enumerate() {
+        match canonical_key(state, value, KeyUse::Set) {
+            Ok(identity) => {
+                if seen.insert(identity) {
+                    unique.push(value);
+                }
+            }
+            Err(error) => collect_error(
+                &mut errors,
+                error.at(LocationItem::Index(index)),
+                state.options().limits.max_errors,
+            ),
         }
+        if stop_after_error_cap(state, &mut errors, index + 1 < children.len()) {
+            break;
+        }
+    }
+    if let Some(error) = errors {
+        return Err(error);
     }
     validate_length(
         unique.len(),
@@ -323,6 +392,7 @@ fn validate_embedded_json(
     state: &mut ValidationState<'_>,
     inner: &Schema,
     input_id: InputId,
+    depth: usize,
 ) -> Result<ValueId, ValidationError> {
     let bytes = match state.input().get(input_id) {
         Some(InputValue::String(value)) => value.as_bytes(),
@@ -351,7 +421,7 @@ fn validate_embedded_json(
     })?;
     let mut options = state.options();
     options.profile = InputProfile::Json;
-    let arena = validate_at(inner, &input, input.root(), options)?;
+    let arena = validate_at_depth(inner, &input, input.root(), options, depth + 1)?;
     state.import(arena)
 }
 
@@ -381,7 +451,11 @@ fn json_limits(options: ValidationOptions) -> JsonLimits {
     }
 }
 
-fn canonical_key(state: &ValidationState<'_>, id: ValueId) -> Result<Vec<u8>, ValidationError> {
+fn canonical_key(
+    state: &ValidationState<'_>,
+    id: ValueId,
+    usage: KeyUse,
+) -> Result<Vec<u8>, ValidationError> {
     let value = state.value(id).ok_or_else(|| {
         super::scalars::type_error(
             "internal_output",
@@ -477,14 +551,23 @@ fn canonical_key(state: &ValidationState<'_>, id: ValueId) -> Result<Vec<u8>, Va
         | ValidatedValue::Mapping(_)
         | ValidatedValue::Set(_)
         | ValidatedValue::FrozenSet(_) => {
-            return Err(super::scalars::type_error(
-                "set_item_unhashable",
-                "Set items must be scalar values",
-                "hashable scalar",
-            ));
+            let (code, message) = match usage {
+                KeyUse::Set => ("set_item_unhashable", "Set items must be scalar values"),
+                KeyUse::Mapping => (
+                    "mapping_key_unhashable",
+                    "Mapping keys must be scalar values",
+                ),
+            };
+            return Err(super::scalars::type_error(code, message, "hashable scalar"));
         }
     }
     Ok(key)
+}
+
+#[derive(Clone, Copy)]
+enum KeyUse {
+    Set,
+    Mapping,
 }
 
 fn append_bytes(target: &mut Vec<u8>, bytes: &[u8]) {
@@ -508,6 +591,7 @@ pub fn validated_iterator<'a>(
     input: &'a InputArena,
     options: ValidationOptions,
 ) -> Result<ValidatedIterator<'a>, ValidationError> {
+    validate_options(options)?;
     let Schema::Generator { item, constraints } = schema else {
         return Err(super::scalars::type_error(
             "generator_schema",
@@ -515,7 +599,23 @@ pub fn validated_iterator<'a>(
             "generator schema",
         ));
     };
-    let children = sequence_input(input, input.root(), "generator")?;
+    let children = sequence_input(
+        input,
+        input.root(),
+        "generator",
+        SequenceKind::List,
+        ValidationOptions {
+            strict: false,
+            ..options
+        },
+    )?;
+    if children.len() > options.limits.max_collection_items {
+        return Err(super::scalars::type_error(
+            "resource_limit",
+            "Validation collection item limit exceeded",
+            "bounded generator",
+        ));
+    }
     Ok(ValidatedIterator {
         input,
         children,

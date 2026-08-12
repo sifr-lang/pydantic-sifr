@@ -15,7 +15,10 @@ fn parses_exact_integers_and_nested_input_into_checked_arena() {
     let root = arena
         .get(arena.root())
         .unwrap_or_else(|| panic!("root must exist"));
-    let InputValue::Object(fields) = root else {
+    let InputValue::Object {
+        entries: fields, ..
+    } = root
+    else {
         panic!("expected object root");
     };
     let exact_id = fields
