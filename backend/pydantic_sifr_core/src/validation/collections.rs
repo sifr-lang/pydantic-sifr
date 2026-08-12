@@ -65,9 +65,11 @@ fn sequence_input(
 ) -> Result<Vec<InputId>, ValidationError> {
     match input.get(input_id) {
         Some(InputValue::Sequence { kind, items })
-            if options.profile != InputProfile::Native
-                || !options.strict
-                || *kind == expected_kind =>
+            if !options.strict
+                || match options.profile {
+                    InputProfile::Native | InputProfile::Strings => *kind == expected_kind,
+                    InputProfile::Json => *kind == SequenceKind::JsonArray,
+                } =>
         {
             Ok(items.clone())
         }
@@ -186,13 +188,18 @@ fn validate_mapping(
     let length = match &input {
         InputValue::Object { kind, entries }
             if !state.options().strict
-                || state.options().profile == InputProfile::Strings
+                || (state.options().profile == InputProfile::Strings
+                    && *kind == ObjectKind::Object)
                 || (state.options().profile == InputProfile::Json
                     && *kind == ObjectKind::JsonObject) =>
         {
             entries.len()
         }
-        InputValue::Mapping(entries) => entries.len(),
+        InputValue::Mapping(entries)
+            if !state.options().strict || state.options().profile != InputProfile::Json =>
+        {
+            entries.len()
+        }
         _ => {
             return Err(super::scalars::type_error(
                 "mapping_type",
@@ -206,10 +213,11 @@ fn validate_mapping(
     let mut seen = BTreeSet::new();
     let mut errors = None;
     match input {
-        InputValue::Object { entries, .. } => {
+        InputValue::Object { kind, entries } => {
             for (index, (field, value_id)) in entries.into_iter().enumerate() {
-                let key = validate_object_key(state, key_schema, &field)
-                    .map_err(|error| error.at(LocationItem::MappingKey(index)));
+                let key =
+                    validate_object_key(state, key_schema, &field, kind == ObjectKind::JsonObject)
+                        .map_err(|error| error.at(LocationItem::MappingKey(index)));
                 let value = state
                     .validate_node(value_schema, value_id, depth + 1)
                     .map_err(|error| error.at(LocationItem::Field(field)));
@@ -317,6 +325,7 @@ fn validate_object_key(
     state: &mut ValidationState<'_>,
     schema: &Schema,
     field: &str,
+    json_key: bool,
 ) -> Result<ValueId, ValidationError> {
     let input = build_native_input(
         &NativeValue::String(field.to_owned()),
@@ -329,7 +338,11 @@ fn validate_object_key(
             "bounded mapping key",
         )
     })?;
-    let arena = validate_at(schema, &input, input.root(), state.options())?;
+    let mut options = state.options();
+    if json_key && options.profile == InputProfile::Json {
+        options.strict = false;
+    }
+    let arena = validate_at(schema, &input, input.root(), options)?;
     state.import(arena)
 }
 

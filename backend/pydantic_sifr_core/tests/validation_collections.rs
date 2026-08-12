@@ -163,6 +163,41 @@ fn strict_mapping_accepts_native_mapping_and_json_object_only_in_their_profiles(
         },
     ));
     assert_eq!(object_error.details()[0].code, "mapping_type");
+
+    let lax_object = validate(&schema, &object, ValidationOptions::default())
+        .unwrap_or_else(|error| panic!("lax structural object conversion failed: {error}"));
+    assert!(matches!(root(&lax_object), ValidatedValue::Mapping(_)));
+}
+
+#[test]
+fn strict_json_mapping_converts_typed_object_keys() {
+    let input = parse_json(br#"{"1":2}"#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON object failed: {error}"));
+    let output = validate(
+        &Schema::Mapping {
+            key: Box::new(Schema::exact_integer()),
+            value: Box::new(Schema::exact_integer()),
+            constraints: CollectionConstraints::default(),
+        },
+        &input,
+        ValidationOptions {
+            strict: true,
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("strict JSON typed keys failed: {error}"));
+    let ValidatedValue::Mapping(entries) = root(&output) else {
+        panic!("expected typed mapping");
+    };
+    let key = entries
+        .first()
+        .map(|entry| entry.0)
+        .unwrap_or_else(|| panic!("typed mapping key must exist"));
+    assert_eq!(
+        output.get(key),
+        Some(&ValidatedValue::ExactInt(BigInt::from(1)))
+    );
 }
 
 #[test]
