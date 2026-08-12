@@ -289,9 +289,8 @@ fn validate_float(
             ));
         }
         let quotient = value / multiple;
-        if !quotient.is_finite()
-            || (quotient - quotient.round()).abs() > 1e-9 * quotient.abs().max(1.0)
-        {
+        let residual = (value - quotient.round() * multiple).abs();
+        if !quotient.is_finite() || !residual.is_finite() || residual > 1e-9 {
             return Err(float_bound_error("multiple_of", Some(multiple)));
         }
     }
@@ -506,10 +505,10 @@ fn decimal_counts(value: &BigDecimal) -> (usize, usize) {
     let coefficient_digits = coefficient.abs().to_string().len();
     let decimal_digits = usize::try_from(scale.max(0)).unwrap_or(usize::MAX);
     let whole_trailing_zeros = usize::try_from((-scale).max(0)).unwrap_or(usize::MAX);
-    (
-        coefficient_digits.saturating_add(whole_trailing_zeros),
-        decimal_digits,
-    )
+    let total_digits = coefficient_digits
+        .saturating_add(whole_trailing_zeros)
+        .max(decimal_digits);
+    (total_digits, decimal_digits)
 }
 
 fn decimal_digit_error(code: &'static str, key: &str, allowance: usize) -> ValidationError {

@@ -253,6 +253,16 @@ fn decimal_digit_count_includes_normalized_whole_trailing_zeros() {
         true,
     ));
     assert_eq!(first_code(&error), "decimal_max_digits");
+
+    let fractional_error = require_validation_error(validate_native(
+        &Schema::Decimal(DecimalConstraints {
+            max_digits: Some(3),
+            ..DecimalConstraints::default()
+        }),
+        NativeValue::Decimal("0.00001".to_owned()),
+        true,
+    ));
+    assert_eq!(first_code(&fractional_error), "decimal_max_digits");
 }
 
 #[test]
@@ -266,6 +276,18 @@ fn float_multiple_overflow_and_strict_strings_bytes_return_stable_results() {
         true,
     ));
     assert_eq!(first_code(&float_error), "multiple_of");
+
+    for (value, multiple) in [(1e9, 3.0), (1e12, 3.0), (1_000_000_000_000.5, 1.0)] {
+        let error = require_validation_error(validate_native(
+            &Schema::Float(FloatConstraints {
+                multiple_of: Some(multiple),
+                ..FloatConstraints::default()
+            }),
+            NativeValue::Float(value),
+            true,
+        ));
+        assert_eq!(first_code(&error), "multiple_of");
+    }
 
     let input = build_native_input(
         &NativeValue::String("abc".to_owned()),

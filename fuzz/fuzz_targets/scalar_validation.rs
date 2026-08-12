@@ -2,8 +2,8 @@
 
 use libfuzzer_sys::fuzz_target;
 use pydantic_sifr_core::{
-    BytesConstraints, DecimalConstraints, FloatConstraints, JsonLimits, Schema,
-    StringConstraints, ValidationOptions, parse_json, validate,
+    BytesConstraints, DecimalConstraints, FloatConstraints, FractionConstraints, InputProfile,
+    JsonLimits, Schema, StringConstraints, ValidationOptions, parse_json, validate,
 };
 
 fuzz_target!(|data: &[u8]| {
@@ -18,7 +18,7 @@ fuzz_target!(|data: &[u8]| {
     let Ok(input) = parse_json(data, limits) else {
         return;
     };
-    let schema = match data.first().map(|byte| byte % 5) {
+    let schema = match data.first().map(|byte| byte % 6) {
         Some(0) => Schema::exact_integer(),
         Some(1) => Schema::Float(FloatConstraints::default()),
         Some(2) => Schema::Decimal(DecimalConstraints {
@@ -26,8 +26,23 @@ fuzz_target!(|data: &[u8]| {
             decimal_places: Some(4_300),
             ..DecimalConstraints::default()
         }),
-        Some(3) => Schema::String(StringConstraints::default()),
+        Some(3) => Schema::Fraction(FractionConstraints::default()),
+        Some(4) => Schema::String(StringConstraints::default()),
         _ => Schema::Bytes(BytesConstraints::default()),
     };
-    let _ = validate(&schema, &input, ValidationOptions::default());
+    let selector = data.get(1).copied().unwrap_or_default();
+    let profile = match selector % 3 {
+        0 => InputProfile::Native,
+        1 => InputProfile::Json,
+        _ => InputProfile::Strings,
+    };
+    let _ = validate(
+        &schema,
+        &input,
+        ValidationOptions {
+            strict: selector & 4 != 0,
+            profile,
+            ..ValidationOptions::default()
+        },
+    );
 });
