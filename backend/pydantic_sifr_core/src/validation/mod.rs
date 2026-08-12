@@ -1,5 +1,6 @@
 mod collections;
 mod error;
+mod models;
 mod scalars;
 mod schema;
 mod special;
@@ -8,13 +9,14 @@ mod value;
 pub use collections::{ValidatedIterator, validated_iterator};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
 pub use schema::{
-    BytesConstraints, BytesJsonMode, CollectionConstraints, ComplexConstraints, DecimalConstraints,
-    FloatConstraints, FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget,
+    AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, CollectionConstraints,
+    ComplexConstraints, DecimalConstraints, ExtraPolicy, FieldDefault, FloatConstraints,
+    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, ModelField, ModelSchema,
     PatternCompileError, PatternSchema, RelativeTimeConstraint, Schema, StringConstraints,
     StringPattern, TemporalKind, TemporalSchema, UrlConstraints,
 };
 pub use value::{
-    DateTimeValue, DateValue, DurationValue, PatternValue, TimeValue, ValidatedArena,
+    DateTimeValue, DateValue, DurationValue, ModelValue, PatternValue, TimeValue, ValidatedArena,
     ValidatedValue, ValueId,
 };
 
@@ -161,6 +163,18 @@ impl ValidationState<'_> {
                 "valid input arena",
             )
         })?;
+        if let Schema::Nullable(inner) = schema {
+            let value = if matches!(input, InputValue::Null) {
+                ValidatedValue::Nullable(None)
+            } else {
+                let child = self.validate_node(inner, input_id, depth + 1)?;
+                ValidatedValue::Nullable(Some(child))
+            };
+            return self.push(value);
+        }
+        if let Schema::Model(model) = schema {
+            return models::validate_model(self, model, input_id, depth);
+        }
         let value = if let Some(result) = scalars::validate_scalar(schema, input, self.options) {
             result?
         } else if let Some(result) = special::validate_special(

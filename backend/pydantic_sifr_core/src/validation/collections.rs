@@ -447,7 +447,11 @@ fn validate_length(
     super::scalars::validate_length(length, constraints.min_length, constraints.max_length, kind)
 }
 
-fn collect_error(target: &mut Option<ValidationError>, error: ValidationError, limit: usize) {
+pub(crate) fn collect_error(
+    target: &mut Option<ValidationError>,
+    error: ValidationError,
+    limit: usize,
+) {
     match target {
         Some(target) => target.append(error, limit),
         None => *target = Some(error),
@@ -563,10 +567,16 @@ fn canonical_key(
             key.push(value.flags());
             append_bytes(&mut key, value.source().as_bytes());
         }
+        ValidatedValue::Nullable(None) => key.push(16),
+        ValidatedValue::Nullable(Some(child)) => {
+            key.push(17);
+            key.extend(canonical_key(state, *child, usage)?);
+        }
         ValidatedValue::Sequence(_)
         | ValidatedValue::Mapping(_)
         | ValidatedValue::Set(_)
-        | ValidatedValue::FrozenSet(_) => {
+        | ValidatedValue::FrozenSet(_)
+        | ValidatedValue::Model(_) => {
             let (code, message) = match usage {
                 KeyUse::Set => ("set_item_unhashable", "Set items must be scalar values"),
                 KeyUse::Mapping => (

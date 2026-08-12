@@ -76,6 +76,50 @@ impl PartialEq for PatternValue {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct ModelValue {
+    name: String,
+    fields: Vec<(String, ValueId)>,
+    extras: Vec<(String, ValueId)>,
+    validated_field_count: usize,
+}
+
+impl ModelValue {
+    pub(crate) const fn new(
+        name: String,
+        fields: Vec<(String, ValueId)>,
+        extras: Vec<(String, ValueId)>,
+        validated_field_count: usize,
+    ) -> Self {
+        Self {
+            name,
+            fields,
+            extras,
+            validated_field_count,
+        }
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[must_use]
+    pub fn fields(&self) -> &[(String, ValueId)] {
+        &self.fields
+    }
+
+    #[must_use]
+    pub fn extras(&self) -> &[(String, ValueId)] {
+        &self.extras
+    }
+
+    #[must_use]
+    pub const fn validated_field_count(&self) -> usize {
+        self.validated_field_count
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum ValidatedValue {
     None,
     Bool(bool),
@@ -94,6 +138,8 @@ pub enum ValidatedValue {
     Uuid([u8; 16]),
     Url(String),
     Pattern(PatternValue),
+    Nullable(Option<ValueId>),
+    Model(ModelValue),
     Sequence(Vec<ValueId>),
     Mapping(Vec<(ValueId, ValueId)>),
     Set(Vec<ValueId>),
@@ -148,6 +194,15 @@ impl ValidatedValue {
                 for (key, value) in entries {
                     *key = remap_id(*key, offset)?;
                     *value = remap_id(*value, offset)?;
+                }
+            }
+            Self::Nullable(Some(id)) => *id = remap_id(*id, offset)?,
+            Self::Model(model) => {
+                for (_, id) in &mut model.fields {
+                    *id = remap_id(*id, offset)?;
+                }
+                for (_, id) in &mut model.extras {
+                    *id = remap_id(*id, offset)?;
                 }
             }
             _ => {}

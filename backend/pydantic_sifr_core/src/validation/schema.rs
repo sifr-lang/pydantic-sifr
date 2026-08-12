@@ -1,6 +1,9 @@
 use bigdecimal::BigDecimal;
 use num_bigint::BigInt;
 use num_rational::BigRational;
+use std::collections::BTreeMap;
+
+use crate::NativeValue;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PatternCompileError {
@@ -221,6 +224,83 @@ pub struct UrlConstraints {
     pub allowed_schemes: Vec<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AliasSegment {
+    Field(String),
+    Index(usize),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AliasPath {
+    pub segments: Vec<AliasSegment>,
+}
+
+impl AliasPath {
+    #[must_use]
+    pub fn field(name: impl Into<String>) -> Self {
+        Self {
+            segments: vec![AliasSegment::Field(name.into())],
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum FieldDefault {
+    Static(NativeValue),
+    Factory(fn() -> NativeValue),
+}
+
+impl PartialEq for FieldDefault {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Static(left), Self::Static(right)) => left == right,
+            (Self::Factory(left), Self::Factory(right)) => std::ptr::fn_addr_eq(*left, *right),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModelField {
+    pub name: String,
+    pub schema: Schema,
+    pub default: Option<FieldDefault>,
+    pub validation_aliases: Vec<AliasPath>,
+    pub metadata: BTreeMap<String, String>,
+}
+
+impl ModelField {
+    #[must_use]
+    pub fn required(name: impl Into<String>, schema: Schema) -> Self {
+        Self {
+            name: name.into(),
+            schema,
+            default: None,
+            validation_aliases: Vec::new(),
+            metadata: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ExtraPolicy {
+    Ignore,
+    Forbid,
+    Allow {
+        destination: String,
+        value_schema: Box<Schema>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModelSchema {
+    pub name: String,
+    pub fields: Vec<ModelField>,
+    pub extra: ExtraPolicy,
+    pub populate_by_name: bool,
+    pub location_by_alias: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Schema {
     None,
@@ -241,6 +321,8 @@ pub enum Schema {
     },
     Url(UrlConstraints),
     Pattern(PatternSchema),
+    Nullable(Box<Self>),
+    Model(ModelSchema),
     List {
         item: Box<Self>,
         constraints: CollectionConstraints,
