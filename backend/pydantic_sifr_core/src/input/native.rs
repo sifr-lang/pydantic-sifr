@@ -321,7 +321,11 @@ impl<'value> StructuralInputBuilder<'value> {
                     StructuralKind::Tuple => SequenceKind::Tuple,
                     StructuralKind::Set => SequenceKind::Set,
                     StructuralKind::FrozenSet => SequenceKind::FrozenSet,
-                    _ => unreachable!(),
+                    _ => {
+                        return Err(NativeInputError::Projection(
+                            "structural sequence kind is invalid",
+                        ));
+                    }
                 };
                 Ok(InputValue::Sequence { kind, items })
             }

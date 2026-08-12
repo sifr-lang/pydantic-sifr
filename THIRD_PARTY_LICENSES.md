@@ -10,10 +10,10 @@ speedate is available under the MIT license.
 The production backend uses base64 0.22.1. The crate is available under the
 MIT or Apache-2.0 licenses.
 
-The production backend uses the released Sifr structural runtime and identity
-crates from commit `11581e0630407d397079c032d0cd30fb87f4795e`, which is the
-source commit for Sifr 0.1.0-beta.16. Sifr is available under the MIT license.
-The exact commit pin prevents a mutable tag from changing the dependency.
+The production backend uses the Sifr structural runtime and identity crates
+from commit `76c3bcb10bc2a28940003dd9e1b1f92506b72d07`. Sifr is available under
+the MIT license. The exact commit pin prevents a mutable tag from changing the
+dependency.
 
 The Sifr structural feature uses encoding_rs 0.8.35, indexmap 2.14.0,
 hashbrown 0.17.1, equivalent 1.0.2, sha2 0.10.9, digest 0.10.7,
