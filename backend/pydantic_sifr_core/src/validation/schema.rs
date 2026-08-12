@@ -1,5 +1,26 @@
 use bigdecimal::BigDecimal;
 use num_bigint::BigInt;
+use num_rational::BigRational;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PatternCompileError {
+    message: String,
+}
+
+impl PatternCompileError {
+    #[must_use]
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl core::fmt::Display for PatternCompileError {
+    fn fmt(&self, formatter: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for PatternCompileError {}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum InputProfile {
@@ -83,6 +104,15 @@ pub struct DecimalConstraints {
     pub decimal_places: Option<usize>,
 }
 
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct FractionConstraints {
+    pub greater_than: Option<BigRational>,
+    pub greater_or_equal: Option<BigRational>,
+    pub less_than: Option<BigRational>,
+    pub less_or_equal: Option<BigRational>,
+    pub multiple_of: Option<BigRational>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ComplexConstraints {
     pub allow_non_finite: bool,
@@ -97,9 +127,15 @@ pub struct StringPattern {
 }
 
 impl StringPattern {
-    pub fn compile(source: impl Into<String>) -> Result<Self, regex::Error> {
+    pub fn compile(source: impl Into<String>) -> Result<Self, PatternCompileError> {
         let source = source.into();
-        let compiled = regex::Regex::new(&source)?;
+        let compiled = regex::RegexBuilder::new(&source)
+            .size_limit(1 << 20)
+            .dfa_size_limit(2 << 20)
+            .build()
+            .map_err(|error| PatternCompileError {
+                message: error.to_string(),
+            })?;
         Ok(Self { source, compiled })
     }
 
@@ -181,7 +217,7 @@ pub enum Schema {
     },
     Float(FloatConstraints),
     Decimal(DecimalConstraints),
-    Fraction(IntegerConstraints),
+    Fraction(FractionConstraints),
     Complex(ComplexConstraints),
     String(StringConstraints),
     Bytes(BytesConstraints),

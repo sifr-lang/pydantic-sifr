@@ -5,6 +5,8 @@ use jiter::JsonValue;
 
 use crate::{Arena, ArenaError, ArenaId};
 
+const HARD_MAX_DEPTH: usize = 256;
+
 pub type InputId = ArenaId;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -120,6 +122,8 @@ fn validate_limits(limits: JsonLimits) -> Result<(), JsonInputError> {
         || limits.max_nodes == 0
         || limits.max_integer_digits == 0
         || limits.max_collection_items == 0
+        || limits.max_string_bytes == 0
+        || limits.max_depth > HARD_MAX_DEPTH
     {
         return Err(JsonInputError::limit("limits must be greater than zero"));
     }

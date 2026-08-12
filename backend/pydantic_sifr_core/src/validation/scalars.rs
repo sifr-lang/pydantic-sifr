@@ -10,29 +10,30 @@ use crate::InputValue;
 
 use super::{
     BytesConstraints, ComplexConstraints, DecimalConstraints, ErrorDetail, FloatConstraints,
-    InputProfile, IntegerConstraints, IntegerTarget, Schema, StringConstraints, ValidatedValue,
-    ValidationError,
+    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, Schema,
+    StringConstraints, ValidatedValue, ValidationError, ValidationOptions,
 };
 
 pub(crate) fn validate_scalar(
     schema: &Schema,
     input: &InputValue,
-    strict: bool,
-    profile: InputProfile,
+    options: ValidationOptions,
 ) -> Option<Result<ValidatedValue, ValidationError>> {
+    let strict = options.strict;
+    let profile = options.profile;
     let result = match schema {
         Schema::None => validate_none(input),
         Schema::Bool => validate_bool(input, strict, profile),
         Schema::Integer {
             target,
             constraints,
-        } => validate_integer(input, strict, profile, *target, constraints),
+        } => validate_integer(input, options, *target, constraints),
         Schema::Float(constraints) => validate_float(input, strict, profile, constraints),
-        Schema::Decimal(constraints) => validate_decimal(input, strict, profile, constraints),
-        Schema::Fraction(constraints) => validate_fraction(input, strict, profile, constraints),
+        Schema::Decimal(constraints) => validate_decimal(input, options, constraints),
+        Schema::Fraction(constraints) => validate_fraction(input, options, constraints),
         Schema::Complex(constraints) => validate_complex(input, strict, profile, constraints),
         Schema::String(constraints) => validate_string(input, strict, constraints),
-        Schema::Bytes(constraints) => validate_bytes(input, strict, constraints),
+        Schema::Bytes(constraints) => validate_bytes(input, strict, profile, constraints),
         _ => return None,
     };
     Some(result)
@@ -76,12 +77,11 @@ fn validate_bool(
 
 fn validate_integer(
     input: &InputValue,
-    strict: bool,
-    profile: InputProfile,
+    options: ValidationOptions,
     target: IntegerTarget,
     constraints: &IntegerConstraints,
 ) -> Result<ValidatedValue, ValidationError> {
-    let value = exact_integer(input, strict, profile)?;
+    let value = exact_integer(input, options)?;
     if let Some((minimum, maximum)) = target.bounds()
         && (value < minimum || value > maximum)
     {
@@ -109,13 +109,12 @@ fn validate_integer(
 
 fn exact_integer(
     input: &InputValue,
-    strict: bool,
-    profile: InputProfile,
+    options: ValidationOptions,
 ) -> Result<BigInt, ValidationError> {
     if let InputValue::Integer(value) = input {
-        return parse_canonical_integer(value);
+        return parse_canonical_integer(value, options.limits.max_numeric_digits);
     }
-    if strict && profile != InputProfile::Strings {
+    if options.strict && options.profile != InputProfile::Strings {
         return Err(type_error("int_type", "Input must be an integer", "int"));
     }
     match input {
@@ -127,7 +126,9 @@ fn exact_integer(
         {
             Ok(BigInt::from(*value as i64))
         }
-        InputValue::String(value) => parse_canonical_integer(value),
+        InputValue::String(value) => {
+            parse_canonical_integer(value, options.limits.max_numeric_digits)
+        }
         _ => Err(type_error(
             "int_parsing",
             "Input must be a valid integer",
@@ -136,8 +137,11 @@ fn exact_integer(
     }
 }
 
-fn parse_canonical_integer(value: &str) -> Result<BigInt, ValidationError> {
+fn parse_canonical_integer(value: &str, max_digits: usize) -> Result<BigInt, ValidationError> {
     let digits = value.strip_prefix('-').unwrap_or(value);
+    if digits.len() > max_digits {
+        return Err(resource_error("Integer digit limit exceeded"));
+    }
     let canonical = !digits.is_empty()
         && digits.bytes().all(|byte| byte.is_ascii_digit())
         && (digits == "0" || !digits.starts_with('0'))
@@ -285,7 +289,9 @@ fn validate_float(
             ));
         }
         let quotient = value / multiple;
-        if (quotient - quotient.round()).abs() > f64::EPSILON * quotient.abs().max(1.0) * 4.0 {
+        if !quotient.is_finite()
+            || (quotient - quotient.round()).abs() > 1e-9 * quotient.abs().max(1.0)
+        {
             return Err(float_bound_error("multiple_of", Some(multiple)));
         }
     }
@@ -302,17 +308,22 @@ fn float_bound_error(code: &'static str, bound: Option<f64>) -> ValidationError 
 
 fn validate_decimal(
     input: &InputValue,
-    strict: bool,
-    profile: InputProfile,
+    options: ValidationOptions,
     constraints: &DecimalConstraints,
 ) -> Result<ValidatedValue, ValidationError> {
     let source = match input {
         InputValue::Decimal(value) => value.as_str(),
-        InputValue::Integer(value) if !strict || profile != InputProfile::Native => value.as_str(),
-        InputValue::Float(value) if !strict && value.is_finite() => {
-            return validate_decimal_text(&value.to_string(), constraints);
+        InputValue::Integer(value)
+            if !options.strict || options.profile != InputProfile::Native =>
+        {
+            value.as_str()
         }
-        InputValue::String(value) if !strict || profile != InputProfile::Native => value.as_str(),
+        InputValue::Float(value) if !options.strict && value.is_finite() => {
+            return validate_decimal_text(&value.to_string(), constraints, options);
+        }
+        InputValue::String(value) if !options.strict || options.profile != InputProfile::Native => {
+            value.as_str()
+        }
         _ => {
             return Err(type_error(
                 "decimal_type",
@@ -321,13 +332,15 @@ fn validate_decimal(
             ));
         }
     };
-    validate_decimal_text(source, constraints)
+    validate_decimal_text(source, constraints, options)
 }
 
 fn validate_decimal_text(
     source: &str,
     constraints: &DecimalConstraints,
+    options: ValidationOptions,
 ) -> Result<ValidatedValue, ValidationError> {
+    validate_decimal_source(source, options)?;
     let value = BigDecimal::from_str(source).map_err(|_| {
         type_error(
             "decimal_parsing",
@@ -336,8 +349,51 @@ fn validate_decimal_text(
         )
     })?;
     validate_decimal_bounds(&value, constraints)?;
-    validate_decimal_digits(&value, constraints)?;
+    if constraints.max_digits.is_some() || constraints.decimal_places.is_some() {
+        validate_decimal_digits(&value, constraints)?;
+    }
     Ok(ValidatedValue::Decimal(value))
+}
+
+fn validate_decimal_source(
+    source: &str,
+    options: ValidationOptions,
+) -> Result<(), ValidationError> {
+    let unsigned = source.strip_prefix(['-', '+']).unwrap_or(source);
+    let (mantissa, exponent) = unsigned
+        .split_once(['e', 'E'])
+        .map_or((unsigned, None), |(mantissa, exponent)| {
+            (mantissa, Some(exponent))
+        });
+    let digits = mantissa.bytes().filter(u8::is_ascii_digit).count();
+    if digits == 0 {
+        return Err(type_error(
+            "decimal_parsing",
+            "Input must be a valid decimal",
+            "decimal",
+        ));
+    }
+    if digits > options.limits.max_numeric_digits {
+        return Err(resource_error("Decimal digit limit exceeded"));
+    }
+    if let Some(exponent) = exponent {
+        let exponent = exponent.strip_prefix(['-', '+']).unwrap_or(exponent);
+        if exponent.is_empty() || !exponent.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err(type_error(
+                "decimal_parsing",
+                "Input must be a valid decimal",
+                "decimal",
+            ));
+        }
+        let maximum = options.limits.max_decimal_exponent.to_string();
+        let significant = exponent.trim_start_matches('0');
+        if significant.len() > maximum.len()
+            || (significant.len() == maximum.len() && significant > maximum.as_str())
+        {
+            return Err(resource_error("Decimal exponent limit exceeded"));
+        }
+    }
+    Ok(())
 }
 
 fn validate_decimal_bounds(
@@ -411,10 +467,8 @@ fn validate_decimal_digits(
     value: &BigDecimal,
     constraints: &DecimalConstraints,
 ) -> Result<(), ValidationError> {
-    let raw = decimal_counts(value);
     let normalized = decimal_counts(&value.normalized());
     if let Some(maximum) = constraints.max_digits
-        && raw.0 > maximum
         && normalized.0 > maximum
     {
         return Err(decimal_digit_error(
@@ -424,7 +478,6 @@ fn validate_decimal_digits(
         ));
     }
     if let Some(maximum) = constraints.decimal_places
-        && raw.1 > maximum
         && normalized.1 > maximum
     {
         return Err(decimal_digit_error(
@@ -437,9 +490,7 @@ fn validate_decimal_digits(
         (constraints.max_digits, constraints.decimal_places)
     {
         let allowed = max_digits.saturating_sub(decimal_places);
-        if raw.0.saturating_sub(raw.1) > allowed
-            && normalized.0.saturating_sub(normalized.1) > allowed
-        {
+        if normalized.0.saturating_sub(normalized.1) > allowed {
             return Err(decimal_digit_error(
                 "decimal_whole_digits",
                 "whole_digits",
@@ -454,7 +505,11 @@ fn decimal_counts(value: &BigDecimal) -> (usize, usize) {
     let (coefficient, scale) = value.as_bigint_and_exponent();
     let coefficient_digits = coefficient.abs().to_string().len();
     let decimal_digits = usize::try_from(scale.max(0)).unwrap_or(usize::MAX);
-    (coefficient_digits, decimal_digits)
+    let whole_trailing_zeros = usize::try_from((-scale).max(0)).unwrap_or(usize::MAX);
+    (
+        coefficient_digits.saturating_add(whole_trailing_zeros),
+        decimal_digits,
+    )
 }
 
 fn decimal_digit_error(code: &'static str, key: &str, allowance: usize) -> ValidationError {
@@ -466,26 +521,35 @@ fn decimal_digit_error(code: &'static str, key: &str, allowance: usize) -> Valid
 
 fn validate_fraction(
     input: &InputValue,
-    strict: bool,
-    profile: InputProfile,
-    constraints: &IntegerConstraints,
+    options: ValidationOptions,
+    constraints: &FractionConstraints,
 ) -> Result<ValidatedValue, ValidationError> {
     let value = match input {
         InputValue::Fraction {
             numerator,
             denominator,
-        } => rational_from_parts(numerator, denominator)?,
-        InputValue::Integer(value) if !strict || profile != InputProfile::Native => {
-            BigRational::from_integer(parse_canonical_integer(value)?)
+        } => rational_from_parts(numerator, denominator, options.limits.max_numeric_digits)?,
+        InputValue::Integer(value)
+            if !options.strict || options.profile != InputProfile::Native =>
+        {
+            BigRational::from_integer(parse_canonical_integer(
+                value,
+                options.limits.max_numeric_digits,
+            )?)
         }
-        InputValue::Decimal(value) if !strict => rational_from_decimal(value)?,
-        InputValue::String(value) if !strict || profile == InputProfile::Strings => {
+        InputValue::Decimal(value) if !options.strict => rational_from_decimal(value, options)?,
+        InputValue::String(value)
+            if !options.strict || options.profile == InputProfile::Strings =>
+        {
             if let Some((numerator, denominator)) = value.split_once('/') {
-                rational_from_parts(numerator, denominator)?
+                rational_from_parts(numerator, denominator, options.limits.max_numeric_digits)?
             } else if value.contains('.') || value.contains('e') || value.contains('E') {
-                rational_from_decimal(value)?
+                rational_from_decimal(value, options)?
             } else {
-                BigRational::from_integer(parse_canonical_integer(value)?)
+                BigRational::from_integer(parse_canonical_integer(
+                    value,
+                    options.limits.max_numeric_digits,
+                )?)
             }
         }
         _ => {
@@ -496,13 +560,17 @@ fn validate_fraction(
             ));
         }
     };
-    validate_integer_constraints(value.numer(), constraints)?;
+    validate_fraction_constraints(&value, constraints)?;
     Ok(ValidatedValue::Fraction(value))
 }
 
-fn rational_from_parts(numerator: &str, denominator: &str) -> Result<BigRational, ValidationError> {
-    let numerator = parse_canonical_integer(numerator)?;
-    let denominator = parse_canonical_integer(denominator)?;
+fn rational_from_parts(
+    numerator: &str,
+    denominator: &str,
+    max_digits: usize,
+) -> Result<BigRational, ValidationError> {
+    let numerator = parse_canonical_integer(numerator, max_digits)?;
+    let denominator = parse_canonical_integer(denominator, max_digits)?;
     if denominator.is_zero() {
         return Err(type_error(
             "fraction_zero_denominator",
@@ -513,7 +581,11 @@ fn rational_from_parts(numerator: &str, denominator: &str) -> Result<BigRational
     Ok(BigRational::new(numerator, denominator))
 }
 
-fn rational_from_decimal(value: &str) -> Result<BigRational, ValidationError> {
+fn rational_from_decimal(
+    value: &str,
+    options: ValidationOptions,
+) -> Result<BigRational, ValidationError> {
+    validate_decimal_source(value, options)?;
     let decimal = BigDecimal::from_str(value).map_err(|_| {
         type_error(
             "fraction_parsing",
@@ -535,6 +607,55 @@ fn rational_from_decimal(value: &str) -> Result<BigRational, ValidationError> {
     } else {
         Ok(BigRational::from_integer(coefficient * power))
     }
+}
+
+fn validate_fraction_constraints(
+    value: &BigRational,
+    constraints: &FractionConstraints,
+) -> Result<(), ValidationError> {
+    if let Some(bound) = &constraints.greater_than
+        && value <= bound
+    {
+        return Err(fraction_bound_error("greater_than", bound));
+    }
+    if let Some(bound) = &constraints.greater_or_equal
+        && value < bound
+    {
+        return Err(fraction_bound_error("greater_than_equal", bound));
+    }
+    if let Some(bound) = &constraints.less_than
+        && value >= bound
+    {
+        return Err(fraction_bound_error("less_than", bound));
+    }
+    if let Some(bound) = &constraints.less_or_equal
+        && value > bound
+    {
+        return Err(fraction_bound_error("less_than_equal", bound));
+    }
+    if let Some(multiple) = &constraints.multiple_of {
+        if multiple.is_zero() {
+            return Err(type_error(
+                "schema_invalid",
+                "multiple_of cannot be zero",
+                "nonzero fraction",
+            ));
+        }
+        if !(value / multiple).is_integer() {
+            return Err(ValidationError::one(
+                ErrorDetail::new("multiple_of", "Input must be a multiple")
+                    .context("multiple_of", multiple.to_string()),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn fraction_bound_error(code: &'static str, bound: &BigRational) -> ValidationError {
+    ValidationError::one(
+        ErrorDetail::new(code, "Input violates a fraction constraint")
+            .context("bound", bound.to_string()),
+    )
 }
 
 fn validate_complex(
@@ -670,11 +791,14 @@ fn validate_string(
 fn validate_bytes(
     input: &InputValue,
     strict: bool,
+    profile: InputProfile,
     constraints: &BytesConstraints,
 ) -> Result<ValidatedValue, ValidationError> {
     let value = match input {
         InputValue::Bytes(value) => value.clone(),
-        InputValue::String(value) if !strict => value.as_bytes().to_vec(),
+        InputValue::String(value) if !strict || profile == InputProfile::Strings => {
+            value.as_bytes().to_vec()
+        }
         _ => return Err(type_error("bytes_type", "Input must be bytes", "bytes")),
     };
     validate_length(
@@ -713,4 +837,8 @@ pub(crate) fn type_error(
     expected: &'static str,
 ) -> ValidationError {
     ValidationError::one(ErrorDetail::new(code, message).expected(expected))
+}
+
+fn resource_error(message: &'static str) -> ValidationError {
+    type_error("resource_limit", message, "bounded numeric input")
 }

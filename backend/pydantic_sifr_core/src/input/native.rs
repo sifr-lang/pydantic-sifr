@@ -4,6 +4,8 @@ use crate::{Arena, ArenaError};
 
 use super::{InputArena, InputId, InputValue, JsonLimits};
 
+const HARD_MAX_DEPTH: usize = 256;
+
 /// Crate-neutral structural input used by generated Sifr projections.
 #[derive(Clone, Debug, PartialEq)]
 pub enum NativeValue {
@@ -31,6 +33,9 @@ pub fn build_native_input(
     value: &NativeValue,
     limits: JsonLimits,
 ) -> Result<InputArena, NativeInputError> {
+    if limits.max_depth == 0 || limits.max_depth > HARD_MAX_DEPTH {
+        return Err(NativeInputError::Limit("valid maximum depth"));
+    }
     let mut builder = NativeBuilder {
         values: Arena::new(),
         limits,
@@ -64,7 +69,10 @@ impl NativeBuilder {
                 InputValue::Integer(value.clone())
             }
             NativeValue::Float(value) => InputValue::Float(*value),
-            NativeValue::Decimal(value) => InputValue::Decimal(value.clone()),
+            NativeValue::Decimal(value) => {
+                self.check_decimal_digits(value)?;
+                InputValue::Decimal(value.clone())
+            }
             NativeValue::Complex { real, imaginary } => InputValue::Complex {
                 real: *real,
                 imaginary: *imaginary,
@@ -80,10 +88,14 @@ impl NativeBuilder {
             NativeValue::Fraction {
                 numerator,
                 denominator,
-            } => InputValue::Fraction {
-                numerator: numerator.clone(),
-                denominator: denominator.clone(),
-            },
+            } => {
+                self.check_integer_digits(numerator)?;
+                self.check_integer_digits(denominator)?;
+                InputValue::Fraction {
+                    numerator: numerator.clone(),
+                    denominator: denominator.clone(),
+                }
+            }
             NativeValue::Sequence(values) => {
                 self.check_collection(values.len())?;
                 let mut children = Vec::with_capacity(values.len());
@@ -118,6 +130,24 @@ impl NativeBuilder {
     fn check_collection(&self, length: usize) -> Result<(), NativeInputError> {
         if length > self.limits.max_collection_items {
             Err(NativeInputError::Limit("maximum collection items"))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn check_integer_digits(&self, value: &str) -> Result<(), NativeInputError> {
+        if value.trim_start_matches(['-', '+']).len() > self.limits.max_integer_digits {
+            Err(NativeInputError::Limit("maximum integer digits"))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn check_decimal_digits(&self, value: &str) -> Result<(), NativeInputError> {
+        let mantissa = value.split_once(['e', 'E']).map_or(value, |parts| parts.0);
+        let digits = mantissa.bytes().filter(u8::is_ascii_digit).count();
+        if digits > self.limits.max_integer_digits {
+            Err(NativeInputError::Limit("maximum numeric digits"))
         } else {
             Ok(())
         }

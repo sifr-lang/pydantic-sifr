@@ -8,8 +8,9 @@ mod value;
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
 pub use schema::{
     BytesConstraints, CollectionConstraints, ComplexConstraints, DecimalConstraints,
-    FloatConstraints, InputProfile, IntegerConstraints, IntegerTarget, PatternSchema,
-    RelativeTimeConstraint, Schema, StringConstraints, StringPattern, TemporalKind, TemporalSchema,
+    FloatConstraints, FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget,
+    PatternCompileError, PatternSchema, RelativeTimeConstraint, Schema, StringConstraints,
+    StringPattern, TemporalKind, TemporalSchema,
 };
 pub use value::{
     DateTimeValue, DateValue, DurationValue, PatternValue, TimeValue, ValidatedArena,
@@ -20,7 +21,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::{Arena, InputArena, InputId, InputValue};
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+const HARD_MAX_DEPTH: usize = 256;
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ClockSnapshot {
     pub unix_seconds: i64,
     pub microsecond: u32,
@@ -59,7 +62,7 @@ impl Default for ValidationOptions {
             strict: false,
             profile: InputProfile::Native,
             limits: ValidationLimits::default(),
-            clock: ClockSnapshot::system_utc(),
+            clock: ClockSnapshot::default(),
         }
     }
 }
@@ -72,7 +75,10 @@ pub fn validate(
     if options.limits.max_depth == 0
         || options.limits.max_collection_items == 0
         || options.limits.max_string_bytes == 0
+        || options.limits.max_numeric_digits == 0
+        || options.limits.max_decimal_exponent == 0
         || options.limits.max_errors == 0
+        || options.limits.max_depth > HARD_MAX_DEPTH
     {
         return Err(scalars::type_error(
             "resource_limit",
@@ -83,6 +89,7 @@ pub fn validate(
     if options.profile == InputProfile::Strings {
         check_strings_profile(input)?;
     }
+    check_input_limits(input, options.limits)?;
     let mut state = ValidationState {
         input,
         values: Arena::new(),
@@ -119,9 +126,7 @@ impl ValidationState<'_> {
                 "valid input arena",
             )
         })?;
-        let value = if let Some(result) =
-            scalars::validate_scalar(schema, input, self.options.strict, self.options.profile)
-        {
+        let value = if let Some(result) = scalars::validate_scalar(schema, input, self.options) {
             result?
         } else if let Some(result) = special::validate_special(
             schema,
@@ -141,6 +146,83 @@ impl ValidationState<'_> {
                 "bounded output",
             )
         })
+    }
+}
+
+fn check_input_limits(input: &InputArena, limits: ValidationLimits) -> Result<(), ValidationError> {
+    let mut pending = vec![(input.root(), 0_usize)];
+    let mut string_bytes = 0_usize;
+    while let Some((id, depth)) = pending.pop() {
+        if depth > limits.max_depth {
+            return Err(scalars::type_error(
+                "recursion_limit",
+                "Validation recursion limit exceeded",
+                "bounded input",
+            ));
+        }
+        let value = input.get(id).ok_or_else(|| {
+            scalars::type_error(
+                "internal_input",
+                "Input arena index is invalid",
+                "valid input arena",
+            )
+        })?;
+        let byte_count = match value {
+            InputValue::Integer(value) | InputValue::Decimal(value) | InputValue::String(value) => {
+                value.len()
+            }
+            InputValue::Bytes(value) => value.len(),
+            InputValue::Fraction {
+                numerator,
+                denominator,
+            } => numerator.len().saturating_add(denominator.len()),
+            InputValue::Array(children) => {
+                check_collection_limit(children.len(), limits)?;
+                pending.extend(children.iter().map(|id| (*id, depth + 1)));
+                0
+            }
+            InputValue::Object(entries) => {
+                check_collection_limit(entries.len(), limits)?;
+                for (key, id) in entries {
+                    string_bytes = string_bytes.saturating_add(key.len());
+                    pending.push((*id, depth + 1));
+                }
+                0
+            }
+            InputValue::Mapping(entries) => {
+                check_collection_limit(entries.len(), limits)?;
+                for (key, value) in entries {
+                    pending.push((*key, depth + 1));
+                    pending.push((*value, depth + 1));
+                }
+                0
+            }
+            InputValue::Null
+            | InputValue::Bool(_)
+            | InputValue::Float(_)
+            | InputValue::Complex { .. } => 0,
+        };
+        string_bytes = string_bytes.saturating_add(byte_count);
+        if string_bytes > limits.max_string_bytes {
+            return Err(scalars::type_error(
+                "resource_limit",
+                "Validation string byte limit exceeded",
+                "bounded input",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn check_collection_limit(length: usize, limits: ValidationLimits) -> Result<(), ValidationError> {
+    if length > limits.max_collection_items {
+        Err(scalars::type_error(
+            "resource_limit",
+            "Validation collection item limit exceeded",
+            "bounded input",
+        ))
+    } else {
+        Ok(())
     }
 }
 

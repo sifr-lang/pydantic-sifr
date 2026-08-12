@@ -20,9 +20,9 @@ pub use schema::{
 };
 pub use validation::{
     BytesConstraints, ClockSnapshot, CollectionConstraints, ComplexConstraints, DateTimeValue,
-    DateValue, DecimalConstraints, DurationValue, ErrorDetail, FloatConstraints, InputProfile,
-    IntegerConstraints, IntegerTarget, LocationItem, PatternSchema, PatternValue,
-    RelativeTimeConstraint, Schema, StringConstraints, StringPattern, TemporalKind, TemporalSchema,
-    TimeValue, ValidatedArena, ValidatedValue, ValidationError, ValidationLimits,
-    ValidationOptions, ValueId, validate,
+    DateValue, DecimalConstraints, DurationValue, ErrorDetail, FloatConstraints,
+    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, LocationItem,
+    PatternCompileError, PatternSchema, PatternValue, RelativeTimeConstraint, Schema,
+    StringConstraints, StringPattern, TemporalKind, TemporalSchema, TimeValue, ValidatedArena,
+    ValidatedValue, ValidationError, ValidationLimits, ValidationOptions, ValueId, validate,
 };

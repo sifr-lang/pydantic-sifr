@@ -82,6 +82,8 @@ pub struct ValidationLimits {
     pub max_depth: usize,
     pub max_collection_items: usize,
     pub max_string_bytes: usize,
+    pub max_numeric_digits: usize,
+    pub max_decimal_exponent: u32,
     pub max_errors: usize,
 }
 
@@ -91,6 +93,8 @@ impl Default for ValidationLimits {
             max_depth: 128,
             max_collection_items: 1_000_000,
             max_string_bytes: 64 * 1024 * 1024,
+            max_numeric_digits: 4_300,
+            max_decimal_exponent: 4_300,
             max_errors: 128,
         }
     }

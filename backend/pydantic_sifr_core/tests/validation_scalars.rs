@@ -3,9 +3,10 @@ use num_bigint::BigInt;
 use num_complex::Complex64;
 use num_rational::BigRational;
 use pydantic_sifr_core::{
-    ComplexConstraints, DecimalConstraints, InputProfile, IntegerConstraints, IntegerTarget,
-    JsonLimits, NativeValue, Schema, StringConstraints, StringPattern, ValidatedArena,
-    ValidatedValue, ValidationError, ValidationOptions, build_native_input, parse_json, validate,
+    BytesConstraints, ComplexConstraints, DecimalConstraints, FloatConstraints,
+    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, JsonLimits, NativeValue,
+    Schema, StringConstraints, StringPattern, ValidatedArena, ValidatedValue, ValidationError,
+    ValidationOptions, build_native_input, parse_json, validate,
 };
 
 fn require_validation_error(result: Result<ValidatedArena, ValidationError>) -> ValidationError {
@@ -129,7 +130,7 @@ fn decimal_fraction_and_complex_values_keep_exact_or_structural_meaning() {
     );
 
     let fraction = validate_native(
-        &Schema::Fraction(IntegerConstraints::default()),
+        &Schema::Fraction(FractionConstraints::default()),
         NativeValue::Fraction {
             numerator: "6".to_owned(),
             denominator: "-8".to_owned(),
@@ -192,4 +193,139 @@ fn native_and_json_integer_limits_fail_before_large_numeric_allocation() {
         Err(error) => error,
     };
     assert_eq!(json.code, "json_integer_limit");
+}
+
+#[test]
+fn fraction_constraints_compare_the_exact_rational_value() {
+    let one = BigRational::from_integer(BigInt::from(1));
+    let schema = Schema::Fraction(FractionConstraints {
+        greater_or_equal: Some(one),
+        multiple_of: Some(BigRational::new(BigInt::from(1), BigInt::from(4))),
+        ..FractionConstraints::default()
+    });
+    let error = require_validation_error(validate_native(
+        &schema,
+        NativeValue::Fraction {
+            numerator: "1".to_owned(),
+            denominator: "2".to_owned(),
+        },
+        true,
+    ));
+    assert_eq!(first_code(&error), "greater_than_equal");
+}
+
+#[test]
+fn decimal_and_fraction_reject_extreme_exponents_and_string_digit_bypass() {
+    let decimal_error = require_validation_error(validate_native(
+        &Schema::Decimal(DecimalConstraints {
+            max_digits: Some(10),
+            ..DecimalConstraints::default()
+        }),
+        NativeValue::String("1e-2000000000".to_owned()),
+        false,
+    ));
+    assert_eq!(first_code(&decimal_error), "resource_limit");
+
+    let fraction_error = require_validation_error(validate_native(
+        &Schema::Fraction(FractionConstraints::default()),
+        NativeValue::String("1e-2000000000".to_owned()),
+        false,
+    ));
+    assert_eq!(first_code(&fraction_error), "resource_limit");
+
+    let digits = "1".repeat(4_301);
+    let integer_error = require_validation_error(validate_native(
+        &Schema::exact_integer(),
+        NativeValue::String(digits),
+        false,
+    ));
+    assert_eq!(first_code(&integer_error), "resource_limit");
+}
+
+#[test]
+fn decimal_digit_count_includes_normalized_whole_trailing_zeros() {
+    let error = require_validation_error(validate_native(
+        &Schema::Decimal(DecimalConstraints {
+            max_digits: Some(2),
+            ..DecimalConstraints::default()
+        }),
+        NativeValue::Decimal("100".to_owned()),
+        true,
+    ));
+    assert_eq!(first_code(&error), "decimal_max_digits");
+}
+
+#[test]
+fn float_multiple_overflow_and_strict_strings_bytes_return_stable_results() {
+    let float_error = require_validation_error(validate_native(
+        &Schema::Float(FloatConstraints {
+            multiple_of: Some(1e-308),
+            ..FloatConstraints::default()
+        }),
+        NativeValue::Float(1e308),
+        true,
+    ));
+    assert_eq!(first_code(&float_error), "multiple_of");
+
+    let input = build_native_input(
+        &NativeValue::String("abc".to_owned()),
+        JsonLimits::default(),
+    )
+    .unwrap_or_else(|error| panic!("native input failed: {error}"));
+    let bytes = validate(
+        &Schema::Bytes(BytesConstraints::default()),
+        &input,
+        ValidationOptions {
+            strict: true,
+            profile: InputProfile::Strings,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("strict strings bytes failed: {error}"));
+    assert_eq!(root(&bytes), &ValidatedValue::Bytes(b"abc".to_vec()));
+}
+
+#[test]
+fn json_profile_runs_the_same_engine_and_validation_limits_are_independent() {
+    let input = parse_json(br#""42""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON input failed: {error}"));
+    let value = validate(
+        &Schema::exact_integer(),
+        &input,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("JSON-profile integer failed: {error}"));
+    assert_eq!(root(&value), &ValidatedValue::ExactInt(BigInt::from(42)));
+
+    let strict_strings_error = require_validation_error(validate(
+        &Schema::exact_integer(),
+        &parse_json(b"42", JsonLimits::default())
+            .unwrap_or_else(|error| panic!("JSON input failed: {error}")),
+        ValidationOptions {
+            profile: InputProfile::Strings,
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(first_code(&strict_strings_error), "strings_type");
+
+    let long = build_native_input(
+        &NativeValue::String("abcdef".to_owned()),
+        JsonLimits::default(),
+    )
+    .unwrap_or_else(|error| panic!("native input failed: {error}"));
+    let limited_error = require_validation_error(validate(
+        &Schema::String(StringConstraints::default()),
+        &long,
+        ValidationOptions {
+            limits: pydantic_sifr_core::ValidationLimits {
+                max_string_bytes: 5,
+                ..pydantic_sifr_core::ValidationLimits::default()
+            },
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(first_code(&limited_error), "resource_limit");
 }
