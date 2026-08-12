@@ -1,0 +1,2698 @@
+# Imported from the approved Sifr native-Pydantic phase record.
+# Paths and selectors are resolved against the immutable upstream pin.
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_schema_functions.py"
+selector = "test_invalid_custom_error"
+class = "adapted"
+milestone = "ps_4"
+fixture = "core/schema_contract"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_schema_functions.py"
+selector = "test_invalid_custom_error_type"
+class = "adapted"
+milestone = "ps_4"
+fixture = "core/schema_contract"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_schema_functions.py"
+selector = "test_err_on_invalid"
+class = "adapted"
+milestone = "ps_4"
+fixture = "core/schema_contract"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_json.py"
+selector = "test_json_invalid"
+class = "adapted"
+milestone = "ps_4"
+fixture = "core/json_foundation"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_json.py"
+selector = "test_input_types"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/json_values"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_json.py"
+selector = "test_bool"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/json_values"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_json.py"
+selector = "test_int"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/json_values"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_json.py"
+selector = "test_float"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/json_values"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_json.py"
+selector = "test_json_bytes_base64_round_trip"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/json_values"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_json.py"
+selector = "test_json_bytes_base64_invalid"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/json_values"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_errors.py"
+selector = "test_error_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/validation_errors"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_errors.py"
+selector = "test_error_json_loc"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/validation_errors"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_errors.py"
+selector = "test_hide_input_in_error"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/validation_errors"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_errors.py"
+selector = "test_error_type"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/validation_errors"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_bool.py"
+selector = "test_bool"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_bool.py"
+selector = "test_bool_strict"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_int.py"
+selector = "test_int_py_and_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_int.py"
+selector = "test_int_strict"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_int.py"
+selector = "test_int_kwargs"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_float.py"
+selector = "test_float"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_float.py"
+selector = "test_float_strict"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_float.py"
+selector = "test_float_kwargs"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_decimal.py"
+selector = "test_decimal"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_decimal.py"
+selector = "test_decimal_strict_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_decimal.py"
+selector = "test_decimal_kwargs"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_decimal.py"
+selector = "test_validate_max_digits_and_decimal_places"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/numeric"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_complex.py"
+selector = "test_complex_cases"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/complex"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_complex.py"
+selector = "test_complex_strict"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/complex"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_complex.py"
+selector = "test_json_complex"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/complex"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_complex.py"
+selector = "test_string_complex"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/complex"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_string.py"
+selector = "test_str"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/text_bytes"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_string.py"
+selector = "test_constrained_str"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/text_bytes"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_string.py"
+selector = "test_coerce_numbers_to_str"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/text_bytes"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_bytes.py"
+selector = "test_strict_bytes_validator"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/text_bytes"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_bytes.py"
+selector = "test_lax_bytes_validator"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/text_bytes"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_bytes.py"
+selector = "test_constrained_bytes"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/text_bytes"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_date.py"
+selector = "test_date_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_date.py"
+selector = "test_date_strict_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_date.py"
+selector = "test_date_kwargs"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_datetime.py"
+selector = "test_datetime_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_datetime.py"
+selector = "test_datetime_strict_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_datetime.py"
+selector = "test_datetime_past"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_datetime.py"
+selector = "test_datetime_future"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_time.py"
+selector = "test_time_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_time.py"
+selector = "test_time_strict_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_timedelta.py"
+selector = "test_timedelta_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_timedelta.py"
+selector = "test_timedelta_strict_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_timedelta.py"
+selector = "test_timedelta_kwargs"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/temporal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_list.py"
+selector = "test_list_py_or_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_list.py"
+selector = "test_list_error"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_list.py"
+selector = "test_list_length_constraints"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_tuple.py"
+selector = "test_tuple_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_tuple.py"
+selector = "test_tuple_validate"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_tuple.py"
+selector = "test_multiple_missing"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_dict.py"
+selector = "test_dict"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_dict.py"
+selector = "test_dict_value_error"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_dict.py"
+selector = "test_dict_length_constraints"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_set.py"
+selector = "test_set_ints_both"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_set.py"
+selector = "test_set_multiple_errors"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_frozenset.py"
+selector = "test_frozenset_ints_both"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_frozenset.py"
+selector = "test_frozenset_multiple_errors"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/collections"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_generator.py"
+selector = "test_generator_json_int"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/generator"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_generator.py"
+selector = "test_error_index"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/generator"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_generator.py"
+selector = "test_too_long"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/generator"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_generator.py"
+selector = "test_too_short"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/generator"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_json.py"
+selector = "test_any"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/embedded_json"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_json.py"
+selector = "test_list_int"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/embedded_json"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_json.py"
+selector = "test_dict_key"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/embedded_json"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_none.py"
+selector = "test_python_none"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/none"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_none.py"
+selector = "test_json_none"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/none"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_url.py"
+selector = "test_url_ok"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/url"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_url.py"
+selector = "test_url_error"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/url"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_url.py"
+selector = "test_max_length"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/url"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_url.py"
+selector = "test_allowed_schemes_ok"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/url"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_url.py"
+selector = "test_allowed_schemes_error"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/url"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_url.py"
+selector = "test_url_vulnerabilities"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/url"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_uuid.py"
+selector = "test_uuid"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/uuid"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_uuid.py"
+selector = "test_uuid_strict"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/uuid"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_uuid.py"
+selector = "test_uuid_version"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/uuid"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_uuid.py"
+selector = "test_uuid_json"
+class = "adapted"
+milestone = "ps_5"
+fixture = "validators/uuid"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_validate_strings.py"
+selector = "test_bool"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/strings_profile"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_validate_strings.py"
+selector = "test_validate_strings"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/strings_profile"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_validate_strings.py"
+selector = "test_dict"
+class = "adapted"
+milestone = "ps_5"
+fixture = "core/strings_profile"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_json.py"
+selector = "test_typed_dict"
+class = "adapted"
+milestone = "ps_6"
+fixture = "core/json_models"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_json.py"
+selector = "test_error_loc"
+class = "adapted"
+milestone = "ps_6"
+fixture = "core/json_models"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_errors.py"
+selector = "test_loc_with_dots"
+class = "adapted"
+milestone = "ps_6"
+fixture = "core/model_error_locations"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_validate_strings.py"
+selector = "test_typed_dict"
+class = "adapted"
+milestone = "ps_6"
+fixture = "core/strings_profile_models"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_model_fields.py"
+selector = "test_simple"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/model_fields"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_model_fields.py"
+selector = "test_with_default"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/model_fields"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_model_fields.py"
+selector = "test_missing_error"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/model_fields"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_model_fields.py"
+selector = "test_fields_required_by_default"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/model_fields"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_model_fields.py"
+selector = "test_alias"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/model_fields"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_model_fields.py"
+selector = "test_alias_path"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/model_fields"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_model_fields.py"
+selector = "test_alias_error_loc_alias"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/model_fields"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_model_fields.py"
+selector = "test_ignore_extra"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/model_fields"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_model_fields.py"
+selector = "test_forbid_extra"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/model_fields"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_simple"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_with_default"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_missing_error"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_fields_required_by_default"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_model_deep"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_alias"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_alias_path"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_alias_error_loc_alias"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_ignore_extra"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_typed_dict.py"
+selector = "test_forbid_extra"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_dataclasses.py"
+selector = "test_dataclass_args"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/dataclasses"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_dataclasses.py"
+selector = "test_aliases"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/dataclasses"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_dataclasses.py"
+selector = "test_dataclass"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/dataclasses"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_dataclasses.py"
+selector = "test_dataclass_field_after_validator"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/dataclasses"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_dataclasses.py"
+selector = "test_dataclass_json"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/dataclasses"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_with_default.py"
+selector = "test_typed_dict_default"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/defaults"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_nullable.py"
+selector = "test_nullable"
+class = "adapted"
+milestone = "ps_6"
+fixture = "validators/nullable"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_literal.py"
+selector = "test_literal_py_and_json"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/literal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_literal.py"
+selector = "test_big_int"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/literal"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_enums.py"
+selector = "test_plain_enum"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/enum"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_enums.py"
+selector = "test_int_enum"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/enum"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_enums.py"
+selector = "test_str_enum"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/enum"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_enums.py"
+selector = "test_enum_exactness"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/enum"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_enums.py"
+selector = "test_big_int"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/enum"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_union_bool_int"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_int_float"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_left_to_right_union"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_smart_union_json_string_types"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_smart_union_model_field"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_td_smart_union_by_fields_set"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_smart_union_does_nested_model_field_counting"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_nested_unions_bubble_up_field_count"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_smart_union_validator_function"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_case_labels"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_union.py"
+selector = "test_custom_error"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_lax_or_strict.py"
+selector = "test_lax_or_strict"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/control_composition"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_lax_or_strict.py"
+selector = "test_lax_or_strict_default_strict"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/control_composition"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_json_or_python.py"
+selector = "test_json_or_python"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/control_composition"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_chain.py"
+selector = "test_chain"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/control_composition"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_chain.py"
+selector = "test_chain_many"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/control_composition"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_chain.py"
+selector = "test_chain_error"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/control_composition"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_chain.py"
+selector = "test_flatten"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/control_composition"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_chain.py"
+selector = "test_chain_empty"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/control_composition"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_chain.py"
+selector = "test_chain_one"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/control_composition"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_tagged_union.py"
+selector = "test_simple_tagged_union"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/tagged_unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_tagged_union.py"
+selector = "test_discriminator_path"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/tagged_unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_tagged_union.py"
+selector = "test_discriminator_function"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/tagged_unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_tagged_union.py"
+selector = "test_custom_error"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/tagged_unions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_nullable.py"
+selector = "test_union_nullable_bool_int"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/nullable_union"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_definitions.py"
+selector = "test_repeated_ref"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/definitions_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_definitions.py"
+selector = "test_deep"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/definitions_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_definitions_recursive.py"
+selector = "test_branch_nullable"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/definitions_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_definitions_recursive.py"
+selector = "test_recursion_branch"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/definitions_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_definitions_recursive.py"
+selector = "test_complex_recursive_type"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/definitions_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_function.py"
+selector = "test_function_before"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_function.py"
+selector = "test_function_wrap"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_function.py"
+selector = "test_function_after"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_function.py"
+selector = "test_function_plain"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_function.py"
+selector = "test_model_field_before_validator"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_function.py"
+selector = "test_model_field_after_validator"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_function.py"
+selector = "test_model_field_wrap_validator"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_validation_context.py"
+selector = "test_after"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_validation_context.py"
+selector = "test_mutable_context"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_validation_context.py"
+selector = "test_typed_dict"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/test_validation_context.py"
+selector = "test_wrap"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_with_default.py"
+selector = "test_validate_default_factory"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/validators/test_with_default.py"
+selector = "test_default_value_validate_default_fail"
+class = "adapted"
+milestone = "ps_7"
+fixture = "validators/callbacks_context"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_simple.py"
+selector = "test_simple_serializers"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_simple.py"
+selector = "test_float_inf_and_nan_serializers"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_bytes.py"
+selector = "test_bytes"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_bytes.py"
+selector = "test_bytes_base64"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_bytes.py"
+selector = "test_bytes_hex"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_datetime.py"
+selector = "test_datetime"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_datetime.py"
+selector = "test_datetime_json"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_datetime.py"
+selector = "test_date"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_datetime.py"
+selector = "test_time"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_decimal.py"
+selector = "test_decimal"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_decimal.py"
+selector = "test_decimal_json"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_complex.py"
+selector = "test_complex_json"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/scalars"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_timedelta.py"
+selector = "test_timedelta"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/duration"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_timedelta.py"
+selector = "test_timedelta_float"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/duration"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_timedelta.py"
+selector = "test_config_timedelta"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/duration"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_timedelta.py"
+selector = "test_timedelta_key"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/duration"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_list_tuple.py"
+selector = "test_list_any"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sequences"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_list_tuple.py"
+selector = "test_include"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sequences"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_list_tuple.py"
+selector = "test_exclude"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sequences"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_list_tuple.py"
+selector = "test_filter"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sequences"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_list_tuple.py"
+selector = "test_filter_runtime"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sequences"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_list_tuple.py"
+selector = "test_filter_runtime_more"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sequences"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_list_tuple.py"
+selector = "test_positional_tuple"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sequences"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_list_tuple.py"
+selector = "test_filter_args_nested"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sequences"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_dict.py"
+selector = "test_dict_str_int"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/mappings"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_dict.py"
+selector = "test_include"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/mappings"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_dict.py"
+selector = "test_exclude"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/mappings"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_dict.py"
+selector = "test_filter"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/mappings"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_dict.py"
+selector = "test_filter_runtime"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/mappings"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_dict.py"
+selector = "test_filter_args_nested"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/mappings"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_set_frozenset.py"
+selector = "test_set_any"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sets"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_set_frozenset.py"
+selector = "test_frozenset_any"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sets"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_typed_dict.py"
+selector = "test_typed_dict"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_typed_dict.py"
+selector = "test_include_exclude_args"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_typed_dict.py"
+selector = "test_alias"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_typed_dict.py"
+selector = "test_exclude_none"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_typed_dict.py"
+selector = "test_exclude_default"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/typed_dict"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_model.py"
+selector = "test_model"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/models"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_model.py"
+selector = "test_include_exclude_args"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/models"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_model.py"
+selector = "test_alias"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/models"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_model.py"
+selector = "test_exclude_none"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/models"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_model.py"
+selector = "test_advanced_exclude_nested_lists"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/models"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_model.py"
+selector = "test_computed_field_exclude_none"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/models"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_enum.py"
+selector = "test_plain_enum"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sums"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_enum.py"
+selector = "test_int_enum"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sums"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_enum.py"
+selector = "test_str_enum"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sums"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_literal.py"
+selector = "test_int_literal"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sums"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_literal.py"
+selector = "test_str_literal"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sums"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_none.py"
+selector = "test_none_fallback"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sums"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_nullable.py"
+selector = "test_nullable"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/sums"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_union.py"
+selector = "test_union_bool_int"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/unions_callbacks_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_union.py"
+selector = "test_typed_dict_literal"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/unions_callbacks_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_union.py"
+selector = "test_tagged_union"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/unions_callbacks_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_union.py"
+selector = "test_tagged_union_with_aliases"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/unions_callbacks_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_definitions_recursive.py"
+selector = "test_branch_nullable"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/unions_callbacks_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_functions.py"
+selector = "test_function_known_type"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/unions_callbacks_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_functions.py"
+selector = "test_function_only_json"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/unions_callbacks_recursion"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_definitions.py"
+selector = "test_custom_ser"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/definitions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_definitions.py"
+selector = "test_repeated_ref"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/definitions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_definitions.py"
+selector = "test_deep"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/definitions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_definitions.py"
+selector = "test_use_after"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/definitions"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_url.py"
+selector = "test_url"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/url_uuid"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_url.py"
+selector = "test_url_dict_keys"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/url_uuid"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_uuid.py"
+selector = "test_uuid"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/url_uuid"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_uuid.py"
+selector = "test_uuid_key"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/url_uuid"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_uuid.py"
+selector = "test_uuid_json"
+class = "adapted"
+milestone = "ps_8"
+fixture = "serializers/url_uuid"
+
+[[anchor]]
+namespace = "core"
+path = "pydantic-core/tests/serializers/test_url.py"
+selector = "test_multi_host_url"
+class = "adapted"
+milestone = "ps_10"
+fixture = "core/multi_host_url_serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_constrained_bytes_good"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_constrained_bytes_too_long"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_constrained_list_good"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_constrained_list_too_long"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_constrained_set_good"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_constrained_set_too_short"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_constrained_str_good"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_constrained_str_too_long"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_string_too_long"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_string_too_short"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_string_constraints_ascii_only"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_decimal_validation"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/constraints"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_success"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_ultra_simple_missing"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_ultra_simple_failed"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_nullable_strings_success"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_parent_sub_model"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_required"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_default_factory_called_once_2"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_allow_extra"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_forbidden_extra_fails"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_model_validate_strict"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_main.py"
+selector = "test_model_validate_json_strict"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/base_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_aliases.py"
+selector = "test_basic_alias"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/aliases"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_aliases.py"
+selector = "test_alias_error_loc_by_alias"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/aliases"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_aliases.py"
+selector = "test_pop_by_field_name"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/aliases"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_aliases.py"
+selector = "test_validation_alias"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/aliases"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_aliases.py"
+selector = "test_validation_alias_parse_data"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/aliases"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_aliases.py"
+selector = "test_validation_alias_priority_json"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/aliases"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_config.py"
+selector = "test_config_inf_nan_disabled"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/config_fields"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_config.py"
+selector = "test_hide_input_in_errors"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/config_fields"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_config.py"
+selector = "test_populate_by_name_still_effective"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/config_fields"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_fields.py"
+selector = "test_coerce_numbers_to_str_field_option"
+class = "adapted"
+milestone = "ps_6"
+fixture = "api/config_fields"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_validators.py"
+selector = "test_annotated_validator_before"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_validators.py"
+selector = "test_annotated_validator_after"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_validators.py"
+selector = "test_annotated_validator_plain"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_validators.py"
+selector = "test_annotated_validator_wrap"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_validators.py"
+selector = "test_annotated_validator_runs_before_field_validators"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_validators.py"
+selector = "test_validate_multiple"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_validators.py"
+selector = "test_field_validator_validate_default"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_model_validator.py"
+selector = "test_model_validator_before"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_model_validator.py"
+selector = "test_model_validator_after"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_model_validator.py"
+selector = "test_model_validator_wrap"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/validators"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_discriminated_union.py"
+selector = "test_discriminated_union_validation"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/discriminated_unions"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_discriminated_union.py"
+selector = "test_discriminated_annotated_union"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/discriminated_unions"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_discriminated_union.py"
+selector = "test_discriminated_union_int"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/discriminated_unions"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_discriminated_union.py"
+selector = "test_nested_discriminated_union"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/discriminated_unions"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_discriminated_union.py"
+selector = "test_callable_discriminated_union_recursive"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/discriminated_unions"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_generics.py"
+selector = "test_value_validation"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/generics_recursion"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_generics.py"
+selector = "test_alongside_concrete_generics"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/generics_recursion"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_generics.py"
+selector = "test_complex_nesting"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/generics_recursion"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_generics.py"
+selector = "test_required_value"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/generics_recursion"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_forward_ref.py"
+selector = "test_self_forward_ref_collection"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/generics_recursion"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_forward_ref.py"
+selector = "test_recursive_model"
+class = "adapted"
+milestone = "ps_7"
+fixture = "api/generics_recursion"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_serialize.py"
+selector = "test_serializer_annotated_plain_json"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_serialize.py"
+selector = "test_serializer_annotated_wrap_json"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_serialize.py"
+selector = "test_model_serializer_plain"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_serialize.py"
+selector = "test_model_serializer_wrap"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_serialize.py"
+selector = "test_serialize_partial"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_serialize.py"
+selector = "test_serialize_json_context"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_computed_fields.py"
+selector = "test_computed_fields_get"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_computed_fields.py"
+selector = "test_include_exclude"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_computed_fields.py"
+selector = "test_exclude_none"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_computed_fields.py"
+selector = "test_computed_field_with_field_serializer"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_aliases.py"
+selector = "test_serialization_alias"
+class = "adapted"
+milestone = "ps_8"
+fixture = "api/serialization"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_type_adapter.py"
+selector = "test_types"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/type_adapter"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_type_adapter.py"
+selector = "test_validate_python_strict"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/type_adapter"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_type_adapter.py"
+selector = "test_validate_python_context"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/type_adapter"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_type_adapter.py"
+selector = "test_validate_json_context"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/type_adapter"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_type_adapter.py"
+selector = "test_validate_strings_dict"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/type_adapter"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_decimal_precision"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/type_adapter"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_serialize.py"
+selector = "test_type_adapter_dump_json"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/type_adapter"
+
+[[anchor]]
+namespace = "api"
+path = "tests/types/test_fraction.py"
+selector = "test_fraction"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/specialized_numeric"
+
+[[anchor]]
+namespace = "api"
+path = "tests/types/test_fraction.py"
+selector = "test_fraction_validate_json"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/specialized_numeric"
+
+[[anchor]]
+namespace = "api"
+path = "tests/types/test_fraction.py"
+selector = "test_fraction_validate_strings"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/specialized_numeric"
+
+[[anchor]]
+namespace = "api"
+path = "tests/types/test_fraction.py"
+selector = "test_fraction_validation_error_strict"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/specialized_numeric"
+
+[[anchor]]
+namespace = "api"
+path = "tests/types/test_fraction.py"
+selector = "test_fraction_dump_json"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/specialized_numeric"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_strict_complex_field"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/specialized_numeric"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_by_alias"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_sub_model"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_optional"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_list_union_dict"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_constraints_schema_validation"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_constraints_schema_serialization"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_literal_schema"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_new_type_schema"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_schema_with_refs"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_nested_generic"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_discriminated_union"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_computed_field"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_json_schema.py"
+selector = "test_type_adapter_json_schemas_title_description"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_aliases.py"
+selector = "test_aliases_json_schema"
+class = "adapted"
+milestone = "ps_9"
+fixture = "api/json_schema"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_networks.py"
+selector = "test_http_url_success"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/networks"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_networks.py"
+selector = "test_http_url_invalid"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/networks"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_networks.py"
+selector = "test_any_url_parts"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/networks"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_networks.py"
+selector = "test_postgres_dsns"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/networks"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_networks.py"
+selector = "test_multihost_postgres_dsns"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/networks"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_networks.py"
+selector = "test_json_schema"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/networks"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_networks.py"
+selector = "test_url_ser"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/networks"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_types.py"
+selector = "test_pattern"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/pattern"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_root_model.py"
+selector = "test_root_model_validation_error"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/root_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_root_model.py"
+selector = "test_root_model_nested"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/root_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_root_model.py"
+selector = "test_model_validator_before"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/root_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_root_model.py"
+selector = "test_model_validator_after"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/root_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_root_model.py"
+selector = "test_root_model_json_schema_meta"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/root_model"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_annotated.py"
+selector = "test_compatible_metadata_raises_correct_validation_error"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/field_metadata"
+
+[[anchor]]
+namespace = "api"
+path = "tests/test_annotated.py"
+selector = "test_decimal_constraints_after_annotation"
+class = "adapted"
+milestone = "ps_10"
+fixture = "api/field_metadata"

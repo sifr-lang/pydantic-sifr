@@ -1,0 +1,29 @@
+[package]
+name = "pydantic-sifr-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.10"
+pydantic_sifr_core = { path = "../backend/pydantic_sifr_core" }
+
+[[bin]]
+name = "json_foundation"
+path = "fuzz_targets/json_foundation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "schema_envelope"
+path = "fuzz_targets/schema_envelope.rs"
+test = false
+doc = false
+bench = false
+
+[workspace]
+members = ["."]

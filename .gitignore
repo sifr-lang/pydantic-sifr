@@ -1,9 +1,9 @@
 .DS_Store
 .upstream/
 .venv/
+.sifr_cache/
 __pycache__/
 *.pyc
 target/
 dist/
 evidence/
-

@@ -1,0 +1,10 @@
+class SchemaIssueArgs:
+    problem: str
+
+
+class SchemaIssue:
+    package: str
+    reason_code: str
+    severity: str
+    arguments: SchemaIssueArgs
+    notes: list[str]
