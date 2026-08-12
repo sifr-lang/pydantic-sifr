@@ -24,5 +24,6 @@ pub use validation::{
     FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, LocationItem,
     PatternCompileError, PatternSchema, PatternValue, RelativeTimeConstraint, Schema,
     StringConstraints, StringPattern, TemporalKind, TemporalSchema, TimeValue, ValidatedArena,
-    ValidatedValue, ValidationError, ValidationLimits, ValidationOptions, ValueId, validate,
+    ValidatedIterator, ValidatedValue, ValidationError, ValidationLimits, ValidationOptions,
+    ValueId, validate, validated_iterator,
 };

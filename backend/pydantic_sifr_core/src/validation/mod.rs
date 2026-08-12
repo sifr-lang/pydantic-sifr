@@ -5,6 +5,7 @@ mod schema;
 mod special;
 mod value;
 
+pub use collections::{ValidatedIterator, validated_iterator};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
 pub use schema::{
     BytesConstraints, CollectionConstraints, ComplexConstraints, DecimalConstraints,
@@ -72,6 +73,15 @@ pub fn validate(
     input: &InputArena,
     options: ValidationOptions,
 ) -> Result<ValidatedArena, ValidationError> {
+    validate_at(schema, input, input.root(), options)
+}
+
+fn validate_at(
+    schema: &Schema,
+    input: &InputArena,
+    root: InputId,
+    options: ValidationOptions,
+) -> Result<ValidatedArena, ValidationError> {
     if options.limits.max_depth == 0
         || options.limits.max_collection_items == 0
         || options.limits.max_string_bytes == 0
@@ -87,15 +97,15 @@ pub fn validate(
         ));
     }
     if options.profile == InputProfile::Strings {
-        check_strings_profile(input)?;
+        check_strings_profile(input, root)?;
     }
-    check_input_limits(input, options.limits)?;
+    check_input_limits(input, root, options.limits)?;
     let mut state = ValidationState {
         input,
         values: Arena::new(),
         options,
     };
-    let root = state.validate_node(schema, input.root(), 0)?;
+    let root = state.validate_node(schema, root, 0)?;
     Ok(ValidatedArena::new(root, state.values))
 }
 
@@ -147,10 +157,56 @@ impl ValidationState<'_> {
             )
         })
     }
+
+    pub(crate) const fn input(&self) -> &InputArena {
+        self.input
+    }
+
+    pub(crate) const fn options(&self) -> ValidationOptions {
+        self.options
+    }
+
+    pub(crate) fn value(&self, id: ValueId) -> Option<&ValidatedValue> {
+        self.values.get(id)
+    }
+
+    pub(crate) fn push(&mut self, value: ValidatedValue) -> Result<ValueId, ValidationError> {
+        value::push_value(&mut self.values, value).map_err(arena_validation_error)
+    }
+
+    pub(crate) fn import(&mut self, arena: ValidatedArena) -> Result<ValueId, ValidationError> {
+        let offset = self.values.len();
+        let (root, values) = arena.into_parts();
+        for mut value in values {
+            value.remap_ids(offset).map_err(arena_validation_error)?;
+            self.push(value)?;
+        }
+        let root = usize::try_from(root.raw())
+            .ok()
+            .and_then(|raw| raw.checked_add(offset))
+            .ok_or_else(arena_capacity_error)?;
+        crate::ArenaId::from_usize(root).map_err(arena_validation_error)
+    }
 }
 
-fn check_input_limits(input: &InputArena, limits: ValidationLimits) -> Result<(), ValidationError> {
-    let mut pending = vec![(input.root(), 0_usize)];
+fn arena_capacity_error() -> ValidationError {
+    scalars::type_error(
+        "resource_limit",
+        "Validated arena capacity exceeded",
+        "bounded output",
+    )
+}
+
+fn arena_validation_error(_error: crate::ArenaError) -> ValidationError {
+    arena_capacity_error()
+}
+
+fn check_input_limits(
+    input: &InputArena,
+    root: InputId,
+    limits: ValidationLimits,
+) -> Result<(), ValidationError> {
+    let mut pending = vec![(root, 0_usize)];
     let mut string_bytes = 0_usize;
     while let Some((id, depth)) = pending.pop() {
         if depth > limits.max_depth {
@@ -226,8 +282,8 @@ fn check_collection_limit(length: usize, limits: ValidationLimits) -> Result<(),
     }
 }
 
-fn check_strings_profile(input: &InputArena) -> Result<(), ValidationError> {
-    let mut pending = vec![input.root()];
+fn check_strings_profile(input: &InputArena, root: InputId) -> Result<(), ValidationError> {
+    let mut pending = vec![root];
     while let Some(id) = pending.pop() {
         match input.get(id) {
             Some(InputValue::String(_)) => {}

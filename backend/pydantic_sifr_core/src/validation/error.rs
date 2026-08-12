@@ -63,6 +63,30 @@ impl ValidationError {
     pub const fn is_truncated(&self) -> bool {
         self.truncated
     }
+
+    pub(crate) fn at(mut self, item: LocationItem) -> Self {
+        for detail in &mut self.details {
+            detail.location.insert(0, item.clone());
+        }
+        self
+    }
+
+    pub(crate) fn append(&mut self, mut other: Self, limit: usize) {
+        let remaining = limit.saturating_sub(self.details.len());
+        if other.details.len() > remaining {
+            self.truncated = true;
+        }
+        self.details.extend(other.details.drain(..remaining));
+        self.truncated |= other.truncated;
+    }
+
+    pub(crate) fn is_full(&self, limit: usize) -> bool {
+        self.details.len() >= limit
+    }
+
+    pub(crate) fn mark_truncated(&mut self) {
+        self.truncated = true;
+    }
 }
 
 impl fmt::Display for ValidationError {

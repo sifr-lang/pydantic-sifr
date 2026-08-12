@@ -122,6 +122,38 @@ impl ValidatedArena {
     pub fn is_empty(&self) -> bool {
         self.values.is_empty()
     }
+
+    pub(crate) fn into_parts(self) -> (ValueId, Vec<ValidatedValue>) {
+        (self.root, self.values.into_values())
+    }
+}
+
+impl ValidatedValue {
+    pub(crate) fn remap_ids(&mut self, offset: usize) -> Result<(), ArenaError> {
+        match self {
+            Self::Sequence(ids) | Self::Set(ids) | Self::FrozenSet(ids) => {
+                for id in ids {
+                    *id = remap_id(*id, offset)?;
+                }
+            }
+            Self::Mapping(entries) => {
+                for (key, value) in entries {
+                    *key = remap_id(*key, offset)?;
+                    *value = remap_id(*value, offset)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+}
+
+fn remap_id(id: ValueId, offset: usize) -> Result<ValueId, ArenaError> {
+    let raw = usize::try_from(id.raw()).map_err(|_| ArenaError::CapacityExceeded)?;
+    let remapped = raw
+        .checked_add(offset)
+        .ok_or(ArenaError::CapacityExceeded)?;
+    ArenaId::from_usize(remapped)
 }
 
 pub(crate) fn push_value(
