@@ -93,6 +93,19 @@ fn relative_temporal_constraints_use_the_injected_clock_snapshot() {
         },
     ));
     assert_eq!(error.details()[0].code, "datetime_future");
+
+    let date = parse_json(br#""2024-01-01""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON date failed: {error}"));
+    let date_error = require_error(validate(
+        &temporal(TemporalKind::Date, Some(RelativeTimeConstraint::Past)),
+        &date,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            clock,
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(date_error.details()[0].code, "date_past");
 }
 
 #[test]
@@ -146,6 +159,75 @@ fn url_validation_returns_a_canonical_absolute_url() {
         root(&output),
         &ValidatedValue::Url("https://example.com/b?q=1".to_owned())
     );
+}
+
+#[test]
+fn url_pattern_and_relative_schema_rejections_are_typed() {
+    let opaque = parse_json(br#""data:text/plain,hello""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON opaque URL failed: {error}"));
+    let url_error = require_error(validate(
+        &Schema::Url,
+        &opaque,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(url_error.details()[0].code, "url_scheme");
+
+    let invalid_pattern = parse_json(br#""(""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON pattern failed: {error}"));
+    let pattern_error = require_error(validate(
+        &Schema::Pattern(PatternSchema {
+            case_insensitive: false,
+            multi_line: false,
+            dot_matches_new_line: false,
+        }),
+        &invalid_pattern,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(pattern_error.details()[0].code, "pattern_parsing");
+
+    for kind in [TemporalKind::Time, TemporalKind::Duration] {
+        let source = if kind == TemporalKind::Time {
+            br#""12:00:00""#.as_slice()
+        } else {
+            br#""P1D""#.as_slice()
+        };
+        let input = parse_json(source, JsonLimits::default())
+            .unwrap_or_else(|error| panic!("JSON temporal failed: {error}"));
+        let error = require_error(validate(
+            &temporal(kind, Some(RelativeTimeConstraint::Past)),
+            &input,
+            ValidationOptions {
+                profile: InputProfile::Json,
+                ..ValidationOptions::default()
+            },
+        ));
+        assert_eq!(error.details()[0].code, "schema_invalid");
+    }
+}
+
+#[test]
+fn clock_snapshot_seconds_never_switch_to_millisecond_inference() {
+    let input = parse_json(br#""2604-01-01""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON date failed: {error}"));
+    let error = require_error(validate(
+        &temporal(TemporalKind::Date, Some(RelativeTimeConstraint::Future)),
+        &input,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            clock: ClockSnapshot {
+                unix_seconds: 20_100_000_000,
+                microsecond: 0,
+            },
+            ..ValidationOptions::default()
+        },
+    ));
+    assert_eq!(error.details()[0].code, "date_future");
 }
 
 #[test]

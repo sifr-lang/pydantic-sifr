@@ -1,5 +1,5 @@
 use regex::RegexBuilder;
-use speedate::{Date, DateTime, Duration, Time};
+use speedate::{Date, DateTime, DateTimeConfig, Duration, Time, TimestampUnit};
 use url::Url;
 use uuid::Uuid;
 
@@ -115,12 +115,16 @@ fn validate_date_relative(
     relative: Option<RelativeTimeConstraint>,
     clock: ClockSnapshot,
 ) -> Result<(), ValidationError> {
-    let current = DateTime::from_timestamp(clock.unix_seconds, clock.microsecond)
-        .map_err(|error| temporal_parse_error(error, "clock"))?
-        .date;
+    let config = DateTimeConfig::builder()
+        .timestamp_unit(TimestampUnit::Second)
+        .build();
+    let current =
+        DateTime::from_timestamp_with_config(clock.unix_seconds, clock.microsecond, &config)
+            .map_err(|error| temporal_parse_error(error, "clock"))?
+            .date;
     let value_tuple = (value.year, value.month, value.day);
     let current_tuple = (current.year, current.month, current.day);
-    validate_relative(value_tuple.cmp(&current_tuple), relative)
+    validate_relative(value_tuple.cmp(&current_tuple), relative, "date")
 }
 
 fn validate_datetime_relative(
@@ -131,25 +135,33 @@ fn validate_datetime_relative(
     let value_micros =
         i128::from(value.timestamp_tz()) * 1_000_000 + i128::from(value.time.microsecond);
     let clock_micros = i128::from(clock.unix_seconds) * 1_000_000 + i128::from(clock.microsecond);
-    validate_relative(value_micros.cmp(&clock_micros), relative)
+    validate_relative(value_micros.cmp(&clock_micros), relative, "datetime")
 }
 
 fn validate_relative(
     ordering: std::cmp::Ordering,
     relative: Option<RelativeTimeConstraint>,
+    kind: &'static str,
 ) -> Result<(), ValidationError> {
     match relative {
-        Some(RelativeTimeConstraint::Past) if !ordering.is_lt() => Err(type_error(
-            "datetime_past",
-            "Input must be in the past",
-            "past temporal value",
+        Some(RelativeTimeConstraint::Past) if !ordering.is_lt() => Err(ValidationError::one(
+            ErrorDetail::new(relative_code(kind, "past"), "Input must be in the past")
+                .expected(format!("past {kind}")),
         )),
-        Some(RelativeTimeConstraint::Future) if !ordering.is_gt() => Err(type_error(
-            "datetime_future",
-            "Input must be in the future",
-            "future temporal value",
+        Some(RelativeTimeConstraint::Future) if !ordering.is_gt() => Err(ValidationError::one(
+            ErrorDetail::new(relative_code(kind, "future"), "Input must be in the future")
+                .expected(format!("future {kind}")),
         )),
         _ => Ok(()),
+    }
+}
+
+fn relative_code(kind: &'static str, direction: &'static str) -> &'static str {
+    match (kind, direction) {
+        ("date", "past") => "date_past",
+        ("date", "future") => "date_future",
+        (_, "past") => "datetime_past",
+        _ => "datetime_future",
     }
 }
 

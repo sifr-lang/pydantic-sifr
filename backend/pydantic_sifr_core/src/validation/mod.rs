@@ -40,9 +40,18 @@ impl ClockSnapshot {
             },
             Err(error) => {
                 let duration = error.duration();
-                Self {
-                    unix_seconds: -i64::try_from(duration.as_secs()).unwrap_or(i64::MAX),
-                    microsecond: duration.subsec_micros(),
+                let seconds = i64::try_from(duration.as_secs()).unwrap_or(i64::MAX);
+                let microsecond = duration.subsec_micros();
+                if microsecond == 0 {
+                    Self {
+                        unix_seconds: -seconds,
+                        microsecond: 0,
+                    }
+                } else {
+                    Self {
+                        unix_seconds: seconds.saturating_neg().saturating_sub(1),
+                        microsecond: 1_000_000 - microsecond,
+                    }
                 }
             }
         }
