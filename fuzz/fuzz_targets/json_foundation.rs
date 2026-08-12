@@ -11,6 +11,8 @@ fuzz_target!(|data: &[u8]| {
             max_depth: 64,
             max_nodes: 16_384,
             max_string_bytes: 1_048_576,
+            max_integer_digits: 4_300,
+            max_collection_items: 16_384,
         },
     );
 });
