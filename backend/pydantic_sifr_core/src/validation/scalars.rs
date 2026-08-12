@@ -317,7 +317,9 @@ fn validate_decimal(
         {
             value.as_str()
         }
-        InputValue::Float(value) if !options.strict && value.is_finite() => {
+        InputValue::Float(value)
+            if (!options.strict || options.profile == InputProfile::Json) && value.is_finite() =>
+        {
             return validate_decimal_text(&value.to_string(), constraints, options);
         }
         InputValue::String(value) if !options.strict || options.profile != InputProfile::Native => {
@@ -536,10 +538,13 @@ fn validate_fraction(
                 options.limits.max_numeric_digits,
             )?)
         }
-        InputValue::Decimal(value) if !options.strict => rational_from_decimal(value, options)?,
-        InputValue::String(value)
-            if !options.strict || options.profile == InputProfile::Strings =>
+        InputValue::Float(value)
+            if (!options.strict || options.profile == InputProfile::Json) && value.is_finite() =>
         {
+            rational_from_decimal(&value.to_string(), options)?
+        }
+        InputValue::Decimal(value) if !options.strict => rational_from_decimal(value, options)?,
+        InputValue::String(value) if !options.strict || options.profile != InputProfile::Native => {
             if let Some((numerator, denominator)) = value.split_once('/') {
                 rational_from_parts(numerator, denominator, options.limits.max_numeric_digits)?
             } else if value.contains('.') || value.contains('e') || value.contains('E') {
@@ -676,7 +681,7 @@ fn validate_complex(
             })?,
             0.0,
         ),
-        InputValue::String(value) if !strict || profile == InputProfile::Strings => {
+        InputValue::String(value) if !strict || profile != InputProfile::Native => {
             let source = value.replace('j', "i");
             Complex64::from_str(&source).map_err(|_| {
                 type_error(
@@ -795,7 +800,7 @@ fn validate_bytes(
 ) -> Result<ValidatedValue, ValidationError> {
     let value = match input {
         InputValue::Bytes(value) => value.clone(),
-        InputValue::String(value) if !strict || profile == InputProfile::Strings => {
+        InputValue::String(value) if !strict || profile != InputProfile::Native => {
             value.as_bytes().to_vec()
         }
         _ => return Err(type_error("bytes_type", "Input must be bytes", "bytes")),

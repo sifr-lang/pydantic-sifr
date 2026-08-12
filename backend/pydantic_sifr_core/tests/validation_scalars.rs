@@ -351,3 +351,62 @@ fn json_profile_runs_the_same_engine_and_validation_limits_are_independent() {
     ));
     assert_eq!(first_code(&limited_error), "resource_limit");
 }
+
+#[test]
+fn strict_json_accepts_json_native_representations_for_extended_scalars() {
+    let options = ValidationOptions {
+        strict: true,
+        profile: InputProfile::Json,
+        ..ValidationOptions::default()
+    };
+    let decimal_input = parse_json(b"1.5", JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON decimal input failed: {error}"));
+    let decimal = validate(
+        &Schema::Decimal(DecimalConstraints::default()),
+        &decimal_input,
+        options,
+    )
+    .unwrap_or_else(|error| panic!("strict JSON decimal failed: {error}"));
+    assert_eq!(
+        root(&decimal),
+        &ValidatedValue::Decimal(
+            "1.5"
+                .parse::<BigDecimal>()
+                .unwrap_or_else(|error| panic!("test decimal failed: {error}"))
+        )
+    );
+
+    let fraction = validate(
+        &Schema::Fraction(FractionConstraints::default()),
+        &decimal_input,
+        options,
+    )
+    .unwrap_or_else(|error| panic!("strict JSON fraction failed: {error}"));
+    assert_eq!(
+        root(&fraction),
+        &ValidatedValue::Fraction(BigRational::new(BigInt::from(3), BigInt::from(2)))
+    );
+
+    let complex_input = parse_json(br#""3+4j""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON complex input failed: {error}"));
+    let complex = validate(
+        &Schema::Complex(ComplexConstraints::default()),
+        &complex_input,
+        options,
+    )
+    .unwrap_or_else(|error| panic!("strict JSON complex failed: {error}"));
+    assert_eq!(
+        root(&complex),
+        &ValidatedValue::Complex(Complex64::new(3.0, 4.0))
+    );
+
+    let bytes_input = parse_json(br#""abc""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON bytes input failed: {error}"));
+    let bytes = validate(
+        &Schema::Bytes(BytesConstraints::default()),
+        &bytes_input,
+        options,
+    )
+    .unwrap_or_else(|error| panic!("strict JSON bytes failed: {error}"));
+    assert_eq!(root(&bytes), &ValidatedValue::Bytes(b"abc".to_vec()));
+}
