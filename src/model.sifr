@@ -1,0 +1,26 @@
+from sifr.meta import StaticProgram, Structural
+
+
+class ValidationError(Error):
+    message: str
+
+
+@rust.structural
+@rust(bridge.model.validate)
+def model_validate[T: StaticProgram, Input: Structural](
+    payload: Input,
+) -> Result[T, ValidationError | RustPanicError]: ...
+
+
+@rust.structural
+@rust(bridge.model.validate_json)
+def model_validate_json[T: StaticProgram](
+    payload: bytes,
+) -> Result[T, ValidationError | RustPanicError]: ...
+
+
+@rust.structural
+@rust(bridge.model.validate_strings)
+def model_validate_strings[T: StaticProgram](
+    payload: bytes,
+) -> Result[T, ValidationError | RustPanicError]: ...

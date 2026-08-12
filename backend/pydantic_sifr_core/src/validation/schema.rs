@@ -4,13 +4,14 @@ use num_rational::BigRational;
 use std::collections::{BTreeMap, BTreeSet};
 
 use sifr_runtime::interop::structural::{
-    NominalField, ShapeIdentity, binary_container, metadata, nominal_record, primitive, tuple,
-    unary_container,
+    NominalField, STATIC_PROGRAM_FORMAT_VERSION, STRUCTURAL_BRIDGE_CONTRACT_VERSION, ShapeIdentity,
+    StaticProgramType, StructuralType, binary_container, metadata, nominal_record, primitive,
+    tuple, unary_container,
 };
 
 use crate::NativeValue;
 
-use super::ValidationError;
+use super::{SchemaRef, ValidationError};
 
 const MAX_SCHEMA_DEPTH: usize = 256;
 
@@ -336,20 +337,43 @@ impl ModelSchema {
 
 #[derive(Clone, Copy, Debug)]
 pub struct PreparedSchema<'schema> {
-    schema: &'schema Schema,
+    schema: SchemaRef<'schema>,
     structural_identity: ShapeIdentity,
 }
 
 impl<'schema> PreparedSchema<'schema> {
     pub fn new(schema: &'schema Schema) -> Result<Self, ValidationError> {
         Ok(Self {
-            schema,
+            schema: SchemaRef::owned(schema),
             structural_identity: schema.structural_identity_at(0)?,
         })
     }
 
+    pub fn from_static<T>() -> Result<PreparedSchema<'static>, ValidationError>
+    where
+        T: StaticProgramType + StructuralType,
+    {
+        let program = T::static_program();
+        let header = program.header();
+        program
+            .verify_envelope(
+                STATIC_PROGRAM_FORMAT_VERSION,
+                header.structural_contract_version(),
+                STRUCTURAL_BRIDGE_CONTRACT_VERSION,
+                header.identity(),
+                T::shape_identity(),
+            )
+            .map_err(|_| {
+                schema_error("Static schema envelope is invalid", "valid schema envelope")
+            })?;
+        Ok(PreparedSchema {
+            schema: SchemaRef::from_static_program(program.value())?,
+            structural_identity: T::shape_identity(),
+        })
+    }
+
     #[must_use]
-    pub const fn schema(&self) -> &'schema Schema {
+    pub const fn schema(&self) -> SchemaRef<'schema> {
         self.schema
     }
 

@@ -1,13 +1,15 @@
-use sifr_runtime::interop::structural::{StructuralConstruct, structural_construct};
+use sifr_runtime::interop::structural::{
+    StructuralConstruct, StructuralProject, structural_construct,
+};
 
 use crate::{
     InputArena, JsonInputError, JsonLimits, NativeInputError, NativeValue, build_native_input,
-    parse_json,
+    parse_json, project_structural_input,
 };
 
 use super::{
     ErrorDetail, InputProfile, LocationItem, PreparedSchema, ValidationError, ValidationOptions,
-    validate,
+    validate_ref,
 };
 
 pub fn validate_and_construct<T>(
@@ -18,7 +20,7 @@ pub fn validate_and_construct<T>(
 where
     T: StructuralConstruct,
 {
-    let mut arena = validate(schema.schema(), input, options)?;
+    let mut arena = validate_ref(schema.schema(), input, options)?;
     arena
         .prepare_structural(schema.structural_identity())
         .map_err(construction_error)?;
@@ -50,6 +52,21 @@ where
 {
     options.profile = InputProfile::Native;
     let input = build_native_input(input, input_limits).map_err(native_input_error)?;
+    validate_and_construct(schema, &input, options)
+}
+
+pub fn validate_structural_and_construct<T, Input>(
+    schema: &PreparedSchema<'_>,
+    input: &Input,
+    input_limits: JsonLimits,
+    mut options: ValidationOptions,
+) -> Result<T, ValidationError>
+where
+    T: StructuralConstruct,
+    Input: StructuralProject,
+{
+    options.profile = InputProfile::Native;
+    let input = project_structural_input(input, input_limits).map_err(native_input_error)?;
     validate_and_construct(schema, &input, options)
 }
 

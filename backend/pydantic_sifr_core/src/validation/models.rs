@@ -3,15 +3,16 @@ use std::collections::{BTreeMap, BTreeSet};
 use crate::{InputId, InputValue, JsonLimits, ObjectKind, build_native_input};
 
 use super::{
-    AliasPath, AliasSegment, ErrorDetail, ExtraPolicy, FieldDefault, InputProfile, LocationItem,
-    ModelField, ModelSchema, ModelValue, ValidatedValue, ValidationError, ValidationState, ValueId,
+    AliasPath, AliasSegment, ErrorDetail, FieldDefault, InputProfile, LocationItem, ModelValue,
+    ValidatedValue, ValidationError, ValidationState, ValueId,
     collections::{collect_error, stop_after_error_cap},
+    schema_view::{DefaultRef, ExtraRef, FieldRef, ModelRef},
     validate_at_depth,
 };
 
 pub(crate) fn validate_model(
     state: &mut ValidationState<'_>,
-    schema: &ModelSchema,
+    schema: ModelRef<'_>,
     input_id: InputId,
     depth: usize,
 ) -> Result<ValueId, ValidationError> {
@@ -49,32 +50,35 @@ pub(crate) fn validate_model(
         ));
     }
 
-    let mut fields = BTreeMap::new();
+    let field_specs = schema.fields()?;
+    let extra_policy = schema.extra()?;
+    let mut field_values = BTreeMap::new();
     let mut consumed = BTreeSet::new();
     let mut errors = None;
     let mut validated_field_count = 0;
-    for (field_index, field) in schema.fields.iter().enumerate() {
-        if !field.input {
-            if field.default.is_some() {
+    for (field_index, field) in field_specs.iter().copied().enumerate() {
+        let field_name = field.name()?;
+        if !field.input() {
+            if field.default()?.is_some() {
                 match validate_default(state, field, depth) {
                     Ok(Some(value)) => {
-                        fields.insert(field.name, value);
+                        field_values.insert(field_name, value);
                     }
                     Ok(None) => {}
                     Err(error) => collect_error(
                         &mut errors,
-                        error.at(LocationItem::Field(field.name.to_owned())),
+                        error.at(LocationItem::Field(field_name.to_owned())),
                         state.options().limits.max_errors,
                     ),
                 }
             }
         } else {
-            match select_field(state, schema, field, input_id, &entries) {
+            match select_field(state, schema, field, input_id, &entries)? {
                 Some((value_id, entry_index, location)) => {
                     consumed.insert(entry_index);
-                    match state.validate_node(&field.schema, value_id, depth + 1) {
+                    match state.validate_node(field.schema()?, value_id, depth + 1) {
                         Ok(value) => {
-                            fields.insert(field.name, value);
+                            field_values.insert(field_name, value);
                             validated_field_count += 1;
                         }
                         Err(error) => collect_error(
@@ -86,7 +90,7 @@ pub(crate) fn validate_model(
                 }
                 None => match validate_default(state, field, depth) {
                     Ok(Some(value)) => {
-                        fields.insert(field.name, value);
+                        field_values.insert(field_name, value);
                     }
                     Ok(None) => collect_error(
                         &mut errors,
@@ -94,22 +98,26 @@ pub(crate) fn validate_model(
                             ErrorDetail::new("missing", "Field is required")
                                 .expected("field value"),
                         )
-                        .at(missing_location(schema, field)),
+                        .at(missing_location(schema, field)?),
                         state.options().limits.max_errors,
                     ),
                     Err(error) => collect_error(
                         &mut errors,
-                        error.at(LocationItem::Field(field.name.to_owned())),
+                        error.at(LocationItem::Field(field_name.to_owned())),
                         state.options().limits.max_errors,
                     ),
                 },
             }
         }
-        let has_more_fields = schema.fields[field_index + 1..]
-            .iter()
-            .any(|candidate| candidate.input || candidate.default.is_some());
+        let mut has_more_fields = false;
+        for candidate in &field_specs[field_index + 1..] {
+            if candidate.input() || candidate.default()?.is_some() {
+                has_more_fields = true;
+                break;
+            }
+        }
         let has_possible_extras =
-            !matches!(schema.extra, ExtraPolicy::Ignore) && consumed.len() < entries.len();
+            !matches!(extra_policy, ExtraRef::Ignore) && consumed.len() < entries.len();
         if stop_after_error_cap(state, &mut errors, has_more_fields || has_possible_extras) {
             break;
         }
@@ -122,7 +130,7 @@ pub(crate) fn validate_model(
     {
         validate_extras(
             state,
-            schema,
+            extra_policy,
             &entries,
             &consumed,
             depth,
@@ -133,23 +141,23 @@ pub(crate) fn validate_model(
     if let Some(error) = errors {
         return Err(error);
     }
-    if let ExtraPolicy::Allow { destination, .. } = &schema.extra {
+    if let ExtraRef::Allow { destination, .. } = extra_policy {
         let mut entries = Vec::with_capacity(extras.len());
         for (name, value) in &extras {
             let key = state.push(ValidatedValue::String(name.clone()))?;
             entries.push((key, *value));
         }
         let mapping = state.push(ValidatedValue::Mapping(entries))?;
-        fields.insert(*destination, mapping);
+        field_values.insert(destination, mapping);
     }
-    let ordered_fields = schema
-        .fields
+    let ordered_fields = field_specs
         .iter()
         .map(|field| {
-            fields
-                .get(field.name)
+            let name = field.name()?;
+            field_values
+                .get(name)
                 .copied()
-                .map(|value| (field.name, value))
+                .map(|value| (name, value))
                 .ok_or_else(|| {
                     type_error(
                         "schema_invalid",
@@ -158,9 +166,9 @@ pub(crate) fn validate_model(
                     )
                 })
         })
-        .collect::<Result<Vec<_>, _>>()?;
+        .collect::<Result<Vec<_>, ValidationError>>()?;
     state.push(ValidatedValue::Model(ModelValue::new(
-        schema.name,
+        schema.name()?,
         ordered_fields,
         extras,
         validated_field_count,
@@ -169,32 +177,38 @@ pub(crate) fn validate_model(
 
 fn select_field(
     state: &ValidationState<'_>,
-    model: &ModelSchema,
-    field: &ModelField,
+    model: ModelRef<'_>,
+    field: FieldRef<'_>,
     root: InputId,
     entries: &[(String, InputId)],
-) -> Option<(InputId, usize, Vec<LocationItem>)> {
-    for alias in &field.validation_aliases {
+) -> Result<Option<(InputId, usize, Vec<LocationItem>)>, ValidationError> {
+    let aliases = field.aliases()?;
+    for alias in &aliases {
         if let Some(value) = resolve_alias(state, root, alias)
             && let Some(index) = top_level_index(alias, entries)
         {
-            return Some((value, index, location_for_alias(model, field, alias)));
+            return Ok(Some((
+                value,
+                index,
+                location_for_alias(model, field, alias)?,
+            )));
         }
     }
-    if field.validation_aliases.is_empty() || model.populate_by_name {
-        entries
+    if aliases.is_empty() || model.populate_by_name()? {
+        let field_name = field.name()?;
+        Ok(entries
             .iter()
             .enumerate()
-            .find(|(_, (name, _))| name == field.name)
+            .find(|(_, (name, _))| name == field_name)
             .map(|(index, (_, value))| {
                 (
                     *value,
                     index,
-                    vec![LocationItem::Field(field.name.to_owned())],
+                    vec![LocationItem::Field(field_name.to_owned())],
                 )
-            })
+            }))
     } else {
-        None
+        Ok(None)
     }
 }
 
@@ -223,33 +237,35 @@ fn top_level_index(path: &AliasPath, entries: &[(String, InputId)]) -> Option<us
 }
 
 fn location_for_alias(
-    model: &ModelSchema,
-    field: &ModelField,
+    model: ModelRef<'_>,
+    field: FieldRef<'_>,
     alias: &AliasPath,
-) -> Vec<LocationItem> {
-    if !model.location_by_alias {
-        return vec![LocationItem::Field(field.name.to_owned())];
+) -> Result<Vec<LocationItem>, ValidationError> {
+    if !model.location_by_alias()? {
+        return Ok(vec![LocationItem::Field(field.name()?.to_owned())]);
     }
-    alias
+    Ok(alias
         .segments
         .iter()
         .map(|segment| match segment {
             AliasSegment::Field(name) => LocationItem::Field((*name).to_owned()),
             AliasSegment::Index(index) => LocationItem::Index(*index),
         })
-        .collect()
+        .collect())
 }
 
-fn missing_location(model: &ModelSchema, field: &ModelField) -> LocationItem {
-    if model.location_by_alias
-        && let Some(AliasSegment::Field(name)) = field
-            .validation_aliases
-            .first()
-            .and_then(|path| path.segments.first())
+fn missing_location(
+    model: ModelRef<'_>,
+    field: FieldRef<'_>,
+) -> Result<LocationItem, ValidationError> {
+    let aliases = field.aliases()?;
+    if model.location_by_alias()?
+        && let Some(AliasSegment::Field(name)) =
+            aliases.first().and_then(|path| path.segments.first())
     {
-        return LocationItem::Field((*name).to_owned());
+        return Ok(LocationItem::Field((*name).to_owned()));
     }
-    LocationItem::Field(field.name.to_owned())
+    Ok(LocationItem::Field(field.name()?.to_owned()))
 }
 
 fn at_path(mut error: ValidationError, path: &[LocationItem]) -> ValidationError {
@@ -261,15 +277,16 @@ fn at_path(mut error: ValidationError, path: &[LocationItem]) -> ValidationError
 
 fn validate_default(
     state: &mut ValidationState<'_>,
-    field: &ModelField,
+    field: FieldRef<'_>,
     depth: usize,
 ) -> Result<Option<ValueId>, ValidationError> {
-    let Some(default) = &field.default else {
+    let Some(default) = field.default()? else {
         return Ok(None);
     };
     let value = match default {
-        FieldDefault::Static(value) => value.clone(),
-        FieldDefault::Factory(factory) => factory(),
+        DefaultRef::Owned(FieldDefault::Static(value)) => value.clone(),
+        DefaultRef::Owned(FieldDefault::Factory(factory)) => factory(),
+        DefaultRef::Static(value) => static_default(value)?,
     };
     let limits = state.options().limits;
     let input = build_native_input(
@@ -292,13 +309,48 @@ fn validate_default(
     })?;
     let mut options = state.options();
     options.profile = InputProfile::Native;
-    let output = validate_at_depth(&field.schema, &input, input.root(), options, depth + 1)?;
+    let output = validate_at_depth(field.schema()?, &input, input.root(), options, depth + 1)?;
     state.import(output).map(Some)
+}
+
+fn static_default(
+    value: &'static sifr_runtime::interop::structural::StaticProgramValue,
+) -> Result<crate::NativeValue, ValidationError> {
+    use sifr_runtime::interop::structural::StaticProgramValue;
+
+    let value = match value {
+        StaticProgramValue::None => crate::NativeValue::Null,
+        StaticProgramValue::Bool(value) => crate::NativeValue::Bool(*value),
+        StaticProgramValue::Integer(value) => crate::NativeValue::Integer((*value).to_owned()),
+        StaticProgramValue::FloatBits(value) => crate::NativeValue::Float(f64::from_bits(*value)),
+        StaticProgramValue::String(value) => crate::NativeValue::String((*value).to_owned()),
+        StaticProgramValue::Bytes(value) => crate::NativeValue::Bytes((*value).to_vec()),
+        StaticProgramValue::List(values) => crate::NativeValue::List(
+            values
+                .iter()
+                .map(static_default)
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+        StaticProgramValue::Tuple(values) => crate::NativeValue::Tuple(
+            values
+                .iter()
+                .map(static_default)
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+        _ => {
+            return Err(type_error(
+                "schema_invalid",
+                "Static model defaults must be closed scalar or sequence values",
+                "supported static default",
+            ));
+        }
+    };
+    Ok(value)
 }
 
 fn validate_extras(
     state: &mut ValidationState<'_>,
-    model: &ModelSchema,
+    extra: ExtraRef<'_>,
     entries: &[(String, InputId)],
     consumed: &BTreeSet<usize>,
     depth: usize,
@@ -309,9 +361,9 @@ fn validate_extras(
         if consumed.contains(&index) {
             continue;
         }
-        match &model.extra {
-            ExtraPolicy::Ignore => {}
-            ExtraPolicy::Forbid => collect_error(
+        match extra {
+            ExtraRef::Ignore => {}
+            ExtraRef::Forbid => collect_error(
                 errors,
                 ValidationError::one(
                     ErrorDetail::new("extra_forbidden", "Extra inputs are not permitted")
@@ -320,7 +372,7 @@ fn validate_extras(
                 .at(LocationItem::Field(name.clone())),
                 state.options().limits.max_errors,
             ),
-            ExtraPolicy::Allow { value_schema, .. } => {
+            ExtraRef::Allow { value_schema, .. } => {
                 match state.validate_node(value_schema, *value_id, depth + 1) {
                     Ok(value) => extras.push((name.clone(), value)),
                     Err(error) => collect_error(

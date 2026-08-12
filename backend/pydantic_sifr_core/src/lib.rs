@@ -11,7 +11,7 @@ pub use arena::{Arena, ArenaError, ArenaId};
 pub use errors::{BuiltInError, ErrorOverride, ErrorRegistry, RegistryError};
 pub use input::{
     InputArena, InputId, InputValue, JsonInputError, JsonLimits, NativeInputError, NativeValue,
-    ObjectKind, SequenceKind, build_native_input, parse_json,
+    ObjectKind, SequenceKind, build_native_input, parse_json, project_structural_input,
 };
 pub use plan::{ExecutionPlan, PlanOp};
 pub use schema::{
@@ -28,5 +28,5 @@ pub use validation::{
     UrlConstraints, ValidatedArena, ValidatedIterator, ValidatedValue, ValidationError,
     ValidationLimits, ValidationOptions, ValueId, validate, validate_and_construct,
     validate_json_and_construct, validate_native_and_construct, validate_strings_and_construct,
-    validated_iterator,
+    validate_structural_and_construct, validated_iterator,
 };

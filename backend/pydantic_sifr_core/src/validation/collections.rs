@@ -6,19 +6,23 @@ use crate::{
 };
 
 use super::{
-    CollectionConstraints, ErrorDetail, InputProfile, LocationItem, Schema, ValidatedArena,
-    ValidatedValue, ValidationError, ValidationOptions, ValidationState, ValueId, validate_at,
-    validate_at_depth, validate_options,
+    CollectionConstraints, ErrorDetail, InputProfile, LocationItem, Schema, SchemaRef,
+    ValidatedArena, ValidatedValue, ValidationError, ValidationOptions, ValidationState, ValueId,
+    validate_at, validate_at_depth, validate_options,
 };
 
 pub(crate) fn validate_collection(
     state: &mut ValidationState<'_>,
-    schema: &Schema,
+    schema: SchemaRef<'_>,
     input_id: InputId,
     depth: usize,
 ) -> Result<ValueId, ValidationError> {
-    match schema {
-        Schema::List { item, constraints } => {
+    match schema.tag()? {
+        super::schema_view::SchemaTag::List => {
+            let constraints = match schema {
+                SchemaRef::Owned(Schema::List { constraints, .. }) => constraints.clone(),
+                _ => CollectionConstraints::default(),
+            };
             let children = sequence_input(
                 state.input(),
                 input_id,
@@ -26,28 +30,49 @@ pub(crate) fn validate_collection(
                 SequenceKind::List,
                 state.options(),
             )?;
-            validate_length(children.len(), constraints, "list")?;
-            let values = validate_items(state, item, &children, depth)?;
+            validate_length(children.len(), &constraints, "list")?;
+            let values = validate_items(state, schema.child(0)?, &children, depth)?;
             state.push(ValidatedValue::Sequence(values))
         }
-        Schema::Tuple(items) => validate_tuple(state, items, input_id, depth),
-        Schema::Mapping {
-            key,
-            value,
-            constraints,
-        } => validate_mapping(state, key, value, constraints, input_id, depth),
-        Schema::Set { item, constraints } => {
-            validate_set(state, item, constraints, input_id, depth, false)
+        super::schema_view::SchemaTag::Tuple => validate_tuple(state, schema, input_id, depth),
+        super::schema_view::SchemaTag::Mapping => {
+            let constraints = match schema {
+                SchemaRef::Owned(Schema::Mapping { constraints, .. }) => constraints.clone(),
+                _ => CollectionConstraints::default(),
+            };
+            validate_mapping(
+                state,
+                schema.child(0)?,
+                schema.child(1)?,
+                &constraints,
+                input_id,
+                depth,
+            )
         }
-        Schema::FrozenSet { item, constraints } => {
-            validate_set(state, item, constraints, input_id, depth, true)
+        super::schema_view::SchemaTag::Set | super::schema_view::SchemaTag::FrozenSet => {
+            let frozen = schema.tag()? == super::schema_view::SchemaTag::FrozenSet;
+            let constraints = match schema {
+                SchemaRef::Owned(Schema::Set { constraints, .. })
+                | SchemaRef::Owned(Schema::FrozenSet { constraints, .. }) => constraints.clone(),
+                _ => CollectionConstraints::default(),
+            };
+            validate_set(
+                state,
+                schema.child(0)?,
+                &constraints,
+                input_id,
+                depth,
+                frozen,
+            )
         }
-        Schema::Generator { .. } => Err(super::scalars::type_error(
+        super::schema_view::SchemaTag::Generator => Err(super::scalars::type_error(
             "generator_iterator",
             "Generator schemas require validated_iterator",
             "lazy iterator entry point",
         )),
-        Schema::EmbeddedJson(inner) => validate_embedded_json(state, inner, input_id, depth),
+        super::schema_view::SchemaTag::EmbeddedJson => {
+            validate_embedded_json(state, schema.child(0)?, input_id, depth)
+        }
         _ => Err(super::scalars::type_error(
             "schema_kind",
             "Validator is not available for this schema kind",
@@ -93,7 +118,7 @@ fn sequence_input(
 
 fn validate_items(
     state: &mut ValidationState<'_>,
-    schema: &Schema,
+    schema: SchemaRef<'_>,
     children: &[InputId],
     depth: usize,
 ) -> Result<Vec<ValueId>, ValidationError> {
@@ -130,7 +155,7 @@ fn validate_items(
 
 fn validate_tuple(
     state: &mut ValidationState<'_>,
-    schemas: &[Schema],
+    schema: SchemaRef<'_>,
     input_id: InputId,
     depth: usize,
 ) -> Result<ValueId, ValidationError> {
@@ -141,17 +166,18 @@ fn validate_tuple(
         SequenceKind::Tuple,
         state.options(),
     )?;
-    if children.len() != schemas.len() {
+    let schema_count = schema.child_count()?;
+    if children.len() != schema_count {
         return Err(ValidationError::one(
             ErrorDetail::new("tuple_length", "Tuple length does not match the schema")
-                .context("expected_length", schemas.len().to_string())
+                .context("expected_length", schema_count.to_string())
                 .context("actual_length", children.len().to_string()),
         ));
     }
     let mut values = Vec::with_capacity(children.len());
     let mut errors = None;
-    for (index, (schema, child)) in schemas.iter().zip(&children).enumerate() {
-        match state.validate_node(schema, *child, depth + 1) {
+    for (index, child) in children.iter().enumerate() {
+        match state.validate_node(schema.child(index)?, *child, depth + 1) {
             Ok(value) => values.push(value),
             Err(error) => collect_error(
                 &mut errors,
@@ -172,8 +198,8 @@ fn validate_tuple(
 
 fn validate_mapping(
     state: &mut ValidationState<'_>,
-    key_schema: &Schema,
-    value_schema: &Schema,
+    key_schema: SchemaRef<'_>,
+    value_schema: SchemaRef<'_>,
     constraints: &CollectionConstraints,
     input_id: InputId,
     depth: usize,
@@ -323,7 +349,7 @@ fn collect_mapping_entry(
 
 fn validate_object_key(
     state: &mut ValidationState<'_>,
-    schema: &Schema,
+    schema: SchemaRef<'_>,
     field: &str,
     json_key: bool,
 ) -> Result<ValueId, ValidationError> {
@@ -348,7 +374,7 @@ fn validate_object_key(
 
 fn validate_set(
     state: &mut ValidationState<'_>,
-    item: &Schema,
+    item: SchemaRef<'_>,
     constraints: &CollectionConstraints,
     input_id: InputId,
     depth: usize,
@@ -404,7 +430,7 @@ fn validate_set(
 
 fn validate_embedded_json(
     state: &mut ValidationState<'_>,
-    inner: &Schema,
+    inner: SchemaRef<'_>,
     input_id: InputId,
     depth: usize,
 ) -> Result<ValueId, ValidationError> {
@@ -444,7 +470,7 @@ fn validate_length(
     constraints: &CollectionConstraints,
     kind: &str,
 ) -> Result<(), ValidationError> {
-    super::scalars::validate_length(length, constraints.min_length, constraints.max_length, kind)
+    super::textual::validate_length(length, constraints.min_length, constraints.max_length, kind)
 }
 
 pub(crate) fn collect_error(
@@ -693,8 +719,13 @@ impl Iterator for ValidatedIterator<'_> {
         let index = self.index;
         self.index += 1;
         Some(
-            validate_at(&self.item, self.input, child, self.options)
-                .map_err(|error| error.at(LocationItem::Index(index))),
+            validate_at(
+                SchemaRef::owned(&self.item),
+                self.input,
+                child,
+                self.options,
+            )
+            .map_err(|error| error.at(LocationItem::Index(index))),
         )
     }
 }

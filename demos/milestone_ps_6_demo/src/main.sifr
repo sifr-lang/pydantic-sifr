@@ -1,0 +1,113 @@
+from pydantic_sifr import ValidationError
+from pydantic_sifr import model_validate as validate_model
+from pydantic_sifr import model_validate_json as validate_model_json
+from pydantic_sifr import model_validate_strings as validate_model_strings
+from pydantic_sifr import verify_schema
+
+
+@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
+@metadata("pydantic.extra", "forbid")
+@metadata("field", "postal_code", "pydantic.alias.field", "address_data")
+@metadata("field", "postal_code", "pydantic.alias.index", "0")
+@metadata("field", "postal_code", "pydantic.alias.field", "postal")
+class Address:
+    city: str
+    postal_code: int64
+
+
+@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
+@metadata("pydantic.extra", "forbid")
+@metadata("field", "id", "pydantic.alias.field", "user_id")
+@metadata("field", "id", "pydantic.gt", "0")
+@metadata("field", "name", "pydantic.min_length", "1")
+@metadata("field", "name", "pydantic.max_length", "100")
+class User:
+    id: int64
+    name: str
+    address: Address
+    active: bool = True
+
+    @classmethod
+    def model_validate_json(
+        cls, payload: bytes
+    ) -> Result[User, ValidationError | RustPanicError]:
+        try:
+            value: User = validate_model_json(payload)
+            return value
+        except ValidationError as error:
+            raise error
+        except RustPanicError as error:
+            raise error
+
+    @classmethod
+    def model_validate_strings(
+        cls, payload: bytes
+    ) -> Result[User, ValidationError | RustPanicError]:
+        try:
+            value: User = validate_model_strings(payload)
+            return value
+        except ValidationError as error:
+            raise error
+        except RustPanicError as error:
+            raise error
+
+
+class PostalInput:
+    postal: str
+
+
+class AddressInput:
+    city: str
+    address_data: list[PostalInput]
+
+
+class UserInput:
+    user_id: str
+    name: str
+    address: AddressInput
+
+
+def main() -> Result[None, ValidationError | RustPanicError]:
+    try:
+        user: User = User.model_validate_json(
+            b'{"user_id":7,"name":"Ada","address":{"city":"NY","address_data":[{"postal":10001}]}}'
+        )
+        expected_id: int64 = 7
+        expected_postal: int64 = 10001
+        assert user.id == expected_id
+        assert user.active
+        assert user.address.postal_code == expected_postal
+        strings: User = User.model_validate_strings(
+            b'{"user_id":"8","name":"Lin","address":{"city":"SF","address_data":[{"postal":"94105"}]}}'
+        )
+        expected_strings_id: int64 = 8
+        expected_strings_postal: int64 = 94105
+        assert strings.id == expected_strings_id
+        assert strings.address.postal_code == expected_strings_postal
+        structural: User = validate_model(
+            UserInput(
+                "9",
+                "Mira",
+                AddressInput("LA", [PostalInput("90001")]),
+            )
+        )
+        expected_structural_id: int64 = 9
+        expected_structural_postal: int64 = 90001
+        assert structural.id == expected_structural_id
+        assert structural.address.postal_code == expected_structural_postal
+        error_seen: bool = False
+        try:
+            invalid: User = User.model_validate_json(
+                b'{"user_id":0,"name":"","address":{"city":"NY","address_data":[{"postal":10001}]},"extra":true}'
+            )
+            assert invalid.id != expected_id
+        except ValidationError as error:
+            error_seen = error.message.startswith('{"errors":[{"code":"greater_than"')
+        except RustPanicError as error:
+            raise error
+        assert error_seen
+    except ValidationError as error:
+        raise error
+    except RustPanicError as error:
+        raise error
+    return None

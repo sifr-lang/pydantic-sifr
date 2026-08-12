@@ -5,8 +5,9 @@ serialization for Sifr programs. The package uses a Sifr frontend and a Rust
 backend. Released artifacts do not load Python, CPython, extension modules, or
 runtime plugins.
 
-The repository is under active construction. The package now has its static
-schema contract and its shared scalar and collection validation engine.
+The repository is under active construction. The package now has static model
+schemas, one shared validation engine, typed model construction, and public
+JSON, structural, and strings entry points.
 
 ## Foundation contract
 
@@ -49,7 +50,29 @@ Depth, item, string-byte, numeric-digit, decimal-exponent, and error-count
 limits apply before unbounded work. The engine has no Python path, legacy
 format, or runtime fallback.
 
+## Model validation
+
+The package exports `model_validate`, `model_validate_json`, and
+`model_validate_strings`. These functions construct an ordinary Sifr class.
+They use one compiler-sealed schema program and one checked validation arena.
+
+Native structural input uses compiler-generated visitation. The adapter writes
+directly into the input arena and does not create a generic model tree. The
+adapter sorts unordered mappings and sets before validation, which keeps error
+order stable.
+
+The milestone demo is a dependent package in
+`demos/milestone_ps_6_demo`. It shows nested models, defaults, constraints,
+aliases, alias paths, JSON input, strings input, structural input, and a stable
+public validation error.
+
 ## Development gates
+
+Set `SIFR_BIN` to the exact required Sifr compiler:
+
+```sh
+export SIFR_BIN=/path/to/sifr
+```
 
 Run the pull-request gate:
 
@@ -68,8 +91,6 @@ The provenance gate uses Pydantic commit
 Core suites in isolated pytest processes from that commit's root `uv.lock`.
 The historical standalone Pydantic Core checkout is not a conformance source.
 
-The gate requires the released `sifr 0.1.0-beta.16` compiler. Locked external
-package checking currently has an upstream authority-policy defect tracked in
-[sifr#3145](https://github.com/sifr-lang/sifr/issues/3145). The gate uses the
-normal released-compiler package check. It does not change or bypass schema
-behavior.
+The gate uses Sifr implementation commit
+`76c3bcb10bc2a28940003dd9e1b1f92506b72d07`. CI builds that exact compiler
+source. The runtime manifests and lockfiles pin the same commit.

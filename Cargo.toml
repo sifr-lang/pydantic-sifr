@@ -19,6 +19,10 @@ include = [
 [package.metadata.sifr]
 manifest = "sifr.toml"
 
+[dependencies]
+pydantic_sifr_core = { path = "backend/pydantic_sifr_core" }
+sifr_runtime = { git = "https://github.com/sifr-lang/sifr.git", rev = "76c3bcb10bc2a28940003dd9e1b1f92506b72d07", default-features = false, features = ["structural"] }
+
 [workspace]
 resolver = "2"
 members = ["backend/pydantic_sifr_core"]
