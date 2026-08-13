@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: sifr-lang/sifr
-          ref: 76c3bcb10bc2a28940003dd9e1b1f92506b72d07
+          ref: 89684aecbd2a321c92912a8cee051b9d9a4fc46a
           path: .sifr-compiler
       - name: Build the required Sifr compiler
         run: |

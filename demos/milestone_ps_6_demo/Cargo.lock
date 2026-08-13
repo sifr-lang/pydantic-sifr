@@ -701,7 +701,7 @@ dependencies = [
 [[package]]
 name = "sifr_runtime"
 version = "0.0.0"
-source = "git+https://github.com/sifr-lang/sifr.git?rev=76c3bcb10bc2a28940003dd9e1b1f92506b72d07#76c3bcb10bc2a28940003dd9e1b1f92506b72d07"
+source = "git+https://github.com/sifr-lang/sifr.git?rev=89684aecbd2a321c92912a8cee051b9d9a4fc46a#89684aecbd2a321c92912a8cee051b9d9a4fc46a"
 dependencies = [
  "encoding_rs",
  "indexmap",
@@ -713,7 +713,7 @@ dependencies = [
 [[package]]
 name = "sifr_structural_identity"
 version = "0.0.0"
-source = "git+https://github.com/sifr-lang/sifr.git?rev=76c3bcb10bc2a28940003dd9e1b1f92506b72d07#76c3bcb10bc2a28940003dd9e1b1f92506b72d07"
+source = "git+https://github.com/sifr-lang/sifr.git?rev=89684aecbd2a321c92912a8cee051b9d9a4fc46a#89684aecbd2a321c92912a8cee051b9d9a4fc46a"
 dependencies = [
  "sha2",
 ]
