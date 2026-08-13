@@ -1,6 +1,19 @@
 use bigdecimal::BigDecimal;
 use num_bigint::BigInt;
 use num_rational::BigRational;
+use std::collections::{BTreeMap, BTreeSet};
+
+use sifr_runtime::interop::structural::{
+    NominalField, STATIC_PROGRAM_FORMAT_VERSION, STRUCTURAL_BRIDGE_CONTRACT_VERSION, ShapeIdentity,
+    StaticProgramType, StructuralType, binary_container, metadata, nominal_record, primitive,
+    tuple, unary_container,
+};
+
+use crate::NativeValue;
+
+use super::{SchemaRef, ValidationError};
+
+const MAX_SCHEMA_DEPTH: usize = 256;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PatternCompileError {
@@ -221,6 +234,155 @@ pub struct UrlConstraints {
     pub allowed_schemes: Vec<String>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AliasSegment {
+    Field(&'static str),
+    Index(usize),
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AliasPath {
+    pub segments: Vec<AliasSegment>,
+}
+
+impl AliasPath {
+    #[must_use]
+    pub fn field(name: &'static str) -> Self {
+        Self {
+            segments: vec![AliasSegment::Field(name)],
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub enum FieldDefault {
+    Static(NativeValue),
+    Factory(fn() -> NativeValue),
+}
+
+impl PartialEq for FieldDefault {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Self::Static(left), Self::Static(right)) => left == right,
+            (Self::Factory(left), Self::Factory(right)) => std::ptr::fn_addr_eq(*left, *right),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModelField {
+    pub name: &'static str,
+    pub schema: Schema,
+    pub input: bool,
+    pub default: Option<FieldDefault>,
+    pub validation_aliases: Vec<AliasPath>,
+    pub metadata: BTreeMap<String, String>,
+}
+
+impl ModelField {
+    #[must_use]
+    pub fn required(name: &'static str, schema: Schema) -> Self {
+        Self {
+            name,
+            schema,
+            input: true,
+            default: None,
+            validation_aliases: Vec::new(),
+            metadata: BTreeMap::new(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum ExtraPolicy {
+    Ignore,
+    Forbid,
+    Allow {
+        destination: &'static str,
+        value_schema: Box<Schema>,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModelSchema {
+    pub(crate) name: &'static str,
+    pub(crate) structural_identity: ShapeIdentity,
+    pub(crate) fields: Vec<ModelField>,
+    pub(crate) extra: ExtraPolicy,
+    pub(crate) populate_by_name: bool,
+    pub(crate) location_by_alias: bool,
+}
+
+impl ModelSchema {
+    pub fn new(
+        name: &'static str,
+        structural_identity: ShapeIdentity,
+        fields: Vec<ModelField>,
+        extra: ExtraPolicy,
+        populate_by_name: bool,
+        location_by_alias: bool,
+    ) -> Result<Self, ValidationError> {
+        verify_model_fields(&fields, &extra)?;
+        Ok(Self {
+            name,
+            structural_identity,
+            fields,
+            extra,
+            populate_by_name,
+            location_by_alias,
+        })
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct PreparedSchema<'schema> {
+    schema: SchemaRef<'schema>,
+    structural_identity: ShapeIdentity,
+}
+
+impl<'schema> PreparedSchema<'schema> {
+    pub fn new(schema: &'schema Schema) -> Result<Self, ValidationError> {
+        Ok(Self {
+            schema: SchemaRef::owned(schema),
+            structural_identity: schema.structural_identity_at(0)?,
+        })
+    }
+
+    pub fn from_static<T>() -> Result<PreparedSchema<'static>, ValidationError>
+    where
+        T: StaticProgramType + StructuralType,
+    {
+        let program = T::static_program();
+        let header = program.header();
+        program
+            .verify_envelope(
+                STATIC_PROGRAM_FORMAT_VERSION,
+                header.structural_contract_version(),
+                STRUCTURAL_BRIDGE_CONTRACT_VERSION,
+                header.identity(),
+                T::shape_identity(),
+            )
+            .map_err(|_| {
+                schema_error("Static schema envelope is invalid", "valid schema envelope")
+            })?;
+        Ok(PreparedSchema {
+            schema: SchemaRef::from_static_program(program.value())?,
+            structural_identity: T::shape_identity(),
+        })
+    }
+
+    #[must_use]
+    pub const fn schema(&self) -> SchemaRef<'schema> {
+        self.schema
+    }
+
+    #[must_use]
+    pub const fn structural_identity(&self) -> ShapeIdentity {
+        self.structural_identity
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum Schema {
     None,
@@ -241,6 +403,8 @@ pub enum Schema {
     },
     Url(UrlConstraints),
     Pattern(PatternSchema),
+    Nullable(Box<Self>),
+    Model(ModelSchema),
     List {
         item: Box<Self>,
         constraints: CollectionConstraints,
@@ -272,6 +436,147 @@ impl Schema {
         Self::Integer {
             target: IntegerTarget::Exact,
             constraints: IntegerConstraints::default(),
+        }
+    }
+
+    fn structural_identity_at(&self, depth: usize) -> Result<ShapeIdentity, ValidationError> {
+        if depth > MAX_SCHEMA_DEPTH {
+            return Err(schema_error(
+                "Schema nesting exceeds the static preparation limit",
+                "bounded static schema",
+            ));
+        }
+        let identity = match self {
+            Self::None => primitive("None"),
+            Self::Bool => primitive("bool"),
+            Self::Integer { target, .. } => primitive(target.structural_name()),
+            Self::Float(_) => primitive("f64"),
+            Self::Decimal(_) => primitive("bigdecimal"),
+            Self::Fraction(_) => primitive("pydantic_sifr.Fraction"),
+            Self::Complex(_) => primitive("pydantic_sifr.Complex"),
+            Self::String(_) | Self::Url(_) => primitive("str"),
+            Self::Pattern(_) => primitive("pydantic_sifr.Pattern"),
+            Self::Bytes(_) | Self::Uuid { .. } => primitive("bytes"),
+            Self::Temporal(schema) => primitive(schema.structural_name()),
+            Self::Nullable(inner) => {
+                unary_container("optional", inner.structural_identity_at(depth + 1)?)
+            }
+            Self::Model(model) => model.structural_identity,
+            Self::List { item, .. } | Self::Generator { item, .. } => {
+                unary_container("list", item.structural_identity_at(depth + 1)?)
+            }
+            Self::Tuple(items) => tuple(
+                &items
+                    .iter()
+                    .map(|item| item.structural_identity_at(depth + 1))
+                    .collect::<Result<Vec<_>, _>>()?,
+            ),
+            Self::Mapping { key, value, .. } => binary_container(
+                "mapping",
+                key.structural_identity_at(depth + 1)?,
+                value.structural_identity_at(depth + 1)?,
+            ),
+            Self::Set { item, .. } => {
+                unary_container("set", item.structural_identity_at(depth + 1)?)
+            }
+            Self::FrozenSet { item, .. } => {
+                let item = item.structural_identity_at(depth + 1)?;
+                nominal_record(
+                    "sifr.collections.frozenset",
+                    &[item],
+                    &[NominalField {
+                        name: "_values",
+                        identity: unary_container("set", item),
+                        required: true,
+                        default_identity: None,
+                    }],
+                    metadata(&[]),
+                )
+            }
+            Self::EmbeddedJson(inner) => inner.structural_identity_at(depth + 1)?,
+        };
+        Ok(identity)
+    }
+}
+
+fn verify_model_fields(fields: &[ModelField], extra: &ExtraPolicy) -> Result<(), ValidationError> {
+    let mut names = BTreeSet::new();
+    for field in fields {
+        if !names.insert(field.name) {
+            return Err(schema_error(
+                "Model field names must be unique",
+                "unique model fields",
+            ));
+        }
+    }
+    let destination = match extra {
+        ExtraPolicy::Allow {
+            destination,
+            value_schema,
+        } => {
+            let Some(field) = fields.iter().find(|field| field.name == *destination) else {
+                return Err(schema_error(
+                    "Extra destination must name a declared field",
+                    "declared extra destination",
+                ));
+            };
+            if field.input || field.default.is_some() || !extra_field_matches(field, value_schema) {
+                return Err(schema_error(
+                    "Extra destination must be one non-input mapping field without a default",
+                    "typed extra destination",
+                ));
+            }
+            Some(*destination)
+        }
+        ExtraPolicy::Ignore | ExtraPolicy::Forbid => None,
+    };
+    if fields
+        .iter()
+        .any(|field| !field.input && field.default.is_none() && Some(field.name) != destination)
+    {
+        return Err(schema_error(
+            "A non-input field needs a default or must be the extra destination",
+            "non-input field value source",
+        ));
+    }
+    Ok(())
+}
+
+fn extra_field_matches(field: &ModelField, value_schema: &Schema) -> bool {
+    matches!(
+        &field.schema,
+        Schema::Mapping { key, value, .. }
+            if matches!(key.as_ref(), Schema::String(_)) && value.as_ref() == value_schema
+    )
+}
+
+fn schema_error(message: &'static str, expected: &'static str) -> ValidationError {
+    super::scalars::type_error("schema_invalid", message, expected)
+}
+
+impl IntegerTarget {
+    const fn structural_name(self) -> &'static str {
+        match self {
+            Self::Exact => "int",
+            Self::I8 => "i8",
+            Self::I16 => "i16",
+            Self::I32 => "i32",
+            Self::I64 => "i64",
+            Self::U8 => "u8",
+            Self::U16 => "u16",
+            Self::U32 => "u32",
+            Self::U64 => "u64",
+        }
+    }
+}
+
+impl TemporalSchema {
+    const fn structural_name(&self) -> &'static str {
+        match self.kind {
+            TemporalKind::Date => "pydantic_sifr.Date",
+            TemporalKind::Time => "pydantic_sifr.Time",
+            TemporalKind::DateTime => "pydantic_sifr.DateTime",
+            TemporalKind::Duration => "pydantic_sifr.Duration",
         }
     }
 }

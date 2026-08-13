@@ -11,7 +11,7 @@ pub use arena::{Arena, ArenaError, ArenaId};
 pub use errors::{BuiltInError, ErrorOverride, ErrorRegistry, RegistryError};
 pub use input::{
     InputArena, InputId, InputValue, JsonInputError, JsonLimits, NativeInputError, NativeValue,
-    ObjectKind, SequenceKind, build_native_input, parse_json,
+    ObjectKind, SequenceKind, build_native_input, parse_json, project_structural_input,
 };
 pub use plan::{ExecutionPlan, PlanOp};
 pub use schema::{
@@ -19,11 +19,14 @@ pub use schema::{
     SchemaVerificationError, VerifiedSchemaProgram, verify_program,
 };
 pub use validation::{
-    BytesConstraints, BytesJsonMode, ClockSnapshot, CollectionConstraints, ComplexConstraints,
-    DateTimeValue, DateValue, DecimalConstraints, DurationValue, ErrorDetail, FloatConstraints,
-    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, LocationItem,
-    PatternCompileError, PatternSchema, PatternValue, RelativeTimeConstraint, Schema,
-    StringConstraints, StringPattern, TemporalKind, TemporalSchema, TimeValue, UrlConstraints,
-    ValidatedArena, ValidatedIterator, ValidatedValue, ValidationError, ValidationLimits,
-    ValidationOptions, ValueId, validate, validated_iterator,
+    AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, ClockSnapshot, CollectionConstraints,
+    ComplexConstraints, DateTimeValue, DateValue, DecimalConstraints, DurationValue, ErrorDetail,
+    ExtraPolicy, FieldDefault, FloatConstraints, FractionConstraints, InputProfile,
+    IntegerConstraints, IntegerTarget, LocationItem, ModelField, ModelSchema, ModelValue,
+    PatternCompileError, PatternSchema, PatternValue, PreparedSchema, RelativeTimeConstraint,
+    Schema, StringConstraints, StringPattern, TemporalKind, TemporalSchema, TimeValue,
+    UrlConstraints, ValidatedArena, ValidatedIterator, ValidatedValue, ValidationError,
+    ValidationLimits, ValidationOptions, ValueId, validate, validate_and_construct,
+    validate_json_and_construct, validate_native_and_construct, validate_strings_and_construct,
+    validate_structural_and_construct, validated_iterator,
 };

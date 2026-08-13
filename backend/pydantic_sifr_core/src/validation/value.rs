@@ -2,6 +2,9 @@ use bigdecimal::BigDecimal;
 use num_bigint::BigInt;
 use num_complex::Complex64;
 use num_rational::BigRational;
+use sifr_runtime::interop::structural::{
+    ShapeIdentity, StructuralKind, StructuralNodeEdge, primitive,
+};
 
 use crate::{Arena, ArenaError, ArenaId};
 
@@ -67,11 +70,59 @@ impl PatternValue {
     pub fn is_match(&self, value: &str) -> bool {
         self.compiled.is_match(value)
     }
+
+    pub(super) fn into_parts(self) -> (String, u8) {
+        (self.source, self.flags)
+    }
 }
 
 impl PartialEq for PatternValue {
     fn eq(&self, other: &Self) -> bool {
         self.source == other.source && self.flags == other.flags
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ModelValue {
+    pub(super) name: &'static str,
+    fields: Vec<(&'static str, ValueId)>,
+    extras: Vec<(String, ValueId)>,
+    validated_field_count: usize,
+}
+
+impl ModelValue {
+    pub(crate) const fn new(
+        name: &'static str,
+        fields: Vec<(&'static str, ValueId)>,
+        extras: Vec<(String, ValueId)>,
+        validated_field_count: usize,
+    ) -> Self {
+        Self {
+            name,
+            fields,
+            extras,
+            validated_field_count,
+        }
+    }
+
+    #[must_use]
+    pub fn name(&self) -> &str {
+        self.name
+    }
+
+    #[must_use]
+    pub fn fields(&self) -> &[(&'static str, ValueId)] {
+        &self.fields
+    }
+
+    #[must_use]
+    pub fn extras(&self) -> &[(String, ValueId)] {
+        &self.extras
+    }
+
+    #[must_use]
+    pub const fn validated_field_count(&self) -> usize {
+        self.validated_field_count
     }
 }
 
@@ -94,7 +145,10 @@ pub enum ValidatedValue {
     Uuid([u8; 16]),
     Url(String),
     Pattern(PatternValue),
+    Nullable(Option<ValueId>),
+    Model(ModelValue),
     Sequence(Vec<ValueId>),
+    Tuple(Vec<ValueId>),
     Mapping(Vec<(ValueId, ValueId)>),
     Set(Vec<ValueId>),
     FrozenSet(Vec<ValueId>),
@@ -102,13 +156,24 @@ pub enum ValidatedValue {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ValidatedArena {
-    root: ValueId,
-    values: Arena<ValidatedValue>,
+    pub(super) root: ValueId,
+    pub(super) values: Arena<ValidatedValue>,
+    pub(super) shape: ShapeIdentity,
+    pub(super) descriptions: Option<Vec<(StructuralKind, Option<&'static str>)>>,
+    pub(super) edges: Option<Vec<Vec<StructuralNodeEdge<'static>>>>,
+    pub(super) moved: Vec<bool>,
 }
 
 impl ValidatedArena {
-    pub(crate) const fn new(root: ValueId, values: Arena<ValidatedValue>) -> Self {
-        Self { root, values }
+    pub(crate) fn new(root: ValueId, values: Arena<ValidatedValue>) -> Self {
+        Self {
+            root,
+            values,
+            shape: primitive("pydantic_sifr.untyped"),
+            descriptions: None,
+            edges: None,
+            moved: Vec::new(),
+        }
     }
 
     #[must_use]
@@ -139,7 +204,7 @@ impl ValidatedArena {
 impl ValidatedValue {
     pub(crate) fn remap_ids(&mut self, offset: usize) -> Result<(), ArenaError> {
         match self {
-            Self::Sequence(ids) | Self::Set(ids) | Self::FrozenSet(ids) => {
+            Self::Sequence(ids) | Self::Tuple(ids) | Self::Set(ids) | Self::FrozenSet(ids) => {
                 for id in ids {
                     *id = remap_id(*id, offset)?;
                 }
@@ -148,6 +213,15 @@ impl ValidatedValue {
                 for (key, value) in entries {
                     *key = remap_id(*key, offset)?;
                     *value = remap_id(*value, offset)?;
+                }
+            }
+            Self::Nullable(Some(id)) => *id = remap_id(*id, offset)?,
+            Self::Model(model) => {
+                for (_, id) in &mut model.fields {
+                    *id = remap_id(*id, offset)?;
+                }
+                for (_, id) in &mut model.extras {
+                    *id = remap_id(*id, offset)?;
                 }
             }
             _ => {}

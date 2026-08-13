@@ -1,4 +1,4 @@
-# Foundation architecture
+# Package architecture
 
 The package has two release-synchronized components.
 
@@ -39,6 +39,13 @@ The adapter checks input bytes, nesting depth, node count, and total string
 bytes. It moves parsed values into a compact checked arena. Integer text is
 preserved exactly. A user-controlled input path does not use `unwrap`,
 `expect`, or an assertion.
+
+The native structural adapter consumes compiler-generated visitation events.
+It writes scalar values and aggregate edges directly into the same input
+arena. It does not build a generic model value first. The adapter applies the
+same depth, node, item, string, and integer limits. It sorts unordered mapping
+and set projections before validation, which keeps aggregate error order
+stable.
 
 ## Error boundary
 
@@ -83,9 +90,57 @@ each call to `next`. A deferred failure includes the original item index. The
 iterator applies length and resource checks without collecting values in
 silence.
 
+## Typed construction boundary
+
+`PreparedSchema` derives the structural shape identity once from the static
+schema. A model schema stores the exact compiler-owned identity. It does not
+copy the target identity at runtime. Typed construction accepts only this
+prepared object. Construction fails before node access if the schema and target
+identities differ.
+
+Ordinary validation does not build structural edge arrays or move-state
+tables. Typed construction prepares those views only after validation succeeds.
+Specialized values add crate-neutral component nodes to the same validated
+arena. They do not create another model tree.
+
+`ModelSchema::new` rejects duplicate fields and invalid non-input fields before
+the schema can validate user data. An allowed-extra destination must be one
+declared, non-input mapping field. Its key type is `str`, and its value schema
+must match the extra value schema.
+
+The backend pins the Sifr structural runtime to exact commit
+`89684aecbd2a321c92912a8cee051b9d9a4fc46a`. The package contains this Rust
+source and its lockfile. The backend is not a separate crates.io product
+because the Sifr runtime crates are not crates.io packages. This rule avoids a
+duplicate private copy of the compiler-owned structural contract.
+
+## Model API boundary
+
+The Sifr package exports `model_validate`, `model_validate_json`, and
+`model_validate_strings`. Each function returns the requested ordinary Sifr
+class or a typed error. The JSON and strings functions accept bytes. The native
+function accepts a separate structural input type.
+
+Each call borrows one compiler-sealed static schema program. The Rust bridge
+prepares a schema view over those static values. It does not parse or clone a
+schema graph. Successful validation prepares structural construction over the
+validated arena and moves the result into the target class.
+
+`ValidationError.message` contains one stable JSON object. The object contains
+ordered details, typed locations, expected values, and the truncation fact.
+The bridge escapes all text before it writes this object. A contained Rust
+panic remains a distinct `RustPanicError`.
+
 ## PS5 compatibility ledger
 
 `tests/compatibility/ps5.toml` classifies every required PS5 fixture family as
 the same or adapted. Each row names executable local evidence and describes
 every adapted semantic difference. A unit gate checks total coverage against
 the pinned upstream anchor ledger.
+
+## PS6 compatibility ledger
+
+`tests/compatibility/ps6.toml` classifies each required PS6 fixture family.
+The ledger covers models, fields, defaults, nullable fields, aliases,
+configuration, constraints, structural input, and the public model API. A unit
+gate checks total coverage against the pinned upstream anchor ledger.

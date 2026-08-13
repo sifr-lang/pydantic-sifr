@@ -1,20 +1,31 @@
 mod collections;
+mod construction;
 mod error;
+mod models;
 mod scalars;
 mod schema;
+mod schema_view;
 mod special;
+mod structural;
+mod textual;
 mod value;
 
 pub use collections::{ValidatedIterator, validated_iterator};
+pub use construction::{
+    validate_and_construct, validate_json_and_construct, validate_native_and_construct,
+    validate_strings_and_construct, validate_structural_and_construct,
+};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
 pub use schema::{
-    BytesConstraints, BytesJsonMode, CollectionConstraints, ComplexConstraints, DecimalConstraints,
-    FloatConstraints, FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget,
-    PatternCompileError, PatternSchema, RelativeTimeConstraint, Schema, StringConstraints,
-    StringPattern, TemporalKind, TemporalSchema, UrlConstraints,
+    AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, CollectionConstraints,
+    ComplexConstraints, DecimalConstraints, ExtraPolicy, FieldDefault, FloatConstraints,
+    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, ModelField, ModelSchema,
+    PatternCompileError, PatternSchema, PreparedSchema, RelativeTimeConstraint, Schema,
+    StringConstraints, StringPattern, TemporalKind, TemporalSchema, UrlConstraints,
 };
+pub use schema_view::SchemaRef;
 pub use value::{
-    DateTimeValue, DateValue, DurationValue, PatternValue, TimeValue, ValidatedArena,
+    DateTimeValue, DateValue, DurationValue, ModelValue, PatternValue, TimeValue, ValidatedArena,
     ValidatedValue, ValueId,
 };
 
@@ -82,11 +93,19 @@ pub fn validate(
     input: &InputArena,
     options: ValidationOptions,
 ) -> Result<ValidatedArena, ValidationError> {
+    validate_ref(SchemaRef::owned(schema), input, options)
+}
+
+pub(crate) fn validate_ref(
+    schema: SchemaRef<'_>,
+    input: &InputArena,
+    options: ValidationOptions,
+) -> Result<ValidatedArena, ValidationError> {
     validate_at(schema, input, input.root(), options)
 }
 
 fn validate_at(
-    schema: &Schema,
+    schema: SchemaRef<'_>,
     input: &InputArena,
     root: InputId,
     options: ValidationOptions,
@@ -95,7 +114,7 @@ fn validate_at(
 }
 
 pub(crate) fn validate_at_depth(
-    schema: &Schema,
+    schema: SchemaRef<'_>,
     input: &InputArena,
     root: InputId,
     options: ValidationOptions,
@@ -143,7 +162,7 @@ pub(crate) struct ValidationState<'a> {
 impl ValidationState<'_> {
     pub(crate) fn validate_node(
         &mut self,
-        schema: &Schema,
+        schema: SchemaRef<'_>,
         input_id: InputId,
         depth: usize,
     ) -> Result<ValueId, ValidationError> {
@@ -161,16 +180,32 @@ impl ValidationState<'_> {
                 "valid input arena",
             )
         })?;
+        if schema.tag()? == schema_view::SchemaTag::Nullable {
+            let value = if matches!(input, InputValue::Null) {
+                ValidatedValue::Nullable(None)
+            } else {
+                let child = self.validate_node(schema.child(0)?, input_id, depth)?;
+                ValidatedValue::Nullable(Some(child))
+            };
+            return self.push(value);
+        }
+        if schema.tag()? == schema_view::SchemaTag::Model {
+            return models::validate_model(self, schema.model()?, input_id, depth);
+        }
         let value = if let Some(result) = scalars::validate_scalar(schema, input, self.options) {
             result?
-        } else if let Some(result) = special::validate_special(
-            schema,
-            input,
-            self.options.strict,
-            self.options.profile,
-            self.options.clock,
-        ) {
-            result?
+        } else if let SchemaRef::Owned(owned) = schema {
+            if let Some(result) = special::validate_special(
+                owned,
+                input,
+                self.options.strict,
+                self.options.profile,
+                self.options.clock,
+            ) {
+                result?
+            } else {
+                return collections::validate_collection(self, schema, input_id, depth);
+            }
         } else {
             return collections::validate_collection(self, schema, input_id, depth);
         };
