@@ -242,6 +242,13 @@ fn selected_member(
         Schema::Nullable(inner) => selected_from_layout(&nullable_layout(inner)?, arena),
         Schema::EmbeddedJson(inner) => selected_member(inner, arena),
         Schema::Definitions(definitions) => selected_member(definitions.root(), arena),
+        Schema::LaxOrStrict(control) => selected_member(control.lax(), arena),
+        Schema::JsonOrStructural(control) => selected_member(control.json(), arena),
+        Schema::Chain(chain) => chain
+            .steps()
+            .last()
+            .ok_or_else(invalid_sum_output)
+            .and_then(|output| selected_member(output, arena)),
         _ => Ok(SelectedMember {
             identity: schema.structural_identity_at(0)?,
             value: Some(arena.root()),
@@ -507,6 +514,43 @@ fn input_matches(
         Schema::EmbeddedJson(_) => {
             matches!(value, InputValue::String(_) | InputValue::Bytes(_))
         }
+        Schema::LaxOrStrict(control) => {
+            let strict = state
+                .options()
+                .strict_override
+                .unwrap_or(state.options().strict || control.default_strict());
+            let selected = if strict {
+                control.strict()
+            } else {
+                control.lax()
+            };
+            input_matches(
+                selected,
+                state,
+                input_id,
+                level,
+                depth + 1,
+                local_definitions,
+            )
+        }
+        Schema::JsonOrStructural(control) => {
+            let selected = if state.options().profile == super::InputProfile::Json {
+                control.json()
+            } else {
+                control.structural()
+            };
+            input_matches(
+                selected,
+                state,
+                input_id,
+                level,
+                depth + 1,
+                local_definitions,
+            )
+        }
+        Schema::Chain(chain) => chain.steps().first().is_some_and(|first| {
+            input_matches(first, state, input_id, level, depth + 1, local_definitions)
+        }),
     }
 }
 
@@ -533,6 +577,16 @@ fn schema_is_string(
                 })
             })
             .unwrap_or(false),
+        Schema::LaxOrStrict(control) => {
+            schema_is_string(control.lax(), state, local_definitions, depth + 1)
+        }
+        Schema::JsonOrStructural(control) => {
+            schema_is_string(control.json(), state, local_definitions, depth + 1)
+        }
+        Schema::Chain(chain) => chain
+            .steps()
+            .last()
+            .is_some_and(|output| schema_is_string(output, state, local_definitions, depth + 1)),
         _ => false,
     }
 }

@@ -32,6 +32,16 @@ One engine validates native, JSON, and strings-profile inputs. Strict mode
 controls native conversions. JSON strict mode still accepts the JSON form of a
 declared scalar, such as a UUID string.
 
+General controls can select a lax or strict child and a JSON or structural
+child. An explicit strictness setting overrides the schema default. JSON calls
+select the JSON child. Native and strings calls select the structural child.
+Both children must return the same declared Sifr type.
+
+Typed chains pass each validated result to the next step through checked
+arenas. Construction flattens nested chains, removes a one-step chain, and
+rejects an empty chain. The handoff keeps the original input profile and does
+not create a persistent dynamic object tree.
+
 Exact integers, decimals, and fractions do not pass through a float. Fixed
 integer targets report typed overflow errors. String processing has one fixed
 order: conversion, trimming, ASCII checks, Unicode length, pattern matching,

@@ -62,8 +62,20 @@ envelopes under explicit resource limits.
 
 The backend validates all scalar and collection schemas through one recursive
 engine. `ValidationOptions` selects native, JSON, or strings input. The same
-options carry strict mode, resource limits, and one clock snapshot. A schema
-does not select a second runtime or a fallback path.
+options carry the default strict mode, an optional call override, resource
+limits, and one clock snapshot. A schema does not select a second runtime or a
+fallback path.
+
+Strictness and input-profile controls select one declared child. A call
+override has authority over the default strict mode. A JSON call selects the
+JSON child. Native and strings calls select the structural child. Both children
+must produce the same structural type.
+
+`Schema::chain` rejects an empty chain. It removes a one-step chain and flattens
+nested chains. Each step validates the typed output of the previous step. A
+checked arena handoff converts only that output into the next input arena. The
+handoff preserves the original input profile and enforces the same limits. It
+does not keep a third dynamic value tree.
 
 A definition scope owns one exact identity-to-schema table. A reference must
 match the structural identity and canonical kind of its target. A reference
@@ -158,3 +170,10 @@ the pinned upstream anchor ledger.
 The ledger covers models, fields, defaults, nullable fields, aliases,
 configuration, constraints, structural input, and the public model API. A unit
 gate checks total coverage against the pinned upstream anchor ledger.
+
+## PS7 compatibility ledger
+
+`tests/compatibility/ps7.toml` records each delivered PS7 family. The current
+rows cover strictness controls, input-profile controls, and typed chains. Each
+adapted row states the Sifr type and ownership rules. A unit gate binds the row
+to the pinned upstream anchor ledger.

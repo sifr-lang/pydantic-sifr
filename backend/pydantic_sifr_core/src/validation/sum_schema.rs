@@ -416,6 +416,17 @@ fn collect_members(
         Schema::Definitions(definitions) => {
             collect_members(definitions.root(), depth + 1, members)?;
         }
+        Schema::LaxOrStrict(control) => collect_members(control.lax(), depth + 1, members)?,
+        Schema::JsonOrStructural(control) => {
+            collect_members(control.json(), depth + 1, members)?;
+        }
+        Schema::Chain(chain) => {
+            let output = chain
+                .steps()
+                .last()
+                .ok_or_else(|| schema_error("A typed chain is empty", "nonempty typed chain"))?;
+            collect_members(output, depth + 1, members)?;
+        }
         _ => members.push(CanonicalMember {
             identity: schema.structural_identity_at(depth + 1)?,
             sort_key: schema_sort_key(schema),
@@ -444,6 +455,12 @@ pub(crate) fn schema_sort_key(schema: &Schema) -> (u8, String) {
         Schema::Tuple(_) => (13, String::new()),
         Schema::Model(model) => (31, bare_nominal_name(model.name).to_owned()),
         Schema::DefinitionRef { sort_key, .. } => sort_key.clone(),
+        Schema::LaxOrStrict(control) => schema_sort_key(control.lax()),
+        Schema::JsonOrStructural(control) => schema_sort_key(control.json()),
+        Schema::Chain(chain) => chain
+            .steps()
+            .last()
+            .map_or((41, String::new()), schema_sort_key),
         Schema::FrozenSet { .. } => (31, "frozenset".to_owned()),
         Schema::Fraction(_) => (34, "Fraction".to_owned()),
         Schema::Complex(_) => (34, "Complex".to_owned()),

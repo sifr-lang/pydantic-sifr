@@ -90,7 +90,7 @@ fn sequence_input(
 ) -> Result<Vec<InputId>, ValidationError> {
     match input.get(input_id) {
         Some(InputValue::Sequence { kind, items })
-            if !options.strict
+            if !options.effective_strict()
                 || match options.profile {
                     InputProfile::Native | InputProfile::Strings => *kind == expected_kind,
                     InputProfile::Json => *kind == SequenceKind::JsonArray,
@@ -213,7 +213,7 @@ fn validate_mapping(
     })?;
     let length = match &input {
         InputValue::Object { kind, entries }
-            if !state.options().strict
+            if !state.options().effective_strict()
                 || (state.options().profile == InputProfile::Strings
                     && *kind == ObjectKind::Object)
                 || (state.options().profile == InputProfile::Json
@@ -222,7 +222,8 @@ fn validate_mapping(
             entries.len()
         }
         InputValue::Mapping(entries)
-            if !state.options().strict || state.options().profile != InputProfile::Json =>
+            if !state.options().effective_strict()
+                || state.options().profile != InputProfile::Json =>
         {
             entries.len()
         }
@@ -373,6 +374,7 @@ fn validate_object_key(
     let mut options = state.options();
     if json_key && options.profile == InputProfile::Json {
         options.strict = false;
+        options.strict_override = None;
     }
     let arena = state.validate_input(schema, &input, input.root(), options, depth + 1)?;
     state.import(arena)

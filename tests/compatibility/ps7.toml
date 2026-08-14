@@ -1,0 +1,8 @@
+milestone = "ps_7"
+upstream_commit = "f59e929c999e8b2efc7b12fd0bc1685c1a186be3"
+
+[[family]]
+name = "validators/control_composition"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_control.rs"
+difference = "JSON selects a JSON branch, while native and strings inputs select a structural branch. Every branch has one declared Sifr output type. Typed chains use checked arena handoffs instead of Python objects."
