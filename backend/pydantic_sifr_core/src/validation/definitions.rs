@@ -41,7 +41,12 @@ impl DefinitionsSchema {
             definitions,
             scope,
         };
-        verify_references(&schema.root, &schema.scope, &mut BTreeSet::new())?;
+        let mut visited = BTreeSet::new();
+        verify_references(&schema.root, &schema.scope, &mut visited)?;
+        for target in schema.scope.values() {
+            verify_references(target.as_ref(), &schema.scope, &mut visited)?;
+            root_identity(target.as_ref(), &schema.scope, &mut BTreeSet::new())?;
+        }
         schema.structural_identity()?;
         Ok(schema)
     }
@@ -58,6 +63,10 @@ impl DefinitionsSchema {
 
     pub(crate) fn scope(&self) -> BTreeMap<&'static str, Arc<Schema>> {
         self.scope.clone()
+    }
+
+    pub(crate) fn definition(&self, name: &'static str) -> Option<&Schema> {
+        self.scope.get(name).map(Arc::as_ref)
     }
 
     pub(crate) fn structural_identity(&self) -> Result<ShapeIdentity, ValidationError> {
@@ -93,6 +102,9 @@ pub(crate) fn validate_definitions(
         SchemaRef::Static(_) if schema.tag()? == SchemaTag::DefinitionRef => {
             let name = schema.static_reference()?;
             let target = schema.static_definition_target()?;
+            if !static_reference_target_is_supported(target)? {
+                return Err(reference_target_error());
+            }
             validate_reference(state, name, target, input_id, depth)
         }
         _ => Err(schema_error("Schema node is not a definition control node")),
@@ -154,6 +166,9 @@ fn verify_references(
             let target = definitions
                 .get(name)
                 .ok_or_else(|| schema_error("Definition reference is not declared"))?;
+            if !target.definition_reference_target_is_supported() {
+                return Err(reference_target_error());
+            }
             if target.structural_identity_at(0)? != *structural_identity
                 || super::sum_schema::schema_sort_key(target.as_ref()) != *sort_key
             {
@@ -199,4 +214,55 @@ fn verify_references(
 
 fn schema_error(message: &'static str) -> ValidationError {
     super::scalars::type_error("schema_invalid", message, "valid definition scope")
+}
+
+fn static_reference_target_is_supported(target: SchemaRef<'_>) -> Result<bool, ValidationError> {
+    Ok(!matches!(
+        target.tag()?,
+        SchemaTag::Literal
+            | SchemaTag::Nullable
+            | SchemaTag::Union
+            | SchemaTag::TaggedUnion
+            | SchemaTag::Definitions
+            | SchemaTag::EmbeddedJson
+    ))
+}
+
+fn reference_target_error() -> ValidationError {
+    super::scalars::type_error(
+        "schema_invalid",
+        "Definition references cannot target flattened wrappers or definition scopes",
+        "non-flattened definition target",
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Arena, JsonLimits, parse_json};
+
+    #[test]
+    fn repeated_active_reference_returns_recursion_loop() {
+        let input = parse_json(b"true", JsonLimits::default())
+            .unwrap_or_else(|error| panic!("JSON input failed: {error}"));
+        let mut state = ValidationState {
+            input: &input,
+            values: Arena::new(),
+            options: super::super::ValidationOptions::default(),
+            definition_scopes: Arc::new(Vec::new()),
+            active_references: Vec::new(),
+        };
+        assert!(state.enter_reference(input.root(), "tests.Loop"));
+        let error = match validate_reference(
+            &mut state,
+            "tests.Loop",
+            SchemaRef::owned(&Schema::Bool),
+            input.root(),
+            0,
+        ) {
+            Ok(_) => panic!("expected recursion loop"),
+            Err(error) => error,
+        };
+        assert_eq!(error.details()[0].code, "recursion_loop");
+    }
 }

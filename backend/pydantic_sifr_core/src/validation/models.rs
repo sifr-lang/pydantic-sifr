@@ -7,7 +7,6 @@ use super::{
     ValidatedValue, ValidationError, ValidationState, ValueId,
     collections::{collect_error, stop_after_error_cap},
     schema_view::{DefaultRef, ExtraRef, FieldRef, ModelRef},
-    validate_at_depth,
 };
 
 pub(crate) fn validate_model(
@@ -309,7 +308,7 @@ fn validate_default(
     })?;
     let mut options = state.options();
     options.profile = InputProfile::Native;
-    let output = validate_at_depth(field.schema()?, &input, input.root(), options, depth + 1)?;
+    let output = state.validate_input(field.schema()?, &input, input.root(), options, depth + 1)?;
     state.import(output).map(Some)
 }
 

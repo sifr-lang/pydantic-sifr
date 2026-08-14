@@ -66,9 +66,17 @@ options carry strict mode, resource limits, and one clock snapshot. A schema
 does not select a second runtime or a fallback path.
 
 A definition scope owns one exact identity-to-schema table. A reference must
-match the structural identity and canonical kind of its target. Validation resolves each reference
-inside that scope and tracks active input/reference pairs. A repeated reference
-can reuse its target. A repeated active pair returns `recursion_loop`. A finite
+match the structural identity and canonical kind of its target. A reference
+cannot target a flattened wrapper or another definition scope. Flattened
+wrappers include literals, nullables, unions, tagged unions, and embedded JSON.
+
+Validation checks every definition before it accepts the scope. It resolves
+references inside that scope. Fresh parsed inputs, defaults, mapping keys, and
+lazy generator items keep the scope. Each fresh input starts a new recursion
+trace.
+
+Validation tracks active input and reference pairs. A repeated reference can
+reuse its target. A repeated active pair returns `recursion_loop`. A finite
 value that exceeds the depth limit returns `recursion_limit`.
 
 The scalar layer keeps exact integers as `BigInt`, decimals as `BigDecimal`,

@@ -6,9 +6,9 @@ use crate::{
 };
 
 use super::{
-    CollectionConstraints, ErrorDetail, InputProfile, LocationItem, Schema, SchemaRef,
-    ValidatedArena, ValidatedValue, ValidationError, ValidationOptions, ValidationState, ValueId,
-    validate_at, validate_at_depth, validate_options,
+    CollectionConstraints, DefinitionScopes, ErrorDetail, InputProfile, LocationItem, Schema,
+    SchemaRef, ValidatedArena, ValidatedValue, ValidationError, ValidationOptions, ValidationState,
+    ValueId, validate_at_depth_with_context, validate_options,
 };
 
 pub(crate) fn validate_collection(
@@ -241,9 +241,14 @@ fn validate_mapping(
     match input {
         InputValue::Object { kind, entries } => {
             for (index, (field, value_id)) in entries.into_iter().enumerate() {
-                let key =
-                    validate_object_key(state, key_schema, &field, kind == ObjectKind::JsonObject)
-                        .map_err(|error| error.at(LocationItem::MappingKey(index)));
+                let key = validate_object_key(
+                    state,
+                    key_schema,
+                    &field,
+                    kind == ObjectKind::JsonObject,
+                    depth,
+                )
+                .map_err(|error| error.at(LocationItem::MappingKey(index)));
                 let value = state
                     .validate_node(value_schema, value_id, depth + 1)
                     .map_err(|error| error.at(LocationItem::Field(field)));
@@ -352,6 +357,7 @@ fn validate_object_key(
     schema: SchemaRef<'_>,
     field: &str,
     json_key: bool,
+    depth: usize,
 ) -> Result<ValueId, ValidationError> {
     let input = build_native_input(
         &NativeValue::String(field.to_owned()),
@@ -368,7 +374,7 @@ fn validate_object_key(
     if json_key && options.profile == InputProfile::Json {
         options.strict = false;
     }
-    let arena = validate_at(schema, &input, input.root(), options)?;
+    let arena = state.validate_input(schema, &input, input.root(), options, depth + 1)?;
     state.import(arena)
 }
 
@@ -461,7 +467,7 @@ fn validate_embedded_json(
     })?;
     let mut options = state.options();
     options.profile = InputProfile::Json;
-    let arena = validate_at_depth(inner, &input, input.root(), options, depth + 1)?;
+    let arena = state.validate_input(inner, &input, input.root(), options, depth + 1)?;
     state.import(arena)
 }
 
@@ -645,6 +651,7 @@ pub struct ValidatedIterator<'a> {
     item: Schema,
     constraints: CollectionConstraints,
     options: ValidationOptions,
+    definition_scopes: DefinitionScopes,
     index: usize,
     finished: bool,
 }
@@ -655,12 +662,19 @@ pub fn validated_iterator<'a>(
     options: ValidationOptions,
 ) -> Result<ValidatedIterator<'a>, ValidationError> {
     validate_options(options)?;
-    let Schema::Generator { item, constraints } = schema else {
-        return Err(super::scalars::type_error(
-            "generator_schema",
-            "validated_iterator requires a generator schema",
-            "generator schema",
-        ));
+    let (item, constraints, definition_scopes) = match schema {
+        Schema::Generator { item, constraints } => {
+            (item.as_ref(), constraints, std::sync::Arc::new(Vec::new()))
+        }
+        Schema::Definitions(definitions) => match definitions.root() {
+            Schema::Generator { item, constraints } => (
+                item.as_ref(),
+                constraints,
+                std::sync::Arc::new(vec![definitions.scope()]),
+            ),
+            _ => return Err(generator_schema_error()),
+        },
+        _ => return Err(generator_schema_error()),
     };
     let children = sequence_input(
         input,
@@ -682,9 +696,10 @@ pub fn validated_iterator<'a>(
     Ok(ValidatedIterator {
         input,
         children,
-        item: item.as_ref().clone(),
+        item: item.clone(),
         constraints: constraints.clone(),
         options,
+        definition_scopes,
         index: 0,
         finished: false,
     })
@@ -729,13 +744,24 @@ impl Iterator for ValidatedIterator<'_> {
         let index = self.index;
         self.index += 1;
         Some(
-            validate_at(
+            validate_at_depth_with_context(
                 SchemaRef::owned(&self.item),
                 self.input,
                 child,
                 self.options,
+                0,
+                std::sync::Arc::clone(&self.definition_scopes),
+                Vec::new(),
             )
             .map_err(|error| error.at(LocationItem::Index(index))),
         )
     }
+}
+
+fn generator_schema_error() -> ValidationError {
+    super::scalars::type_error(
+        "generator_schema",
+        "validated_iterator requires a generator schema",
+        "generator schema",
+    )
 }

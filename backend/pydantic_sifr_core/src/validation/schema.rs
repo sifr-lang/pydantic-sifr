@@ -472,11 +472,29 @@ impl Schema {
         name: &'static str,
         target: &Self,
     ) -> Result<Self, ValidationError> {
+        if !target.definition_reference_target_is_supported() {
+            return Err(schema_error(
+                "Definition references cannot target flattened wrappers or definition scopes",
+                "non-flattened definition target",
+            ));
+        }
         Ok(Self::DefinitionRef {
             name,
             structural_identity: target.structural_identity_at(0)?,
             sort_key: super::sum_schema::schema_sort_key(target),
         })
+    }
+
+    pub(crate) const fn definition_reference_target_is_supported(&self) -> bool {
+        !matches!(
+            self,
+            Self::Literal(_)
+                | Self::Nullable(_)
+                | Self::Union(_)
+                | Self::TaggedUnion(_)
+                | Self::Definitions(_)
+                | Self::EmbeddedJson(_)
+        )
     }
 
     pub(crate) fn structural_identity_at(

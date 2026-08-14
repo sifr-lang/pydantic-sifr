@@ -413,6 +413,9 @@ fn collect_members(
             collect_members(inner, depth + 1, members)?;
         }
         Schema::EmbeddedJson(inner) => collect_members(inner, depth + 1, members)?,
+        Schema::Definitions(definitions) => {
+            collect_members(definitions.root(), depth + 1, members)?;
+        }
         _ => members.push(CanonicalMember {
             identity: schema.structural_identity_at(depth + 1)?,
             sort_key: schema_sort_key(schema),

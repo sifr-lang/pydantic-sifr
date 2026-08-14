@@ -36,6 +36,25 @@ fn union_node_with_metadata(
     ])
 }
 
+fn defined_union_node(name: &'static str, children: &[&'static str]) -> StaticProgramValue {
+    record(vec![
+        ("kind", StaticProgramValue::String("union")),
+        (
+            "children",
+            list(
+                children
+                    .iter()
+                    .map(|index| StaticProgramValue::Integer(index))
+                    .collect(),
+            ),
+        ),
+        ("metadata", list(Vec::new())),
+        ("error_code", StaticProgramValue::None),
+        ("error_message", StaticProgramValue::None),
+        ("definition", StaticProgramValue::String(name)),
+    ])
+}
+
 fn metadata(key: &'static str, value: &'static str) -> StaticProgramValue {
     record(vec![
         ("key", StaticProgramValue::String(key)),
@@ -70,6 +89,23 @@ fn string_node() -> StaticProgramValue {
         ("kind", StaticProgramValue::String("str")),
         ("children", list(Vec::new())),
         ("string_constraints", StaticProgramValue::None),
+    ])
+}
+
+fn definition_reference_node(name: &'static str) -> StaticProgramValue {
+    record(vec![
+        ("kind", StaticProgramValue::String("definition-ref")),
+        ("children", list(Vec::new())),
+        ("reference", StaticProgramValue::String(name)),
+    ])
+}
+
+fn defined_string_node(name: &'static str) -> StaticProgramValue {
+    record(vec![
+        ("kind", StaticProgramValue::String("str")),
+        ("children", list(Vec::new())),
+        ("string_constraints", StaticProgramValue::None),
+        ("definition", StaticProgramValue::String(name)),
     ])
 }
 
@@ -165,4 +201,58 @@ fn static_left_to_right_union_keeps_the_first_successful_branch() {
     ]);
 
     assert_eq!(selected_union_index(program, br#"{"a":"1"}"#), 0);
+}
+
+#[test]
+fn static_smart_union_ranks_a_reference_by_its_target_exactness() {
+    let program = schema_program(vec![
+        union_node(&["1", "2"]),
+        integer_node(),
+        definition_reference_node("shared.text"),
+        defined_string_node("shared.text"),
+    ]);
+
+    assert_eq!(selected_union_index(program, br#""1""#), 1);
+}
+
+#[test]
+fn static_smart_union_ranks_a_mapping_with_a_referenced_string_key() {
+    let program = schema_program(vec![
+        union_node(&["1", "4"]),
+        mapping_node("2", "3"),
+        integer_node(),
+        integer_node(),
+        mapping_node("5", "6"),
+        definition_reference_node("shared.text"),
+        integer_node(),
+        defined_string_node("shared.text"),
+    ]);
+
+    assert_eq!(selected_union_index(program, br#"{"1":2}"#), 1);
+}
+
+#[test]
+fn static_definition_reference_rejects_a_union_target() {
+    let program = schema_program(vec![
+        definition_reference_node("shared.sum"),
+        defined_union_node("shared.sum", &["2", "3"]),
+        integer_node(),
+        string_node(),
+    ]);
+    let schema = SchemaRef::from_static_program(program)
+        .unwrap_or_else(|error| panic!("static schema failed: {error}"));
+    let input = parse_json(b"1", JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON input failed: {error}"));
+    let error = match super::super::validate_ref(
+        schema,
+        &input,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    ) {
+        Ok(_) => panic!("expected static reference rejection"),
+        Err(error) => error,
+    };
+    assert_eq!(error.details()[0].code, "schema_invalid");
 }

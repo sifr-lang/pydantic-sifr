@@ -38,7 +38,11 @@ pub use value::{
     UnionValue, ValidatedArena, ValidatedValue, ValueId,
 };
 
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    collections::BTreeMap,
+    sync::Arc,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{Arena, InputArena, InputId, InputValue};
 
@@ -129,6 +133,26 @@ pub(crate) fn validate_at_depth(
     options: ValidationOptions,
     start_depth: usize,
 ) -> Result<ValidatedArena, ValidationError> {
+    validate_at_depth_with_context(
+        schema,
+        input,
+        root,
+        options,
+        start_depth,
+        Arc::new(Vec::new()),
+        Vec::new(),
+    )
+}
+
+pub(crate) fn validate_at_depth_with_context(
+    schema: SchemaRef<'_>,
+    input: &InputArena,
+    root: InputId,
+    options: ValidationOptions,
+    start_depth: usize,
+    definition_scopes: DefinitionScopes,
+    active_references: Vec<(InputId, &'static str)>,
+) -> Result<ValidatedArena, ValidationError> {
     validate_options(options)?;
     if options.profile == InputProfile::Strings {
         check_strings_profile(input, root)?;
@@ -138,12 +162,15 @@ pub(crate) fn validate_at_depth(
         input,
         values: Arena::new(),
         options,
-        definition_scopes: Vec::new(),
-        active_references: Vec::new(),
+        definition_scopes,
+        active_references,
     };
     let root = state.validate_node(schema, root, start_depth)?;
     Ok(ValidatedArena::new(root, state.values))
 }
+
+pub(crate) type DefinitionScope = BTreeMap<&'static str, Arc<Schema>>;
+pub(crate) type DefinitionScopes = Arc<Vec<DefinitionScope>>;
 
 pub(crate) fn validate_options(options: ValidationOptions) -> Result<(), ValidationError> {
     if options.limits.max_depth == 0
@@ -168,7 +195,7 @@ pub(crate) struct ValidationState<'a> {
     input: &'a InputArena,
     values: Arena<ValidatedValue>,
     options: ValidationOptions,
-    definition_scopes: Vec<std::collections::BTreeMap<&'static str, std::sync::Arc<Schema>>>,
+    definition_scopes: DefinitionScopes,
     active_references: Vec<(InputId, &'static str)>,
 }
 
@@ -288,25 +315,41 @@ impl ValidationState<'_> {
             input: self.input,
             values: Arena::new(),
             options: self.options,
-            definition_scopes: self.definition_scopes.clone(),
+            definition_scopes: Arc::clone(&self.definition_scopes),
             active_references: self.active_references.clone(),
         };
         let root = state.validate_node(schema, root, start_depth)?;
         Ok(ValidatedArena::new(root, state.values))
     }
 
-    pub(crate) fn push_definition_scope(
-        &mut self,
-        scope: std::collections::BTreeMap<&'static str, std::sync::Arc<Schema>>,
-    ) {
-        self.definition_scopes.push(scope);
+    pub(crate) fn validate_input(
+        &self,
+        schema: SchemaRef<'_>,
+        input: &InputArena,
+        root: InputId,
+        options: ValidationOptions,
+        start_depth: usize,
+    ) -> Result<ValidatedArena, ValidationError> {
+        validate_at_depth_with_context(
+            schema,
+            input,
+            root,
+            options,
+            start_depth,
+            Arc::clone(&self.definition_scopes),
+            Vec::new(),
+        )
+    }
+
+    pub(crate) fn push_definition_scope(&mut self, scope: DefinitionScope) {
+        Arc::make_mut(&mut self.definition_scopes).push(scope);
     }
 
     pub(crate) fn pop_definition_scope(&mut self) {
-        self.definition_scopes.pop();
+        Arc::make_mut(&mut self.definition_scopes).pop();
     }
 
-    pub(crate) fn definition(&self, name: &'static str) -> Option<std::sync::Arc<Schema>> {
+    pub(crate) fn definition(&self, name: &'static str) -> Option<Arc<Schema>> {
         self.definition_scopes
             .iter()
             .rev()
