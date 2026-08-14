@@ -29,6 +29,8 @@ jobs:
           repository: sifr-lang/sifr
           ref: ${{ env.SIFR_REV }}
           path: .sifr-compiler
+      - name: Check out the required Ruff source
+        run: git -C .sifr-compiler submodule update --init third_party/ruff
       - name: Build the required Sifr compiler
         run: |
           cargo build --release -j 6 -p sifr --manifest-path .sifr-compiler/Cargo.toml
