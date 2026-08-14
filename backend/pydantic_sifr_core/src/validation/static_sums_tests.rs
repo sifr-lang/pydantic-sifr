@@ -92,6 +92,26 @@ fn string_node() -> StaticProgramValue {
     ])
 }
 
+fn control_node(
+    kind: &'static str,
+    children: &[&'static str],
+    metadata_items: Vec<StaticProgramValue>,
+) -> StaticProgramValue {
+    record(vec![
+        ("kind", StaticProgramValue::String(kind)),
+        (
+            "children",
+            list(
+                children
+                    .iter()
+                    .map(|index| StaticProgramValue::Integer(index))
+                    .collect(),
+            ),
+        ),
+        ("metadata", list(metadata_items)),
+    ])
+}
+
 fn definition_reference_node(name: &'static str) -> StaticProgramValue {
     record(vec![
         ("kind", StaticProgramValue::String("definition-ref")),
@@ -255,4 +275,97 @@ fn static_definition_reference_rejects_a_union_target() {
         Err(error) => error,
     };
     assert_eq!(error.details()[0].code, "schema_invalid");
+}
+
+#[test]
+fn static_lax_or_strict_honors_default_and_call_override() {
+    let program = schema_program(vec![
+        control_node(
+            "lax-or-strict",
+            &["1", "2"],
+            vec![metadata("pydantic.strict.default", "true")],
+        ),
+        string_node(),
+        integer_node(),
+    ]);
+    let schema = SchemaRef::from_static_program(program)
+        .unwrap_or_else(|error| panic!("static schema failed: {error}"));
+    let input = parse_json(br#""12""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON input failed: {error}"));
+
+    let default_output = super::super::validate_ref(
+        schema,
+        &input,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("default strict control failed: {error}"));
+    assert!(matches!(
+        default_output.get(default_output.root()),
+        Some(ValidatedValue::FixedInt { .. })
+    ));
+
+    let lax_output = super::super::validate_ref(
+        schema,
+        &input,
+        ValidationOptions {
+            strict_override: Some(false),
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("explicit lax control failed: {error}"));
+    assert!(matches!(
+        lax_output.get(lax_output.root()),
+        Some(ValidatedValue::String(value)) if value == "12"
+    ));
+}
+
+#[test]
+fn static_profile_control_and_chain_execute_in_declared_order() {
+    let profile_program = schema_program(vec![
+        control_node("json-or-structural", &["1", "2"], Vec::new()),
+        string_node(),
+        integer_node(),
+    ]);
+    let profile_schema = SchemaRef::from_static_program(profile_program)
+        .unwrap_or_else(|error| panic!("static profile schema failed: {error}"));
+    let input = parse_json(br#""12""#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON input failed: {error}"));
+    let json_output = super::super::validate_ref(
+        profile_schema,
+        &input,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("JSON profile branch failed: {error}"));
+    assert!(matches!(
+        json_output.get(json_output.root()),
+        Some(ValidatedValue::String(value)) if value == "12"
+    ));
+
+    let chain_program = schema_program(vec![
+        control_node("chain", &["1", "2"], Vec::new()),
+        string_node(),
+        integer_node(),
+    ]);
+    let chain_schema = SchemaRef::from_static_program(chain_program)
+        .unwrap_or_else(|error| panic!("static chain schema failed: {error}"));
+    let chain_output = super::super::validate_ref(
+        chain_schema,
+        &input,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("static chain failed: {error}"));
+    assert!(matches!(
+        chain_output.get(chain_output.root()),
+        Some(ValidatedValue::FixedInt { .. })
+    ));
 }

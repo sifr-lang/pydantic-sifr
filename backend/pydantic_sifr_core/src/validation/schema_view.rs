@@ -53,6 +53,9 @@ pub enum SchemaTag {
     FrozenSet,
     Generator,
     EmbeddedJson,
+    LaxOrStrict,
+    JsonOrStructural,
+    Chain,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -134,6 +137,9 @@ impl<'schema> SchemaRef<'schema> {
                 Schema::FrozenSet { .. } => SchemaTag::FrozenSet,
                 Schema::Generator { .. } => SchemaTag::Generator,
                 Schema::EmbeddedJson(_) => SchemaTag::EmbeddedJson,
+                Schema::LaxOrStrict(_) => SchemaTag::LaxOrStrict,
+                Schema::JsonOrStructural(_) => SchemaTag::JsonOrStructural,
+                Schema::Chain(_) => SchemaTag::Chain,
             }),
             Self::Static(schema) => match schema.kind()? {
                 "none" => Ok(SchemaTag::None),
@@ -155,6 +161,9 @@ impl<'schema> SchemaRef<'schema> {
                 "tuple" => Ok(SchemaTag::Tuple),
                 "dict" => Ok(SchemaTag::Mapping),
                 "set" => Ok(SchemaTag::Set),
+                "lax-or-strict" => Ok(SchemaTag::LaxOrStrict),
+                "json-or-structural" => Ok(SchemaTag::JsonOrStructural),
+                "chain" => Ok(SchemaTag::Chain),
                 _ => Err(schema_error("Static schema kind is not supported")),
             },
         }
@@ -171,6 +180,8 @@ impl<'schema> SchemaRef<'schema> {
         match self {
             Self::Owned(schema) => Ok(match schema {
                 Schema::Nullable(_) | Schema::Definitions(_) | Schema::EmbeddedJson(_) => 1,
+                Schema::LaxOrStrict(_) | Schema::JsonOrStructural(_) => 2,
+                Schema::Chain(schema) => schema.steps().len(),
                 Schema::Union(schema) => schema.choices().len(),
                 Schema::TaggedUnion(schema) => schema.choices().len(),
                 Schema::List { .. }
@@ -245,6 +256,22 @@ impl<'schema> SchemaRef<'schema> {
             _ => Err(schema_error(
                 "Schema node is not a static definition reference",
             )),
+        }
+    }
+
+    pub(crate) fn default_strict(self) -> Result<bool, ValidationError> {
+        match self {
+            Self::Owned(Schema::LaxOrStrict(schema)) => Ok(schema.default_strict()),
+            Self::Static(_) => self
+                .static_metadata()?
+                .iter()
+                .find(|item| item.key == "pydantic.strict.default")
+                .map_or(Ok(false), |item| match item.value {
+                    "true" => Ok(true),
+                    "false" => Ok(false),
+                    _ => Err(schema_error("Static strict default is invalid")),
+                }),
+            _ => Err(schema_error("Schema node is not a strictness control")),
         }
     }
 }
@@ -569,6 +596,17 @@ fn owned_child<'schema>(
             _ => None,
         },
         Schema::Definitions(schema) => (index == 0).then_some(schema.root()),
+        Schema::LaxOrStrict(schema) => match index {
+            0 => Some(schema.lax()),
+            1 => Some(schema.strict()),
+            _ => None,
+        },
+        Schema::JsonOrStructural(schema) => match index {
+            0 => Some(schema.json()),
+            1 => Some(schema.structural()),
+            _ => None,
+        },
+        Schema::Chain(schema) => schema.steps().get(index),
         _ => None,
     }
     .ok_or_else(|| schema_error("Schema child is missing"))?;

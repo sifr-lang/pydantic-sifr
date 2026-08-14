@@ -363,6 +363,14 @@ fn input_matches(
         SchemaTag::DefinitionRef => schema
             .static_definition_target()
             .is_ok_and(|target| input_matches(target, input, input_id, level, depth + 1)),
+        SchemaTag::LaxOrStrict | SchemaTag::JsonOrStructural => (0..2).any(|index| {
+            schema
+                .child(index)
+                .is_ok_and(|child| input_matches(child, input, input_id, level, depth + 1))
+        }),
+        SchemaTag::Chain => schema
+            .child(0)
+            .is_ok_and(|child| input_matches(child, input, input_id, level, depth + 1)),
         _ => false,
     }
 }
@@ -447,6 +455,15 @@ fn static_schema_is_string(schema: SchemaRef<'_>, depth: usize) -> bool {
         Ok(SchemaTag::DefinitionRef) => schema
             .static_definition_target()
             .is_ok_and(|target| static_schema_is_string(target, depth + 1)),
+        Ok(SchemaTag::LaxOrStrict | SchemaTag::JsonOrStructural) => schema
+            .child(0)
+            .is_ok_and(|child| static_schema_is_string(child, depth + 1)),
+        Ok(SchemaTag::Chain) => schema.child_count().ok().is_some_and(|count| {
+            count > 0
+                && schema
+                    .child(count - 1)
+                    .is_ok_and(|child| static_schema_is_string(child, depth + 1))
+        }),
         _ => false,
     }
 }

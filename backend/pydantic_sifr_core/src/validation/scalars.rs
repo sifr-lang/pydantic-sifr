@@ -19,7 +19,7 @@ pub(crate) fn validate_scalar(
     input: &InputValue,
     options: ValidationOptions,
 ) -> Option<Result<ValidatedValue, ValidationError>> {
-    let strict = options.strict;
+    let strict = options.effective_strict();
     let profile = options.profile;
     let tag = match schema.tag() {
         Ok(tag) => tag,
@@ -155,7 +155,7 @@ fn exact_integer(
     if let InputValue::Integer(value) = input {
         return parse_canonical_integer(value, options.limits.max_numeric_digits);
     }
-    if options.strict && options.profile != InputProfile::Strings {
+    if options.effective_strict() && options.profile != InputProfile::Strings {
         return Err(type_error("int_type", "Input must be an integer", "int"));
     }
     match input {
@@ -354,16 +354,19 @@ fn validate_decimal(
     let source = match input {
         InputValue::Decimal(value) => value.as_str(),
         InputValue::Integer(value)
-            if !options.strict || options.profile != InputProfile::Native =>
+            if !options.effective_strict() || options.profile != InputProfile::Native =>
         {
             value.as_str()
         }
         InputValue::Float(value)
-            if (!options.strict || options.profile == InputProfile::Json) && value.is_finite() =>
+            if (!options.effective_strict() || options.profile == InputProfile::Json)
+                && value.is_finite() =>
         {
             return validate_decimal_text(&value.to_string(), constraints, options);
         }
-        InputValue::String(value) if !options.strict || options.profile != InputProfile::Native => {
+        InputValue::String(value)
+            if !options.effective_strict() || options.profile != InputProfile::Native =>
+        {
             value.as_str()
         }
         _ => {
@@ -572,7 +575,7 @@ fn validate_fraction(
             denominator,
         } => rational_from_parts(numerator, denominator, options.limits.max_numeric_digits)?,
         InputValue::Integer(value)
-            if !options.strict || options.profile != InputProfile::Native =>
+            if !options.effective_strict() || options.profile != InputProfile::Native =>
         {
             BigRational::from_integer(parse_canonical_integer(
                 value,
@@ -580,12 +583,17 @@ fn validate_fraction(
             )?)
         }
         InputValue::Float(value)
-            if (!options.strict || options.profile == InputProfile::Json) && value.is_finite() =>
+            if (!options.effective_strict() || options.profile == InputProfile::Json)
+                && value.is_finite() =>
         {
             rational_from_decimal(&value.to_string(), options)?
         }
-        InputValue::Decimal(value) if !options.strict => rational_from_decimal(value, options)?,
-        InputValue::String(value) if !options.strict || options.profile != InputProfile::Native => {
+        InputValue::Decimal(value) if !options.effective_strict() => {
+            rational_from_decimal(value, options)?
+        }
+        InputValue::String(value)
+            if !options.effective_strict() || options.profile != InputProfile::Native =>
+        {
             if let Some((numerator, denominator)) = value.split_once('/') {
                 rational_from_parts(numerator, denominator, options.limits.max_numeric_digits)?
             } else if value.contains('.') || value.contains('e') || value.contains('E') {

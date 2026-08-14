@@ -317,6 +317,87 @@ pub struct ModelSchema {
     pub(crate) location_by_alias: bool,
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct LaxOrStrictSchema {
+    lax: Box<Schema>,
+    strict: Box<Schema>,
+    default_strict: bool,
+}
+
+impl LaxOrStrictSchema {
+    pub fn new(lax: Schema, strict: Schema, default_strict: bool) -> Result<Self, ValidationError> {
+        require_matching_control_identities(&lax, &strict)?;
+        Ok(Self {
+            lax: Box::new(lax),
+            strict: Box::new(strict),
+            default_strict,
+        })
+    }
+
+    #[must_use]
+    pub fn lax(&self) -> &Schema {
+        &self.lax
+    }
+
+    #[must_use]
+    pub fn strict(&self) -> &Schema {
+        &self.strict
+    }
+
+    #[must_use]
+    pub const fn default_strict(&self) -> bool {
+        self.default_strict
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct JsonOrStructuralSchema {
+    json: Box<Schema>,
+    structural: Box<Schema>,
+}
+
+impl JsonOrStructuralSchema {
+    pub fn new(json: Schema, structural: Schema) -> Result<Self, ValidationError> {
+        require_matching_control_identities(&json, &structural)?;
+        Ok(Self {
+            json: Box::new(json),
+            structural: Box::new(structural),
+        })
+    }
+
+    #[must_use]
+    pub fn json(&self) -> &Schema {
+        &self.json
+    }
+
+    #[must_use]
+    pub fn structural(&self) -> &Schema {
+        &self.structural
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChainSchema {
+    steps: Vec<Schema>,
+}
+
+impl ChainSchema {
+    fn new(steps: Vec<Schema>) -> Result<Self, ValidationError> {
+        if steps.is_empty() {
+            return Err(schema_error(
+                "A typed chain must contain at least one step",
+                "nonempty typed chain",
+            ));
+        }
+        Ok(Self { steps })
+    }
+
+    #[must_use]
+    pub fn steps(&self) -> &[Schema] {
+        &self.steps
+    }
+}
+
 impl ModelSchema {
     pub fn new(
         name: &'static str,
@@ -441,6 +522,9 @@ pub enum Schema {
         constraints: CollectionConstraints,
     },
     EmbeddedJson(Box<Self>),
+    LaxOrStrict(LaxOrStrictSchema),
+    JsonOrStructural(JsonOrStructuralSchema),
+    Chain(ChainSchema),
 }
 
 impl Schema {
@@ -483,6 +567,35 @@ impl Schema {
             structural_identity: target.structural_identity_at(0)?,
             sort_key: super::sum_schema::schema_sort_key(target),
         })
+    }
+
+    pub fn lax_or_strict(
+        lax: Self,
+        strict: Self,
+        default_strict: bool,
+    ) -> Result<Self, ValidationError> {
+        LaxOrStrictSchema::new(lax, strict, default_strict).map(Self::LaxOrStrict)
+    }
+
+    pub fn json_or_structural(json: Self, structural: Self) -> Result<Self, ValidationError> {
+        JsonOrStructuralSchema::new(json, structural).map(Self::JsonOrStructural)
+    }
+
+    pub fn chain(steps: Vec<Self>) -> Result<Self, ValidationError> {
+        let mut flattened = Vec::new();
+        for step in steps {
+            match step {
+                Self::Chain(chain) => flattened.extend(chain.steps),
+                step => flattened.push(step),
+            }
+        }
+        match flattened.len() {
+            0 => ChainSchema::new(flattened).map(Self::Chain),
+            1 => flattened.pop().ok_or_else(|| {
+                schema_error("A typed chain lost its only step", "one typed chain step")
+            }),
+            _ => ChainSchema::new(flattened).map(Self::Chain),
+        }
     }
 
     pub(crate) const fn definition_reference_target_is_supported(&self) -> bool {
@@ -562,8 +675,29 @@ impl Schema {
                 )
             }
             Self::EmbeddedJson(inner) => inner.structural_identity_at(depth + 1)?,
+            Self::LaxOrStrict(schema) => schema.lax.structural_identity_at(depth + 1)?,
+            Self::JsonOrStructural(schema) => schema.json.structural_identity_at(depth + 1)?,
+            Self::Chain(schema) => schema
+                .steps
+                .last()
+                .ok_or_else(|| schema_error("A typed chain is empty", "nonempty typed chain"))?
+                .structural_identity_at(depth + 1)?,
         };
         Ok(identity)
+    }
+}
+
+fn require_matching_control_identities(
+    left: &Schema,
+    right: &Schema,
+) -> Result<(), ValidationError> {
+    if left.structural_identity_at(0)? == right.structural_identity_at(0)? {
+        Ok(())
+    } else {
+        Err(schema_error(
+            "Control branches must produce the same structural type",
+            "matching control branch types",
+        ))
     }
 }
 

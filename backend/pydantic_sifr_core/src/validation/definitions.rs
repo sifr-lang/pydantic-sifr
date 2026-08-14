@@ -185,6 +185,18 @@ fn verify_references(
         Schema::Nullable(child) | Schema::EmbeddedJson(child) => {
             verify_references(child, definitions, visited)
         }
+        Schema::LaxOrStrict(control) => {
+            verify_references(control.lax(), definitions, visited)?;
+            verify_references(control.strict(), definitions, visited)
+        }
+        Schema::JsonOrStructural(control) => {
+            verify_references(control.json(), definitions, visited)?;
+            verify_references(control.structural(), definitions, visited)
+        }
+        Schema::Chain(chain) => chain
+            .steps()
+            .iter()
+            .try_for_each(|step| verify_references(step, definitions, visited)),
         Schema::Union(union) => union
             .choices()
             .iter()

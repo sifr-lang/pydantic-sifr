@@ -55,6 +55,7 @@ fuzz_target!(|data: &[u8]| {
         &input,
         ValidationOptions {
             strict: selector & 64 != 0,
+            strict_override: None,
             profile: InputProfile::Json,
             limits: ValidationLimits {
                 max_depth: 32,

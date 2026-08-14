@@ -32,7 +32,7 @@ pub(crate) fn validate_model(
             ));
         }
     };
-    if state.options().strict
+    if state.options().effective_strict()
         && !matches!(
             (state.options().profile, kind),
             (InputProfile::Json, ObjectKind::JsonObject)

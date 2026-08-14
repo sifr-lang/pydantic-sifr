@@ -1,5 +1,6 @@
 mod collections;
 mod construction;
+mod control;
 mod definitions;
 mod error;
 mod models;
@@ -22,11 +23,12 @@ pub use construction::{
 pub use definitions::{DefinitionSchema, DefinitionsSchema};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
 pub use schema::{
-    AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, CollectionConstraints,
+    AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, ChainSchema, CollectionConstraints,
     ComplexConstraints, DecimalConstraints, ExtraPolicy, FieldDefault, FloatConstraints,
-    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, ModelField, ModelSchema,
-    PatternCompileError, PatternSchema, PreparedSchema, RelativeTimeConstraint, Schema,
-    StringConstraints, StringPattern, TemporalKind, TemporalSchema, UrlConstraints,
+    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, JsonOrStructuralSchema,
+    LaxOrStrictSchema, ModelField, ModelSchema, PatternCompileError, PatternSchema, PreparedSchema,
+    RelativeTimeConstraint, Schema, StringConstraints, StringPattern, TemporalKind, TemporalSchema,
+    UrlConstraints,
 };
 pub use schema_view::SchemaRef;
 pub use sum_schema::{
@@ -85,6 +87,7 @@ impl ClockSnapshot {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ValidationOptions {
     pub strict: bool,
+    pub strict_override: Option<bool>,
     pub profile: InputProfile,
     pub limits: ValidationLimits,
     pub clock: ClockSnapshot,
@@ -94,9 +97,20 @@ impl Default for ValidationOptions {
     fn default() -> Self {
         Self {
             strict: false,
+            strict_override: None,
             profile: InputProfile::Native,
             limits: ValidationLimits::default(),
             clock: ClockSnapshot::default(),
+        }
+    }
+}
+
+impl ValidationOptions {
+    #[must_use]
+    pub const fn effective_strict(self) -> bool {
+        match self.strict_override {
+            Some(strict) => strict,
+            None => self.strict,
         }
     }
 }
@@ -153,8 +167,36 @@ pub(crate) fn validate_at_depth_with_context(
     definition_scopes: DefinitionScopes,
     active_references: Vec<(InputId, &'static str)>,
 ) -> Result<ValidatedArena, ValidationError> {
+    validate_at_depth_with_context_mode(
+        schema,
+        input,
+        root,
+        options,
+        start_depth,
+        ValidationContext {
+            definition_scopes,
+            active_references,
+            enforce_strings_input: true,
+        },
+    )
+}
+
+struct ValidationContext {
+    definition_scopes: DefinitionScopes,
+    active_references: Vec<(InputId, &'static str)>,
+    enforce_strings_input: bool,
+}
+
+fn validate_at_depth_with_context_mode(
+    schema: SchemaRef<'_>,
+    input: &InputArena,
+    root: InputId,
+    options: ValidationOptions,
+    start_depth: usize,
+    context: ValidationContext,
+) -> Result<ValidatedArena, ValidationError> {
     validate_options(options)?;
-    if options.profile == InputProfile::Strings {
+    if context.enforce_strings_input && options.profile == InputProfile::Strings {
         check_strings_profile(input, root)?;
     }
     check_input_limits(input, root, start_depth, options.limits)?;
@@ -162,8 +204,8 @@ pub(crate) fn validate_at_depth_with_context(
         input,
         values: Arena::new(),
         options,
-        definition_scopes,
-        active_references,
+        definition_scopes: context.definition_scopes,
+        active_references: context.active_references,
     };
     let root = state.validate_node(schema, root, start_depth)?;
     Ok(ValidatedArena::new(root, state.values))
@@ -223,6 +265,14 @@ impl ValidationState<'_> {
         let tag = schema.tag()?;
         if matches!(
             tag,
+            schema_view::SchemaTag::LaxOrStrict
+                | schema_view::SchemaTag::JsonOrStructural
+                | schema_view::SchemaTag::Chain
+        ) {
+            return control::validate_control(self, schema, input_id, depth);
+        }
+        if matches!(
+            tag,
             schema_view::SchemaTag::Definitions | schema_view::SchemaTag::DefinitionRef
         ) {
             return definitions::validate_definitions(self, schema, input_id, depth);
@@ -246,7 +296,7 @@ impl ValidationState<'_> {
             if let Some(result) = special::validate_special(
                 owned,
                 input,
-                self.options.strict,
+                self.options.effective_strict(),
                 self.options.profile,
                 self.options.clock,
             ) {
@@ -338,6 +388,27 @@ impl ValidationState<'_> {
             start_depth,
             Arc::clone(&self.definition_scopes),
             Vec::new(),
+        )
+    }
+
+    pub(crate) fn validate_chain_input(
+        &self,
+        schema: SchemaRef<'_>,
+        input: &InputArena,
+        root: InputId,
+        start_depth: usize,
+    ) -> Result<ValidatedArena, ValidationError> {
+        validate_at_depth_with_context_mode(
+            schema,
+            input,
+            root,
+            self.options,
+            start_depth,
+            ValidationContext {
+                definition_scopes: Arc::clone(&self.definition_scopes),
+                active_references: Vec::new(),
+                enforce_strings_input: false,
+            },
         )
     }
 
