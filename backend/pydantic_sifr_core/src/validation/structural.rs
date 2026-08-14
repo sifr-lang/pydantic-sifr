@@ -256,6 +256,8 @@ fn structural_description(
         ValidatedValue::Set(_) => (StructuralKind::Set, None),
         ValidatedValue::FrozenSet(_) => (StructuralKind::FrozenSet, None),
         ValidatedValue::Nullable(_) => (StructuralKind::Optional, None),
+        ValidatedValue::Enum(value) => (StructuralKind::Enum, Some(value.name)),
+        ValidatedValue::Union(_) => (StructuralKind::Union, None),
         ValidatedValue::Model(model) => (StructuralKind::Record, Some(model.name)),
         ValidatedValue::Fraction(_)
         | ValidatedValue::Complex(_)
@@ -305,6 +307,20 @@ fn build_structural_edges(values: &Arena<ValidatedValue>) -> Vec<Vec<StructuralN
                     index: 0,
                 },
                 node_id(*id),
+            )],
+            ValidatedValue::Enum(value) => vec![StructuralNodeEdge::new(
+                StructuralEdgeKind::ActiveMember {
+                    name: value.variant,
+                    index: value.index,
+                },
+                node_id(value.discriminant),
+            )],
+            ValidatedValue::Union(value) => vec![StructuralNodeEdge::new(
+                StructuralEdgeKind::ActiveMember {
+                    name: "member",
+                    index: value.index,
+                },
+                node_id(value.value),
             )],
             ValidatedValue::Model(model) => model
                 .fields()

@@ -6,6 +6,7 @@ pub enum LocationItem {
     Field(String),
     Index(usize),
     MappingKey(usize),
+    Branch(String),
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]

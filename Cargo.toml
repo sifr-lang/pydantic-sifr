@@ -21,7 +21,7 @@ manifest = "sifr.toml"
 
 [dependencies]
 pydantic_sifr_core = { path = "backend/pydantic_sifr_core" }
-sifr_runtime = { git = "https://github.com/sifr-lang/sifr.git", rev = "89684aecbd2a321c92912a8cee051b9d9a4fc46a", default-features = false, features = ["structural"] }
+sifr_runtime = { git = "https://github.com/sifr-lang/sifr.git", rev = "6bcce3876bdf4f07fab00c520c58462ec7b9c6ad", default-features = false, features = ["structural"] }
 
 [workspace]
 resolver = "2"

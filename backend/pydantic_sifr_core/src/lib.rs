@@ -20,13 +20,15 @@ pub use schema::{
 };
 pub use validation::{
     AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, ClockSnapshot, CollectionConstraints,
-    ComplexConstraints, DateTimeValue, DateValue, DecimalConstraints, DurationValue, ErrorDetail,
-    ExtraPolicy, FieldDefault, FloatConstraints, FractionConstraints, InputProfile,
-    IntegerConstraints, IntegerTarget, LocationItem, ModelField, ModelSchema, ModelValue,
+    ComplexConstraints, DateTimeValue, DateValue, DecimalConstraints, DiscriminatorPath,
+    DurationValue, EnumSchema, EnumValue, EnumVariant, ErrorDetail, ExtraPolicy, FieldDefault,
+    FloatConstraints, FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget,
+    LiteralSchema, LiteralValue, LocationItem, ModelField, ModelSchema, ModelValue,
     PatternCompileError, PatternSchema, PatternValue, PreparedSchema, RelativeTimeConstraint,
-    Schema, StringConstraints, StringPattern, TemporalKind, TemporalSchema, TimeValue,
-    UrlConstraints, ValidatedArena, ValidatedIterator, ValidatedValue, ValidationError,
-    ValidationLimits, ValidationOptions, ValueId, validate, validate_and_construct,
-    validate_json_and_construct, validate_native_and_construct, validate_strings_and_construct,
-    validate_structural_and_construct, validated_iterator,
+    Schema, SchemaErrorOverride, StringConstraints, StringPattern, TaggedUnionChoice,
+    TaggedUnionSchema, TemporalKind, TemporalSchema, TimeValue, UnionChoice, UnionMode,
+    UnionSchema, UnionValue, UrlConstraints, ValidatedArena, ValidatedIterator, ValidatedValue,
+    ValidationError, ValidationLimits, ValidationOptions, ValueId, validate,
+    validate_and_construct, validate_json_and_construct, validate_native_and_construct,
+    validate_strings_and_construct, validate_structural_and_construct, validated_iterator,
 };

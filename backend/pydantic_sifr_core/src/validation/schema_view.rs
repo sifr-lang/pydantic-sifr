@@ -35,7 +35,11 @@ pub enum SchemaTag {
     Uuid,
     Url,
     Pattern,
+    Literal,
+    Enum,
     Nullable,
+    Union,
+    TaggedUnion,
     Model,
     List,
     Tuple,
@@ -110,7 +114,11 @@ impl<'schema> SchemaRef<'schema> {
                 Schema::Uuid { .. } => SchemaTag::Uuid,
                 Schema::Url(_) => SchemaTag::Url,
                 Schema::Pattern(_) => SchemaTag::Pattern,
+                Schema::Literal(_) => SchemaTag::Literal,
+                Schema::Enum(_) => SchemaTag::Enum,
                 Schema::Nullable(_) => SchemaTag::Nullable,
+                Schema::Union(_) => SchemaTag::Union,
+                Schema::TaggedUnion(_) => SchemaTag::TaggedUnion,
                 Schema::Model(_) => SchemaTag::Model,
                 Schema::List { .. } => SchemaTag::List,
                 Schema::Tuple(_) => SchemaTag::Tuple,
@@ -129,6 +137,9 @@ impl<'schema> SchemaRef<'schema> {
                 "str" => Ok(SchemaTag::String),
                 "bytes" => Ok(SchemaTag::Bytes),
                 "nullable" => Ok(SchemaTag::Nullable),
+                "union" => Ok(SchemaTag::Union),
+                "enum" => Ok(SchemaTag::Enum),
+                "tagged-union" => Ok(SchemaTag::TaggedUnion),
                 "model" => Ok(SchemaTag::Model),
                 "list" => Ok(SchemaTag::List),
                 "tuple" => Ok(SchemaTag::Tuple),
@@ -150,6 +161,8 @@ impl<'schema> SchemaRef<'schema> {
         match self {
             Self::Owned(schema) => Ok(match schema {
                 Schema::Nullable(_) | Schema::EmbeddedJson(_) => 1,
+                Schema::Union(schema) => schema.choices().len(),
+                Schema::TaggedUnion(schema) => schema.choices().len(),
                 Schema::List { .. }
                 | Schema::Set { .. }
                 | Schema::FrozenSet { .. }
@@ -476,6 +489,8 @@ fn owned_child<'schema>(
         | Schema::FrozenSet { item, .. }
         | Schema::Generator { item, .. } => (index == 0).then_some(item.as_ref()),
         Schema::Tuple(items) => items.get(index),
+        Schema::Union(schema) => schema.choices().get(index).map(|choice| &choice.schema),
+        Schema::TaggedUnion(schema) => schema.choices().get(index).map(|choice| &choice.schema),
         Schema::Mapping { key, value, .. } => match index {
             0 => Some(key.as_ref()),
             1 => Some(value.as_ref()),

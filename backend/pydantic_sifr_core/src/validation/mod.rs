@@ -7,6 +7,8 @@ mod schema;
 mod schema_view;
 mod special;
 mod structural;
+mod sum_schema;
+mod sums;
 mod textual;
 mod value;
 
@@ -24,9 +26,13 @@ pub use schema::{
     StringConstraints, StringPattern, TemporalKind, TemporalSchema, UrlConstraints,
 };
 pub use schema_view::SchemaRef;
+pub use sum_schema::{
+    DiscriminatorPath, EnumSchema, EnumVariant, LiteralSchema, LiteralValue, SchemaErrorOverride,
+    TaggedUnionChoice, TaggedUnionSchema, UnionChoice, UnionMode, UnionSchema,
+};
 pub use value::{
-    DateTimeValue, DateValue, DurationValue, ModelValue, PatternValue, TimeValue, ValidatedArena,
-    ValidatedValue, ValueId,
+    DateTimeValue, DateValue, DurationValue, EnumValue, ModelValue, PatternValue, TimeValue,
+    UnionValue, ValidatedArena, ValidatedValue, ValueId,
 };
 
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -134,6 +140,22 @@ pub(crate) fn validate_at_depth(
     Ok(ValidatedArena::new(root, state.values))
 }
 
+pub(crate) fn validate_branch_at(
+    schema: SchemaRef<'_>,
+    input: &InputArena,
+    root: InputId,
+    options: ValidationOptions,
+    start_depth: usize,
+) -> Result<ValidatedArena, ValidationError> {
+    let mut state = ValidationState {
+        input,
+        values: Arena::new(),
+        options,
+    };
+    let root = state.validate_node(schema, root, start_depth)?;
+    Ok(ValidatedArena::new(root, state.values))
+}
+
 pub(crate) fn validate_options(options: ValidationOptions) -> Result<(), ValidationError> {
     if options.limits.max_depth == 0
         || options.limits.max_collection_items == 0
@@ -180,7 +202,8 @@ impl ValidationState<'_> {
                 "valid input arena",
             )
         })?;
-        if schema.tag()? == schema_view::SchemaTag::Nullable {
+        let tag = schema.tag()?;
+        if tag == schema_view::SchemaTag::Nullable && matches!(schema, SchemaRef::Static(_)) {
             let value = if matches!(input, InputValue::Null) {
                 ValidatedValue::Nullable(None)
             } else {
@@ -189,8 +212,18 @@ impl ValidationState<'_> {
             };
             return self.push(value);
         }
-        if schema.tag()? == schema_view::SchemaTag::Model {
+        if tag == schema_view::SchemaTag::Model {
             return models::validate_model(self, schema.model()?, input_id, depth);
+        }
+        if matches!(
+            tag,
+            schema_view::SchemaTag::Literal
+                | schema_view::SchemaTag::Enum
+                | schema_view::SchemaTag::Nullable
+                | schema_view::SchemaTag::Union
+                | schema_view::SchemaTag::TaggedUnion
+        ) {
+            return sums::validate_sum(self, schema, input_id, depth);
         }
         let value = if let Some(result) = scalars::validate_scalar(schema, input, self.options) {
             result?
@@ -235,13 +268,22 @@ impl ValidationState<'_> {
     }
 
     pub(crate) fn import(&mut self, arena: ValidatedArena) -> Result<ValueId, ValidationError> {
+        let root = arena.root();
+        self.import_at(arena, root)
+    }
+
+    pub(crate) fn import_at(
+        &mut self,
+        arena: ValidatedArena,
+        selected: ValueId,
+    ) -> Result<ValueId, ValidationError> {
         let offset = self.values.len();
-        let (root, values) = arena.into_parts();
+        let (_, values) = arena.into_parts();
         for mut value in values {
             value.remap_ids(offset).map_err(arena_validation_error)?;
             self.push(value)?;
         }
-        let root = usize::try_from(root.raw())
+        let root = usize::try_from(selected.raw())
             .ok()
             .and_then(|raw| raw.checked_add(offset))
             .ok_or_else(arena_capacity_error)?;
