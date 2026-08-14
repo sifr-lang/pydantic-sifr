@@ -12,7 +12,8 @@ use sifr_runtime::interop::structural::{
 use crate::NativeValue;
 
 use super::{
-    EnumSchema, LiteralSchema, SchemaRef, TaggedUnionSchema, UnionSchema, ValidationError,
+    DefinitionsSchema, EnumSchema, LiteralSchema, SchemaRef, TaggedUnionSchema, UnionSchema,
+    ValidationError,
 };
 
 const MAX_SCHEMA_DEPTH: usize = 256;
@@ -410,6 +411,12 @@ pub enum Schema {
     Nullable(Box<Self>),
     Union(UnionSchema),
     TaggedUnion(TaggedUnionSchema),
+    Definitions(DefinitionsSchema),
+    DefinitionRef {
+        name: &'static str,
+        structural_identity: ShapeIdentity,
+        sort_key: (u8, String),
+    },
     Model(ModelSchema),
     List {
         item: Box<Self>,
@@ -445,6 +452,33 @@ impl Schema {
         }
     }
 
+    #[must_use]
+    pub fn model_reference(
+        name: &'static str,
+        structural_identity: ShapeIdentity,
+        nominal_name: &'static str,
+    ) -> Self {
+        Self::DefinitionRef {
+            name,
+            structural_identity,
+            sort_key: (
+                31,
+                super::sum_schema::bare_nominal_name(nominal_name).to_owned(),
+            ),
+        }
+    }
+
+    pub fn definition_reference(
+        name: &'static str,
+        target: &Self,
+    ) -> Result<Self, ValidationError> {
+        Ok(Self::DefinitionRef {
+            name,
+            structural_identity: target.structural_identity_at(0)?,
+            sort_key: super::sum_schema::schema_sort_key(target),
+        })
+    }
+
     pub(crate) fn structural_identity_at(
         &self,
         depth: usize,
@@ -472,6 +506,11 @@ impl Schema {
             Self::Nullable(inner) => super::sum_schema::nullable_layout(inner)?.identity(),
             Self::Union(schema) => schema.layout().identity(),
             Self::TaggedUnion(schema) => schema.layout().identity(),
+            Self::Definitions(schema) => schema.structural_identity()?,
+            Self::DefinitionRef {
+                structural_identity,
+                ..
+            } => *structural_identity,
             Self::Model(model) => model.structural_identity,
             Self::List { item, .. } | Self::Generator { item, .. } => {
                 unary_container("list", item.structural_identity_at(depth + 1)?)
