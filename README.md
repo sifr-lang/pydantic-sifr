@@ -67,7 +67,7 @@ aliases, alias paths, JSON input, strings input, structural input, and a stable
 public validation error.
 
 `demos/milestone_ps_7_demo` shows literals, payload-free enums, smart unions,
-field-discriminated tagged unions, recursive models, recursion limits, and
+field-discriminated tagged unions, recursive models, and
 labelled branch errors through the same public API.
 
 Sum declarations use package-owned metadata. Literal keys are

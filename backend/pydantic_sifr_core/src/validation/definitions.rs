@@ -41,7 +41,12 @@ impl DefinitionsSchema {
             definitions,
             scope,
         };
-        verify_references(&schema.root, &schema.scope, &mut BTreeSet::new())?;
+        let mut visited = BTreeSet::new();
+        verify_references(&schema.root, &schema.scope, &mut visited)?;
+        for target in schema.scope.values() {
+            verify_references(target.as_ref(), &schema.scope, &mut visited)?;
+            root_identity(target.as_ref(), &schema.scope, &mut BTreeSet::new())?;
+        }
         schema.structural_identity()?;
         Ok(schema)
     }
@@ -58,6 +63,10 @@ impl DefinitionsSchema {
 
     pub(crate) fn scope(&self) -> BTreeMap<&'static str, Arc<Schema>> {
         self.scope.clone()
+    }
+
+    pub(crate) fn definition(&self, name: &'static str) -> Option<&Schema> {
+        self.scope.get(name).map(Arc::as_ref)
     }
 
     pub(crate) fn structural_identity(&self) -> Result<ShapeIdentity, ValidationError> {
@@ -154,6 +163,11 @@ fn verify_references(
             let target = definitions
                 .get(name)
                 .ok_or_else(|| schema_error("Definition reference is not declared"))?;
+            if !target.definition_reference_target_is_supported() {
+                return Err(schema_error(
+                    "Definition references cannot target sum or definition scopes",
+                ));
+            }
             if target.structural_identity_at(0)? != *structural_identity
                 || super::sum_schema::schema_sort_key(target.as_ref()) != *sort_key
             {
@@ -199,4 +213,35 @@ fn verify_references(
 
 fn schema_error(message: &'static str) -> ValidationError {
     super::scalars::type_error("schema_invalid", message, "valid definition scope")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{Arena, JsonLimits, parse_json};
+
+    #[test]
+    fn repeated_active_reference_returns_recursion_loop() {
+        let input = parse_json(b"true", JsonLimits::default())
+            .unwrap_or_else(|error| panic!("JSON input failed: {error}"));
+        let mut state = ValidationState {
+            input: &input,
+            values: Arena::new(),
+            options: super::super::ValidationOptions::default(),
+            definition_scopes: Vec::new(),
+            active_references: Vec::new(),
+        };
+        assert!(state.enter_reference(input.root(), "tests.Loop"));
+        let error = match validate_reference(
+            &mut state,
+            "tests.Loop",
+            SchemaRef::owned(&Schema::Bool),
+            input.root(),
+            0,
+        ) {
+            Ok(_) => panic!("expected recursion loop"),
+            Err(error) => error,
+        };
+        assert_eq!(error.details()[0].code, "recursion_loop");
+    }
 }

@@ -241,6 +241,7 @@ fn selected_member(
         Schema::TaggedUnion(schema) => selected_from_layout(schema.layout(), arena),
         Schema::Nullable(inner) => selected_from_layout(&nullable_layout(inner)?, arena),
         Schema::EmbeddedJson(inner) => selected_member(inner, arena),
+        Schema::Definitions(definitions) => selected_member(definitions.root(), arena),
         _ => Ok(SelectedMember {
             identity: schema.structural_identity_at(0)?,
             value: Some(arena.root()),
@@ -335,9 +336,9 @@ fn candidate_exactness(
     state: &ValidationState<'_>,
     input_id: InputId,
 ) -> Exactness {
-    if input_matches(schema, state.input(), input_id, MatchLevel::Exact, 0) {
+    if input_matches(schema, state, input_id, MatchLevel::Exact, 0, None) {
         Exactness::Exact
-    } else if input_matches(schema, state.input(), input_id, MatchLevel::Strict, 0) {
+    } else if input_matches(schema, state, input_id, MatchLevel::Strict, 0, None) {
         Exactness::Strict
     } else {
         Exactness::Lax
@@ -352,14 +353,16 @@ enum MatchLevel {
 
 fn input_matches(
     schema: &Schema,
-    input: &InputArena,
+    state: &ValidationState<'_>,
     input_id: InputId,
     level: MatchLevel,
     depth: usize,
+    local_definitions: Option<&super::DefinitionsSchema>,
 ) -> bool {
     if depth > 256 {
         return false;
     }
+    let input = state.input();
     let Some(value) = input.get(input_id) else {
         return false;
     };
@@ -396,56 +399,108 @@ fn input_matches(
         }),
         Schema::Nullable(inner) => {
             matches!(value, InputValue::Null)
-                || input_matches(inner, input, input_id, level, depth + 1)
+                || input_matches(inner, state, input_id, level, depth + 1, local_definitions)
         }
-        Schema::Union(schema) => schema
-            .choices()
-            .iter()
-            .any(|choice| input_matches(&choice.schema, input, input_id, level, depth + 1)),
-        Schema::TaggedUnion(schema) => schema
-            .choices()
-            .iter()
-            .any(|choice| input_matches(&choice.schema, input, input_id, level, depth + 1)),
-        Schema::Definitions(schema) => {
-            input_matches(schema.root(), input, input_id, level, depth + 1)
+        Schema::Union(schema) => schema.choices().iter().any(|choice| {
+            input_matches(
+                &choice.schema,
+                state,
+                input_id,
+                level,
+                depth + 1,
+                local_definitions,
+            )
+        }),
+        Schema::TaggedUnion(schema) => schema.choices().iter().any(|choice| {
+            input_matches(
+                &choice.schema,
+                state,
+                input_id,
+                level,
+                depth + 1,
+                local_definitions,
+            )
+        }),
+        Schema::Definitions(schema) => input_matches(
+            schema.root(),
+            state,
+            input_id,
+            level,
+            depth + 1,
+            Some(schema),
+        ),
+        Schema::DefinitionRef { name, .. } => local_definitions
+            .and_then(|definitions| definitions.definition(name))
+            .map(|target| {
+                input_matches(target, state, input_id, level, depth + 1, local_definitions)
+            })
+            .or_else(|| {
+                state.definition(name).map(|target| {
+                    input_matches(
+                        target.as_ref(),
+                        state,
+                        input_id,
+                        level,
+                        depth + 1,
+                        local_definitions,
+                    )
+                })
+            })
+            .unwrap_or(false),
+        Schema::Model(model) => {
+            model_input_matches(model, state, input_id, level, depth + 1, local_definitions)
         }
-        Schema::DefinitionRef { .. } => false,
-        Schema::Model(model) => model_input_matches(model, input, input_id, level, depth + 1),
-        Schema::List { item, .. } | Schema::Generator { item, .. } => {
-            sequence_matches(item, SequenceKind::List, input, value, level, depth + 1)
-        }
+        Schema::List { item, .. } | Schema::Generator { item, .. } => sequence_matches(
+            item,
+            SequenceKind::List,
+            state,
+            value,
+            level,
+            depth + 1,
+            local_definitions,
+        ),
         Schema::Tuple(items) => match value {
             InputValue::Sequence {
                 kind: SequenceKind::Tuple,
                 items: input_items,
-            } if items.len() == input_items.len() => items
-                .iter()
-                .zip(input_items)
-                .all(|(schema, id)| input_matches(schema, input, *id, level, depth + 1)),
+            } if items.len() == input_items.len() => {
+                items.iter().zip(input_items).all(|(schema, id)| {
+                    input_matches(schema, state, *id, level, depth + 1, local_definitions)
+                })
+            }
             _ => false,
         },
-        Schema::Set { item, .. } => {
-            sequence_matches(item, SequenceKind::Set, input, value, level, depth + 1)
-        }
-        Schema::FrozenSet { item, .. } => sequence_matches(
+        Schema::Set { item, .. } => sequence_matches(
             item,
-            SequenceKind::FrozenSet,
-            input,
+            SequenceKind::Set,
+            state,
             value,
             level,
             depth + 1,
+            local_definitions,
+        ),
+        Schema::FrozenSet { item, .. } => sequence_matches(
+            item,
+            SequenceKind::FrozenSet,
+            state,
+            value,
+            level,
+            depth + 1,
+            local_definitions,
         ),
         Schema::Mapping {
             key, value: item, ..
         } => match value {
             InputValue::Mapping(entries) => entries.iter().all(|(key_id, value_id)| {
-                input_matches(key, input, *key_id, level, depth + 1)
-                    && input_matches(item, input, *value_id, level, depth + 1)
+                input_matches(key, state, *key_id, level, depth + 1, local_definitions)
+                    && input_matches(item, state, *value_id, level, depth + 1, local_definitions)
             }),
-            InputValue::Object { entries, .. } if matches!(key.as_ref(), Schema::String(_)) => {
-                entries
-                    .iter()
-                    .all(|(_, value_id)| input_matches(item, input, *value_id, level, depth + 1))
+            InputValue::Object { entries, .. }
+                if schema_is_string(key, state, local_definitions, depth + 1) =>
+            {
+                entries.iter().all(|(_, value_id)| {
+                    input_matches(item, state, *value_id, level, depth + 1, local_definitions)
+                })
             }
             _ => false,
         },
@@ -455,29 +510,59 @@ fn input_matches(
     }
 }
 
+fn schema_is_string(
+    schema: &Schema,
+    state: &ValidationState<'_>,
+    local_definitions: Option<&super::DefinitionsSchema>,
+    depth: usize,
+) -> bool {
+    if depth > 256 {
+        return false;
+    }
+    match schema {
+        Schema::String(_) => true,
+        Schema::Definitions(definitions) => {
+            schema_is_string(definitions.root(), state, Some(definitions), depth + 1)
+        }
+        Schema::DefinitionRef { name, .. } => local_definitions
+            .and_then(|definitions| definitions.definition(name))
+            .map(|target| schema_is_string(target, state, local_definitions, depth + 1))
+            .or_else(|| {
+                state.definition(name).map(|target| {
+                    schema_is_string(target.as_ref(), state, local_definitions, depth + 1)
+                })
+            })
+            .unwrap_or(false),
+        _ => false,
+    }
+}
+
 fn sequence_matches(
     schema: &Schema,
     expected_kind: SequenceKind,
-    input: &InputArena,
+    state: &ValidationState<'_>,
     value: &InputValue,
     level: MatchLevel,
     depth: usize,
+    local_definitions: Option<&super::DefinitionsSchema>,
 ) -> bool {
     match value {
         InputValue::Sequence { kind, items } if *kind == expected_kind => items
             .iter()
-            .all(|id| input_matches(schema, input, *id, level, depth)),
+            .all(|id| input_matches(schema, state, *id, level, depth, local_definitions)),
         _ => false,
     }
 }
 
 fn model_input_matches(
     model: &super::ModelSchema,
-    input: &InputArena,
+    state: &ValidationState<'_>,
     input_id: InputId,
     level: MatchLevel,
     depth: usize,
+    local_definitions: Option<&super::DefinitionsSchema>,
 ) -> bool {
+    let input = state.input();
     let Some(InputValue::Object { entries, .. }) = input.get(input_id) else {
         return false;
     };
@@ -501,7 +586,7 @@ fn model_input_matches(
                         .flatten()
                 });
             selected.map_or(field.default.is_some(), |value| {
-                input_matches(&field.schema, input, value, level, depth)
+                input_matches(&field.schema, state, value, level, depth, local_definitions)
             })
         })
 }

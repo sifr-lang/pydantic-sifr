@@ -360,6 +360,12 @@ fn input_matches(
             sequence_matches(schema, SequenceKind::Set, input, value, level, depth + 1)
         }
         SchemaTag::Mapping => mapping_input_matches(schema, input, value, level, depth + 1),
+        SchemaTag::Definitions => schema
+            .child(0)
+            .is_ok_and(|root| input_matches(root, input, input_id, level, depth + 1)),
+        SchemaTag::DefinitionRef => schema
+            .static_definition_target()
+            .is_ok_and(|target| input_matches(target, input, input_id, level, depth + 1)),
         _ => false,
     }
 }
@@ -428,9 +434,25 @@ fn mapping_input_matches(
             input_matches(key, input, *key_id, level, depth)
                 && input_matches(item, input, *value_id, level, depth)
         }),
-        InputValue::Object { entries, .. } if key.tag().ok() == Some(SchemaTag::String) => entries
+        InputValue::Object { entries, .. } if static_schema_is_string(key, depth) => entries
             .iter()
             .all(|(_, value_id)| input_matches(item, input, *value_id, level, depth)),
+        _ => false,
+    }
+}
+
+fn static_schema_is_string(schema: SchemaRef<'_>, depth: usize) -> bool {
+    if depth > 256 {
+        return false;
+    }
+    match schema.tag() {
+        Ok(SchemaTag::String) => true,
+        Ok(SchemaTag::Definitions) => schema
+            .child(0)
+            .is_ok_and(|root| static_schema_is_string(root, depth + 1)),
+        Ok(SchemaTag::DefinitionRef) => schema
+            .static_definition_target()
+            .is_ok_and(|target| static_schema_is_string(target, depth + 1)),
         _ => false,
     }
 }
