@@ -410,6 +410,10 @@ def first_difference(current: bytes, generated: bytes) -> str:
         itertools.zip_longest(current_lines, generated_lines, fillvalue="<missing>"),
         start=1,
     ):
+        if current_line.startswith("ledger_sha256 = ") and generated_line.startswith(
+            "ledger_sha256 = "
+        ):
+            continue
         if current_line != generated_line:
             return (
                 f"first difference at line {line_number}: "
