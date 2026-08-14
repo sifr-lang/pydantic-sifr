@@ -491,7 +491,10 @@ fn validated_iterator_defers_item_validation_until_consumption() {
 #[test]
 fn validated_iterator_relaxes_only_the_generator_container_kind() {
     let input = build_native_input(
-        &NativeValue::Tuple(vec![NativeValue::Integer("1".to_owned())]),
+        &NativeValue::Tuple(vec![
+            NativeValue::Integer("1".to_owned()),
+            NativeValue::String("2".to_owned()),
+        ]),
         JsonLimits::default(),
     )
     .unwrap_or_else(|error| panic!("native input failed: {error}"));
@@ -515,6 +518,12 @@ fn validated_iterator_relaxes_only_the_generator_container_kind() {
         .unwrap_or_else(|| panic!("item must exist"))
         .unwrap_or_else(|error| panic!("item validation failed: {error}"));
     assert_eq!(root(&item), &ValidatedValue::ExactInt(BigInt::from(1)));
+    let error = match iterator.next() {
+        Some(Err(error)) => error,
+        Some(Ok(_)) => panic!("string item must not pass strict integer validation"),
+        None => panic!("second item must exist"),
+    };
+    assert_eq!(error.details()[0].code, "int_type");
     assert!(iterator.next().is_none());
 }
 

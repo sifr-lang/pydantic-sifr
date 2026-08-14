@@ -213,14 +213,28 @@ impl ChainInputBuilder<'_> {
                 self.sequence(items, SequenceKind::FrozenSet, depth)?
             }
             ValidatedValue::Mapping(entries) => {
-                let mut converted = Vec::with_capacity(entries.len());
-                for (key, value) in entries {
-                    converted.push((
-                        self.convert(key, depth + 1)?,
-                        self.convert(value, depth + 1)?,
-                    ));
+                if self.profile == InputProfile::Json {
+                    let mut converted = Vec::with_capacity(entries.len());
+                    for (key, value) in entries {
+                        converted.push((
+                            self.json_key_text(key, depth + 1)?,
+                            self.convert(value, depth + 1)?,
+                        ));
+                    }
+                    InputValue::Object {
+                        kind: ObjectKind::JsonObject,
+                        entries: converted,
+                    }
+                } else {
+                    let mut converted = Vec::with_capacity(entries.len());
+                    for (key, value) in entries {
+                        converted.push((
+                            self.convert(key, depth + 1)?,
+                            self.convert(value, depth + 1)?,
+                        ));
+                    }
+                    InputValue::Mapping(converted)
                 }
-                InputValue::Mapping(converted)
             }
             ValidatedValue::Enum(_) | ValidatedValue::Union(_) | ValidatedValue::Nullable(_) => {
                 return Err(control_error(
@@ -259,6 +273,76 @@ impl ChainInputBuilder<'_> {
         } else {
             ObjectKind::Object
         }
+    }
+
+    fn json_key_text(&self, id: ValueId, depth: usize) -> Result<String, ValidationError> {
+        if depth > 256 {
+            return Err(control_error(
+                "Typed chain mapping key exceeds the handoff depth limit",
+                "bounded JSON mapping key",
+            ));
+        }
+        let value = self.source.get(id).ok_or_else(|| {
+            control_error(
+                "Typed chain mapping key index is invalid",
+                "valid mapping key",
+            )
+        })?;
+        let text = match value {
+            ValidatedValue::Bool(value) => value.to_string(),
+            ValidatedValue::ExactInt(value) | ValidatedValue::FixedInt { value, .. } => {
+                value.to_string()
+            }
+            ValidatedValue::Float(value) => value.to_string(),
+            ValidatedValue::Decimal(value) => value.to_string(),
+            ValidatedValue::Fraction(value) => value.to_string(),
+            ValidatedValue::Complex(value) => value.to_string(),
+            ValidatedValue::String(value) => value.clone(),
+            ValidatedValue::Bytes(value) => String::from_utf8(value.clone()).map_err(|_| {
+                control_error(
+                    "Typed chain JSON mapping key is not valid UTF-8",
+                    "textual JSON mapping key",
+                )
+            })?,
+            ValidatedValue::Date(value) => {
+                format!("{:04}-{:02}-{:02}", value.year, value.month, value.day)
+            }
+            ValidatedValue::Time(value) => time_text(value),
+            ValidatedValue::DateTime(value) => format!(
+                "{:04}-{:02}-{:02}T{}",
+                value.date.year,
+                value.date.month,
+                value.date.day,
+                time_text(&value.time)
+            ),
+            ValidatedValue::Duration(value) => duration_text(value),
+            ValidatedValue::Uuid(value) => uuid::Uuid::from_bytes(*value).to_string(),
+            ValidatedValue::Url(value) => value.clone(),
+            ValidatedValue::Pattern(value) => value.source().to_owned(),
+            ValidatedValue::Enum(value) => {
+                return self.json_key_text(value.discriminant, depth + 1);
+            }
+            ValidatedValue::Union(value) => {
+                return self.json_key_text(value.value(), depth + 1);
+            }
+            ValidatedValue::Nullable(Some(value)) => {
+                return self.json_key_text(*value, depth + 1);
+            }
+            ValidatedValue::None
+            | ValidatedValue::Nullable(None)
+            | ValidatedValue::Model(_)
+            | ValidatedValue::Sequence(_)
+            | ValidatedValue::Tuple(_)
+            | ValidatedValue::Mapping(_)
+            | ValidatedValue::Set(_)
+            | ValidatedValue::FrozenSet(_) => {
+                return Err(control_error(
+                    "Typed chain output cannot represent this JSON mapping key",
+                    "textual JSON mapping key",
+                ));
+            }
+        };
+        Ok(text)
     }
 
     fn push(&mut self, value: InputValue) -> Result<InputId, ValidationError> {

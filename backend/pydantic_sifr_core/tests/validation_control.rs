@@ -206,6 +206,31 @@ fn chain_preserves_profile_for_nested_controls_and_errors_at_the_failing_step() 
 }
 
 #[test]
+fn chain_preserves_strict_json_mapping_shape_and_keys() {
+    let mapping = Schema::Mapping {
+        key: Box::new(Schema::exact_integer()),
+        value: Box::new(Schema::exact_integer()),
+        constraints: CollectionConstraints::default(),
+    };
+    let schema = Schema::chain(vec![mapping.clone(), mapping])
+        .unwrap_or_else(|error| panic!("mapping chain failed: {error}"));
+    let input = parse_json(br#"{"1":2}"#, JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON input failed: {error}"));
+
+    let output = validate(
+        &schema,
+        &input,
+        ValidationOptions {
+            strict_override: Some(true),
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("strict JSON mapping chain failed: {error}"));
+    assert!(matches!(root(&output), ValidatedValue::Mapping(entries) if entries.len() == 1));
+}
+
+#[test]
 fn chain_rejects_empty_and_erases_one_step() {
     let error = require_error(Schema::chain(Vec::new()));
     assert_eq!(error.details()[0].code, "schema_invalid");
