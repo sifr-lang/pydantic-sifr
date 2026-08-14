@@ -92,5 +92,5 @@ Core suites in isolated pytest processes from that commit's root `uv.lock`.
 The historical standalone Pydantic Core checkout is not a conformance source.
 
 The gate uses Sifr implementation commit
-`6bcce3876bdf4f07fab00c520c58462ec7b9c6ad`. CI builds that exact compiler
+`4f5492531e81385dd28efe25adfdd57dd678d2a9`. CI builds that exact compiler
 source. The runtime manifests and lockfiles pin the same commit.
