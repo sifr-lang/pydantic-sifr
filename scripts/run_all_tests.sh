@@ -16,6 +16,7 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${root}"
 
 python3 scripts/check_file_size.py
+python3 scripts/check_sifr_pin.py
 python3 -m unittest discover -s tests/unit -p 'test_*.py'
 
 if [[ -d .upstream/pydantic ]]; then
@@ -31,6 +32,7 @@ fi
 
 sifr_bin="${SIFR_BIN:?set SIFR_BIN to the exact required Sifr compiler}"
 "${sifr_bin}" --version
+python3 scripts/check_sifr_union_order.py --sifr-bin "${sifr_bin}"
 "${sifr_bin}" fmt --check src
 "${sifr_bin}" check src/__init__.sifr
 "${sifr_bin}" test src
@@ -38,6 +40,12 @@ python3 scripts/check_sifr_schema_failures.py --sifr-bin "${sifr_bin}"
 python3 scripts/check_static_program_roundtrip.py --sifr-bin "${sifr_bin}"
 (
   cd demos/milestone_ps_6_demo
+  "${sifr_bin}" fetch --locked
+  "${sifr_bin}" fmt --check src
+  "${sifr_bin}" run --locked
+)
+(
+  cd demos/milestone_ps_7_demo
   "${sifr_bin}" fetch --locked
   "${sifr_bin}" fmt --check src
   "${sifr_bin}" run --locked

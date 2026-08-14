@@ -94,13 +94,7 @@ fn validation_error_json(error: &ValidationError) -> String {
             let location = detail
                 .location
                 .iter()
-                .map(|item| match item {
-                    pydantic_sifr_core::LocationItem::Field(value) => {
-                        format!("\"{}\"", escape_json(value))
-                    }
-                    pydantic_sifr_core::LocationItem::Index(value)
-                    | pydantic_sifr_core::LocationItem::MappingKey(value) => value.to_string(),
-                })
+                .map(location_item_json)
                 .collect::<Vec<_>>()
                 .join(",");
             format!(
@@ -118,6 +112,17 @@ fn validation_error_json(error: &ValidationError) -> String {
         details,
         error.is_truncated(),
     )
+}
+
+fn location_item_json(item: &pydantic_sifr_core::LocationItem) -> String {
+    match item {
+        pydantic_sifr_core::LocationItem::Field(value)
+        | pydantic_sifr_core::LocationItem::Branch(value) => {
+            format!("\"{}\"", escape_json(value))
+        }
+        pydantic_sifr_core::LocationItem::Index(value)
+        | pydantic_sifr_core::LocationItem::MappingKey(value) => value.to_string(),
+    }
 }
 
 fn escape_json(value: &str) -> String {
@@ -167,7 +172,9 @@ const fn hex_digit(value: u32) -> char {
 
 #[cfg(test)]
 mod tests {
-    use super::escape_json;
+    use pydantic_sifr_core::LocationItem;
+
+    use super::{escape_json, location_item_json};
 
     #[test]
     fn json_escape_covers_every_control_character() {
@@ -176,6 +183,14 @@ mod tests {
         assert_eq!(
             escaped,
             "\\u0000\\u0001\\u0002\\u0003\\u0004\\u0005\\u0006\\u0007\\b\\t\\n\\u000b\\f\\r\\u000e\\u000f\\u0010\\u0011\\u0012\\u0013\\u0014\\u0015\\u0016\\u0017\\u0018\\u0019\\u001a\\u001b\\u001c\\u001d\\u001e\\u001f"
+        );
+    }
+
+    #[test]
+    fn branch_locations_use_the_stable_string_representation() {
+        assert_eq!(
+            location_item_json(&LocationItem::Branch("int\"choice".to_owned())),
+            "\"int\\\"choice\""
         );
     }
 }

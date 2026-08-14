@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import datetime as dt
 import decimal
+import sys
+import types
 import unittest
 
-from scripts.provenance.collect_upstream import _canonical, _fingerprint
+from scripts.provenance.collect_upstream import _canonical, _fingerprint, _source_hash
 
 
 class FingerprintTests(unittest.TestCase):
@@ -29,7 +31,20 @@ class FingerprintTests(unittest.TestCase):
         with self.assertRaises(TypeError):
             _fingerprint(value)
 
+    def test_module_fingerprint_excludes_runtime_source(self) -> None:
+        module = types.ModuleType("compiled_example")
+        module.__file__ = "/different/platform/compiled_example.so"
+        self.assertEqual(
+            _fingerprint(module),
+            ["module", "compiled_example"],
+        )
+
+    def test_runtime_symbol_fingerprint_excludes_interpreter_source(self) -> None:
+        self.assertEqual(_source_hash(dt.datetime), "external-symbol")
+
+    def test_runtime_import_path_excludes_environment_paths(self) -> None:
+        self.assertEqual(_fingerprint(sys.path), ["runtime-import-path"])
+
 
 if __name__ == "__main__":
     unittest.main()
-

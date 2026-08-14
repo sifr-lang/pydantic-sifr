@@ -1,5 +1,8 @@
 name: ci
 
+env:
+  SIFR_REV: 4f5492531e81385dd28efe25adfdd57dd678d2a9
+
 on:
   pull_request:
   push:
@@ -24,10 +27,13 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           repository: sifr-lang/sifr
-          ref: 89684aecbd2a321c92912a8cee051b9d9a4fc46a
+          ref: ${{ env.SIFR_REV }}
           path: .sifr-compiler
+      - name: Check out the required Ruff source
+        run: git -C .sifr-compiler submodule update --init third_party/ruff
       - name: Build the required Sifr compiler
         run: |
           cargo build --release -j 6 -p sifr --manifest-path .sifr-compiler/Cargo.toml
           echo "SIFR_BIN=$PWD/.sifr-compiler/target/release/sifr" >> "$GITHUB_ENV"
+          echo "SIFR_SYSROOT=$PWD/.sifr-compiler" >> "$GITHUB_ENV"
       - run: scripts/run_all_tests.sh --profile create-pr

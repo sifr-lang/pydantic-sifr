@@ -598,6 +598,16 @@ fn canonical_key(
             key.push(17);
             key.extend(canonical_key(state, *child, usage)?);
         }
+        ValidatedValue::Enum(value) => {
+            key.push(18);
+            append_bytes(&mut key, value.name().as_bytes());
+            key.extend(value.index().to_be_bytes());
+        }
+        ValidatedValue::Union(value) => {
+            key.push(19);
+            key.extend(value.index().to_be_bytes());
+            key.extend(canonical_key(state, value.value(), usage)?);
+        }
         ValidatedValue::Sequence(_)
         | ValidatedValue::Tuple(_)
         | ValidatedValue::Mapping(_)

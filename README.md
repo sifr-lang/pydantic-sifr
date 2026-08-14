@@ -66,6 +66,24 @@ The milestone demo is a dependent package in
 aliases, alias paths, JSON input, strings input, structural input, and a stable
 public validation error.
 
+`demos/milestone_ps_7_demo` shows literals, payload-free enums, smart unions,
+field-discriminated tagged unions, and labelled branch errors through the same
+public API.
+
+Sum declarations use package-owned metadata. Literal keys are
+`pydantic.literal.none|bool|int|str|bytes`. Enum fields use the corresponding
+`pydantic.enum.*` keys in variant order. Integer values are canonical decimal
+strings. Byte values are hexadecimal strings. Ordinary unions accept repeated
+`pydantic.union.label` entries, `pydantic.union.mode`, and
+`pydantic.union.auto_collapse`. A tagged union declares a field/index path,
+then pairs each `pydantic.discriminator.choice` with one or more typed
+`pydantic.discriminator.tag.*` entries.
+
+Union labels use the compiler's canonical member order, not annotation order.
+Supply one label for each member in that canonical order.
+Static `left_to_right` unions also select the first successful member in
+canonical order.
+
 ## Development gates
 
 Set `SIFR_BIN` to the exact required Sifr compiler:
@@ -92,5 +110,5 @@ Core suites in isolated pytest processes from that commit's root `uv.lock`.
 The historical standalone Pydantic Core checkout is not a conformance source.
 
 The gate uses Sifr implementation commit
-`89684aecbd2a321c92912a8cee051b9d9a4fc46a`. CI builds that exact compiler
+`4f5492531e81385dd28efe25adfdd57dd678d2a9`. CI builds that exact compiler
 source. The runtime manifests and lockfiles pin the same commit.

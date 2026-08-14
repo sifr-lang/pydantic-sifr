@@ -127,6 +127,49 @@ impl ModelValue {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct EnumValue {
+    pub(crate) name: &'static str,
+    pub(crate) variant: &'static str,
+    pub(crate) index: usize,
+    pub(crate) discriminant: ValueId,
+}
+
+impl EnumValue {
+    #[must_use]
+    pub const fn name(&self) -> &'static str {
+        self.name
+    }
+
+    #[must_use]
+    pub const fn variant(&self) -> &'static str {
+        self.variant
+    }
+
+    #[must_use]
+    pub const fn index(&self) -> usize {
+        self.index
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnionValue {
+    pub(crate) index: usize,
+    pub(crate) value: ValueId,
+}
+
+impl UnionValue {
+    #[must_use]
+    pub const fn index(&self) -> usize {
+        self.index
+    }
+
+    #[must_use]
+    pub const fn value(&self) -> ValueId {
+        self.value
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum ValidatedValue {
     None,
     Bool(bool),
@@ -145,6 +188,8 @@ pub enum ValidatedValue {
     Uuid([u8; 16]),
     Url(String),
     Pattern(PatternValue),
+    Enum(EnumValue),
+    Union(UnionValue),
     Nullable(Option<ValueId>),
     Model(ModelValue),
     Sequence(Vec<ValueId>),
@@ -216,6 +261,8 @@ impl ValidatedValue {
                 }
             }
             Self::Nullable(Some(id)) => *id = remap_id(*id, offset)?,
+            Self::Enum(value) => value.discriminant = remap_id(value.discriminant, offset)?,
+            Self::Union(value) => value.value = remap_id(value.value, offset)?,
             Self::Model(model) => {
                 for (_, id) in &mut model.fields {
                     *id = remap_id(*id, offset)?;

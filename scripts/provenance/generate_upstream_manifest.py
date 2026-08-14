@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import itertools
 import json
 import os
 import subprocess
@@ -402,6 +403,25 @@ def render(files: list[dict[str, str]], nodes: list[dict[str, Any]]) -> bytes:
     return "\n".join(lines).encode()
 
 
+def first_difference(current: bytes, generated: bytes) -> str:
+    current_lines = current.decode("utf-8", errors="replace").splitlines()
+    generated_lines = generated.decode("utf-8", errors="replace").splitlines()
+    for line_number, (current_line, generated_line) in enumerate(
+        itertools.zip_longest(current_lines, generated_lines, fillvalue="<missing>"),
+        start=1,
+    ):
+        if current_line.startswith("ledger_sha256 = ") and generated_line.startswith(
+            "ledger_sha256 = "
+        ):
+            continue
+        if current_line != generated_line:
+            return (
+                f"first difference at line {line_number}: "
+                f"committed={current_line!r}, generated={generated_line!r}"
+            )
+    return "byte content differs after identical decoded lines"
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--upstream", type=Path, required=True)
@@ -421,7 +441,12 @@ def main() -> int:
         except OSError as error:
             fail(f"could not read {output}: {error}")
         if current != generated:
-            fail(f"generated manifest differs from {output}")
+            fail(
+                f"generated manifest differs from {output}; "
+                f"committed_sha256={digest(current)}; "
+                f"generated_sha256={digest(generated)}; "
+                f"{first_difference(current, generated)}"
+            )
         print(
             f"upstream manifest exact-set audit passed: files={len(files)} "
             f"nodes={len(nodes)} sha256={digest(generated)}"

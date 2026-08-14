@@ -8,6 +8,9 @@ use super::{
     ModelField, ModelSchema, Schema, StringConstraints, ValidationError, scalars::type_error,
 };
 
+mod sums;
+pub(crate) use sums::{StaticMetadata, StaticVariant};
+
 #[derive(Clone, Copy, Debug)]
 pub enum SchemaRef<'schema> {
     Owned(&'schema Schema),
@@ -35,7 +38,11 @@ pub enum SchemaTag {
     Uuid,
     Url,
     Pattern,
+    Literal,
+    Enum,
     Nullable,
+    Union,
+    TaggedUnion,
     Model,
     List,
     Tuple,
@@ -110,7 +117,11 @@ impl<'schema> SchemaRef<'schema> {
                 Schema::Uuid { .. } => SchemaTag::Uuid,
                 Schema::Url(_) => SchemaTag::Url,
                 Schema::Pattern(_) => SchemaTag::Pattern,
+                Schema::Literal(_) => SchemaTag::Literal,
+                Schema::Enum(_) => SchemaTag::Enum,
                 Schema::Nullable(_) => SchemaTag::Nullable,
+                Schema::Union(_) => SchemaTag::Union,
+                Schema::TaggedUnion(_) => SchemaTag::TaggedUnion,
                 Schema::Model(_) => SchemaTag::Model,
                 Schema::List { .. } => SchemaTag::List,
                 Schema::Tuple(_) => SchemaTag::Tuple,
@@ -128,7 +139,11 @@ impl<'schema> SchemaRef<'schema> {
                 "decimal" => Ok(SchemaTag::Decimal),
                 "str" => Ok(SchemaTag::String),
                 "bytes" => Ok(SchemaTag::Bytes),
+                "literal" => Ok(SchemaTag::Literal),
                 "nullable" => Ok(SchemaTag::Nullable),
+                "union" => Ok(SchemaTag::Union),
+                "enum" => Ok(SchemaTag::Enum),
+                "tagged-union" => Ok(SchemaTag::TaggedUnion),
                 "model" => Ok(SchemaTag::Model),
                 "list" => Ok(SchemaTag::List),
                 "tuple" => Ok(SchemaTag::Tuple),
@@ -150,6 +165,8 @@ impl<'schema> SchemaRef<'schema> {
         match self {
             Self::Owned(schema) => Ok(match schema {
                 Schema::Nullable(_) | Schema::EmbeddedJson(_) => 1,
+                Schema::Union(schema) => schema.choices().len(),
+                Schema::TaggedUnion(schema) => schema.choices().len(),
                 Schema::List { .. }
                 | Schema::Set { .. }
                 | Schema::FrozenSet { .. }
@@ -187,6 +204,24 @@ impl<'schema> SchemaRef<'schema> {
             Self::Static(schema) => schema.string_constraints(),
             _ => Err(schema_error("Schema node is not a string")),
         }
+    }
+
+    pub(crate) fn static_metadata(self) -> Result<Vec<StaticMetadata>, ValidationError> {
+        sums::metadata(self)
+    }
+
+    pub(crate) fn static_variants(self) -> Result<Vec<StaticVariant>, ValidationError> {
+        sums::variants(self)
+    }
+
+    pub(crate) fn static_definition(self) -> Result<&'static str, ValidationError> {
+        sums::definition(self)
+    }
+
+    pub(crate) fn static_error(
+        self,
+    ) -> Result<Option<super::SchemaErrorOverride>, ValidationError> {
+        sums::error_override(self)
     }
 }
 
@@ -476,6 +511,8 @@ fn owned_child<'schema>(
         | Schema::FrozenSet { item, .. }
         | Schema::Generator { item, .. } => (index == 0).then_some(item.as_ref()),
         Schema::Tuple(items) => items.get(index),
+        Schema::Union(schema) => schema.choices().get(index).map(|choice| &choice.schema),
+        Schema::TaggedUnion(schema) => schema.choices().get(index).map(|choice| &choice.schema),
         Schema::Mapping { key, value, .. } => match index {
             0 => Some(key.as_ref()),
             1 => Some(value.as_ref()),

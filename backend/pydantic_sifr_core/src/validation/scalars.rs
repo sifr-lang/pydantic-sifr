@@ -116,7 +116,7 @@ fn validate_bool(
         .ok_or_else(|| type_error("bool_parsing", "Input must be a valid boolean", "bool"))
 }
 
-fn validate_integer(
+pub(super) fn validate_integer(
     input: &InputValue,
     options: ValidationOptions,
     target: IntegerTarget,

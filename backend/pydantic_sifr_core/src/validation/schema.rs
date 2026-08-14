@@ -11,7 +11,9 @@ use sifr_runtime::interop::structural::{
 
 use crate::NativeValue;
 
-use super::{SchemaRef, ValidationError};
+use super::{
+    EnumSchema, LiteralSchema, SchemaRef, TaggedUnionSchema, UnionSchema, ValidationError,
+};
 
 const MAX_SCHEMA_DEPTH: usize = 256;
 
@@ -403,7 +405,11 @@ pub enum Schema {
     },
     Url(UrlConstraints),
     Pattern(PatternSchema),
+    Literal(LiteralSchema),
+    Enum(EnumSchema),
     Nullable(Box<Self>),
+    Union(UnionSchema),
+    TaggedUnion(TaggedUnionSchema),
     Model(ModelSchema),
     List {
         item: Box<Self>,
@@ -439,7 +445,10 @@ impl Schema {
         }
     }
 
-    fn structural_identity_at(&self, depth: usize) -> Result<ShapeIdentity, ValidationError> {
+    pub(crate) fn structural_identity_at(
+        &self,
+        depth: usize,
+    ) -> Result<ShapeIdentity, ValidationError> {
         if depth > MAX_SCHEMA_DEPTH {
             return Err(schema_error(
                 "Schema nesting exceeds the static preparation limit",
@@ -456,11 +465,13 @@ impl Schema {
             Self::Complex(_) => primitive("pydantic_sifr.Complex"),
             Self::String(_) | Self::Url(_) => primitive("str"),
             Self::Pattern(_) => primitive("pydantic_sifr.Pattern"),
+            Self::Literal(schema) => schema.layout().identity(),
+            Self::Enum(schema) => schema.structural_identity(),
             Self::Bytes(_) | Self::Uuid { .. } => primitive("bytes"),
             Self::Temporal(schema) => primitive(schema.structural_name()),
-            Self::Nullable(inner) => {
-                unary_container("optional", inner.structural_identity_at(depth + 1)?)
-            }
+            Self::Nullable(inner) => super::sum_schema::nullable_layout(inner)?.identity(),
+            Self::Union(schema) => schema.layout().identity(),
+            Self::TaggedUnion(schema) => schema.layout().identity(),
             Self::Model(model) => model.structural_identity,
             Self::List { item, .. } | Self::Generator { item, .. } => {
                 unary_container("list", item.structural_identity_at(depth + 1)?)
