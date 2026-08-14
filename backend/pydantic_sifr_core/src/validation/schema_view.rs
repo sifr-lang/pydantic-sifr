@@ -43,6 +43,8 @@ pub enum SchemaTag {
     Nullable,
     Union,
     TaggedUnion,
+    Definitions,
+    DefinitionRef,
     Model,
     List,
     Tuple,
@@ -122,6 +124,8 @@ impl<'schema> SchemaRef<'schema> {
                 Schema::Nullable(_) => SchemaTag::Nullable,
                 Schema::Union(_) => SchemaTag::Union,
                 Schema::TaggedUnion(_) => SchemaTag::TaggedUnion,
+                Schema::Definitions(_) => SchemaTag::Definitions,
+                Schema::DefinitionRef { .. } => SchemaTag::DefinitionRef,
                 Schema::Model(_) => SchemaTag::Model,
                 Schema::List { .. } => SchemaTag::List,
                 Schema::Tuple(_) => SchemaTag::Tuple,
@@ -144,6 +148,8 @@ impl<'schema> SchemaRef<'schema> {
                 "union" => Ok(SchemaTag::Union),
                 "enum" => Ok(SchemaTag::Enum),
                 "tagged-union" => Ok(SchemaTag::TaggedUnion),
+                "definitions" => Ok(SchemaTag::Definitions),
+                "definition-ref" => Ok(SchemaTag::DefinitionRef),
                 "model" => Ok(SchemaTag::Model),
                 "list" => Ok(SchemaTag::List),
                 "tuple" => Ok(SchemaTag::Tuple),
@@ -223,6 +229,24 @@ impl<'schema> SchemaRef<'schema> {
     ) -> Result<Option<super::SchemaErrorOverride>, ValidationError> {
         sums::error_override(self)
     }
+
+    pub(crate) fn static_reference(self) -> Result<&'static str, ValidationError> {
+        match self {
+            Self::Static(schema) => schema.reference(),
+            _ => Err(schema_error(
+                "Schema node is not a static definition reference",
+            )),
+        }
+    }
+
+    pub(crate) fn static_definition_target(self) -> Result<Self, ValidationError> {
+        match self {
+            Self::Static(schema) => schema.definition_target().map(Self::Static),
+            _ => Err(schema_error(
+                "Schema node is not a static definition reference",
+            )),
+        }
+    }
 }
 
 impl StaticSchemaRef {
@@ -257,6 +281,32 @@ impl StaticSchemaRef {
 
     fn child_count(self) -> Result<usize, ValidationError> {
         list(field(self.node_record()?, "children")?, "schema children").map(<[_]>::len)
+    }
+
+    fn reference(self) -> Result<&'static str, ValidationError> {
+        string(
+            field(self.node_record()?, "reference")?,
+            "definition reference",
+        )
+    }
+
+    fn definition_target(self) -> Result<Self, ValidationError> {
+        let reference = self.reference()?;
+        let index = self
+            .nodes
+            .iter()
+            .enumerate()
+            .find_map(|(index, value)| {
+                let record = record(value, "static schema node").ok()?;
+                let definition = field(record, "definition").ok()?;
+                matches!(definition, StaticProgramValue::String(value) if *value == reference)
+                    .then_some(index)
+            })
+            .ok_or_else(|| schema_error("Static definition reference is unresolved"))?;
+        Ok(Self {
+            nodes: self.nodes,
+            index,
+        })
     }
 
     fn model(self) -> Result<StaticModelRef, ValidationError> {
@@ -518,6 +568,7 @@ fn owned_child<'schema>(
             1 => Some(value.as_ref()),
             _ => None,
         },
+        Schema::Definitions(schema) => (index == 0).then_some(schema.root()),
         _ => None,
     }
     .ok_or_else(|| schema_error("Schema child is missing"))?;

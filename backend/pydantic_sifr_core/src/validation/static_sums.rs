@@ -10,7 +10,6 @@ use super::{
         Exactness, apply_override, candidate_is_better, collect_branch_error, input_literal,
         input_matches_literal, invalid_input, type_error, validated_field_score, validated_literal,
     },
-    validate_branch_at,
 };
 
 pub(super) fn validate(
@@ -73,13 +72,7 @@ fn validate_literal(
         if matches!(expected, LiteralValue::None) {
             return state.push(ValidatedValue::Nullable(None));
         }
-        let candidate = validate_branch_at(
-            schema.child(0)?,
-            state.input(),
-            input_id,
-            state.options(),
-            depth + 1,
-        )?;
+        let candidate = state.validate_branch(schema.child(0)?, input_id, depth + 1)?;
         let value = state.import(candidate)?;
         return state.push(ValidatedValue::Nullable(Some(value)));
     }
@@ -97,13 +90,7 @@ fn validate_literal(
                 "matching literal member",
             )
         })?;
-    let candidate = validate_branch_at(
-        schema.child(index)?,
-        state.input(),
-        input_id,
-        state.options(),
-        depth + 1,
-    )?;
+    let candidate = state.validate_branch(schema.child(index)?, input_id, depth + 1)?;
     wrap_union(state, index, candidate)
 }
 
@@ -142,13 +129,7 @@ fn validate_nullable(
     if matches!(state.input().get(input_id), Some(InputValue::Null)) {
         return state.push(ValidatedValue::Nullable(None));
     }
-    let candidate = validate_branch_at(
-        schema.child(0)?,
-        state.input(),
-        input_id,
-        state.options(),
-        depth + 1,
-    )?;
+    let candidate = state.validate_branch(schema.child(0)?, input_id, depth + 1)?;
     let value = state.import(candidate)?;
     state.push(ValidatedValue::Nullable(Some(value)))
 }
@@ -178,13 +159,7 @@ fn validate_union(
         ));
     }
     if count == 1 && auto_collapse {
-        let candidate = validate_branch_at(
-            schema.child(0)?,
-            state.input(),
-            input_id,
-            state.options(),
-            depth + 1,
-        )?;
+        let candidate = state.validate_branch(schema.child(0)?, input_id, depth + 1)?;
         return state.import(candidate);
     }
     let labels = union_labels(&metadata, count)?;
@@ -192,7 +167,7 @@ fn validate_union(
     let mut best: Option<(Option<usize>, Exactness, usize, ValidatedArena)> = None;
     for (index, label) in labels.iter().enumerate() {
         let choice = schema.child(index)?;
-        match validate_branch_at(choice, state.input(), input_id, state.options(), depth + 1) {
+        match state.validate_branch(choice, input_id, depth + 1) {
             Ok(candidate) if mode == "left_to_right" => {
                 return wrap_union(state, index, candidate);
             }
@@ -274,19 +249,14 @@ fn validate_tagged_union(
                 error,
             )
         })?;
-    let candidate = validate_branch_at(
-        schema.child(index)?,
-        state.input(),
-        input_id,
-        state.options(),
-        depth + 1,
-    )
-    .map_err(|error_value| {
-        apply_override(
-            error_value.at(LocationItem::Branch(labels[index].to_owned())),
-            error,
-        )
-    })?;
+    let candidate = state
+        .validate_branch(schema.child(index)?, input_id, depth + 1)
+        .map_err(|error_value| {
+            apply_override(
+                error_value.at(LocationItem::Branch(labels[index].to_owned())),
+                error,
+            )
+        })?;
     wrap_union(state, index, candidate)
 }
 

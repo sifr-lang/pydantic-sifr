@@ -22,6 +22,12 @@ class Dog:
 
 
 @const_specialize("pydantic_sifr.schema_contract", "verify_schema")
+class RecursiveNode:
+    value: int64
+    next: RecursiveNode | None
+
+
+@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
 @metadata("field", "status", "pydantic.enum.str", "ready")
 @metadata("field", "status", "pydantic.enum.int", "9")
 @metadata("field", "level", "pydantic.literal.int", "1")
@@ -56,6 +62,13 @@ def main() -> Result[None, ValidationError | RustPanicError]:
             b'{"status":9,"level":1,"value":7,"pet":{"kind":"dog","bark":true}}'
         )
         assert paused.status == Status.PAUSED
+
+        recursive: RecursiveNode = model_validate_json(
+            b'{"value":1,"next":{"value":2,"next":null}}'
+        )
+        expected_recursive_value: int64 = 1
+        assert recursive.value == expected_recursive_value
+        assert recursive.next is not None
 
         branch_seen: bool = False
         try:

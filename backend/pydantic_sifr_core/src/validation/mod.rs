@@ -1,5 +1,6 @@
 mod collections;
 mod construction;
+mod definitions;
 mod error;
 mod models;
 mod scalars;
@@ -18,6 +19,7 @@ pub use construction::{
     validate_and_construct, validate_json_and_construct, validate_native_and_construct,
     validate_strings_and_construct, validate_structural_and_construct,
 };
+pub use definitions::{DefinitionSchema, DefinitionsSchema};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
 pub use schema::{
     AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, CollectionConstraints,
@@ -136,22 +138,8 @@ pub(crate) fn validate_at_depth(
         input,
         values: Arena::new(),
         options,
-    };
-    let root = state.validate_node(schema, root, start_depth)?;
-    Ok(ValidatedArena::new(root, state.values))
-}
-
-pub(crate) fn validate_branch_at(
-    schema: SchemaRef<'_>,
-    input: &InputArena,
-    root: InputId,
-    options: ValidationOptions,
-    start_depth: usize,
-) -> Result<ValidatedArena, ValidationError> {
-    let mut state = ValidationState {
-        input,
-        values: Arena::new(),
-        options,
+        definition_scopes: Vec::new(),
+        active_references: Vec::new(),
     };
     let root = state.validate_node(schema, root, start_depth)?;
     Ok(ValidatedArena::new(root, state.values))
@@ -180,6 +168,8 @@ pub(crate) struct ValidationState<'a> {
     input: &'a InputArena,
     values: Arena<ValidatedValue>,
     options: ValidationOptions,
+    definition_scopes: Vec<std::collections::BTreeMap<&'static str, std::sync::Arc<Schema>>>,
+    active_references: Vec<(InputId, &'static str)>,
 }
 
 impl ValidationState<'_> {
@@ -204,6 +194,12 @@ impl ValidationState<'_> {
             )
         })?;
         let tag = schema.tag()?;
+        if matches!(
+            tag,
+            schema_view::SchemaTag::Definitions | schema_view::SchemaTag::DefinitionRef
+        ) {
+            return definitions::validate_definitions(self, schema, input_id, depth);
+        }
         if tag == schema_view::SchemaTag::Model {
             return models::validate_model(self, schema.model()?, input_id, depth);
         }
@@ -280,6 +276,59 @@ impl ValidationState<'_> {
             .and_then(|raw| raw.checked_add(offset))
             .ok_or_else(arena_capacity_error)?;
         crate::ArenaId::from_usize(root).map_err(arena_validation_error)
+    }
+
+    pub(crate) fn validate_branch(
+        &self,
+        schema: SchemaRef<'_>,
+        root: InputId,
+        start_depth: usize,
+    ) -> Result<ValidatedArena, ValidationError> {
+        let mut state = ValidationState {
+            input: self.input,
+            values: Arena::new(),
+            options: self.options,
+            definition_scopes: self.definition_scopes.clone(),
+            active_references: self.active_references.clone(),
+        };
+        let root = state.validate_node(schema, root, start_depth)?;
+        Ok(ValidatedArena::new(root, state.values))
+    }
+
+    pub(crate) fn push_definition_scope(
+        &mut self,
+        scope: std::collections::BTreeMap<&'static str, std::sync::Arc<Schema>>,
+    ) {
+        self.definition_scopes.push(scope);
+    }
+
+    pub(crate) fn pop_definition_scope(&mut self) {
+        self.definition_scopes.pop();
+    }
+
+    pub(crate) fn definition(&self, name: &'static str) -> Option<std::sync::Arc<Schema>> {
+        self.definition_scopes
+            .iter()
+            .rev()
+            .find_map(|scope| scope.get(name).cloned())
+    }
+
+    pub(crate) fn enter_reference(&mut self, input: InputId, name: &'static str) -> bool {
+        if self.active_references.contains(&(input, name)) {
+            return false;
+        }
+        self.active_references.push((input, name));
+        true
+    }
+
+    pub(crate) fn leave_reference(&mut self, input: InputId, name: &'static str) {
+        if let Some(index) = self
+            .active_references
+            .iter()
+            .rposition(|entry| *entry == (input, name))
+        {
+            self.active_references.remove(index);
+        }
     }
 }
 

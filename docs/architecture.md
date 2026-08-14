@@ -65,6 +65,12 @@ engine. `ValidationOptions` selects native, JSON, or strings input. The same
 options carry strict mode, resource limits, and one clock snapshot. A schema
 does not select a second runtime or a fallback path.
 
+A definition scope owns one exact identity-to-schema table. A reference must
+match the structural identity and canonical kind of its target. Validation resolves each reference
+inside that scope and tracks active input/reference pairs. A repeated reference
+can reuse its target. A repeated active pair returns `recursion_loop`. A finite
+value that exceeds the depth limit returns `recursion_limit`.
+
 The scalar layer keeps exact integers as `BigInt`, decimals as `BigDecimal`,
 and fractions as normalized `BigRational` values. Fixed integer schemas check
 their declared signed or unsigned range. Complex values use two finite `f64`

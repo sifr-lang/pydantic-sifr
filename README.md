@@ -67,8 +67,8 @@ aliases, alias paths, JSON input, strings input, structural input, and a stable
 public validation error.
 
 `demos/milestone_ps_7_demo` shows literals, payload-free enums, smart unions,
-field-discriminated tagged unions, and labelled branch errors through the same
-public API.
+field-discriminated tagged unions, recursive models, recursion limits, and
+labelled branch errors through the same public API.
 
 Sum declarations use package-owned metadata. Literal keys are
 `pydantic.literal.none|bool|int|str|bytes`. Enum fields use the corresponding

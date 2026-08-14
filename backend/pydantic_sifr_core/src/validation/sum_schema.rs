@@ -421,7 +421,7 @@ fn collect_members(
     Ok(())
 }
 
-fn schema_sort_key(schema: &Schema) -> (u8, String) {
+pub(crate) fn schema_sort_key(schema: &Schema) -> (u8, String) {
     // Keep these categories synchronized with
     // sifr_type_system/src/union.rs::type_sort_key. Each package schema maps
     // to the Sifr type that owns its generated structural union position.
@@ -440,6 +440,7 @@ fn schema_sort_key(schema: &Schema) -> (u8, String) {
         Schema::Set { .. } => (12, String::new()),
         Schema::Tuple(_) => (13, String::new()),
         Schema::Model(model) => (31, bare_nominal_name(model.name).to_owned()),
+        Schema::DefinitionRef { sort_key, .. } => sort_key.clone(),
         Schema::FrozenSet { .. } => (31, "frozenset".to_owned()),
         Schema::Fraction(_) => (34, "Fraction".to_owned()),
         Schema::Complex(_) => (34, "Complex".to_owned()),
@@ -451,11 +452,12 @@ fn schema_sort_key(schema: &Schema) -> (u8, String) {
         | Schema::Nullable(_)
         | Schema::Union(_)
         | Schema::TaggedUnion(_)
+        | Schema::Definitions(_)
         | Schema::EmbeddedJson(_) => (41, String::new()),
     }
 }
 
-fn bare_nominal_name(name: &str) -> &str {
+pub(crate) fn bare_nominal_name(name: &str) -> &str {
     let start = name.rfind('.').map_or(0, |index| index + 1);
     &name[start..]
 }

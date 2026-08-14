@@ -9,7 +9,6 @@ use super::{
     UnionMode, UnionSchema, UnionValue, ValidatedArena, ValidatedValue, ValidationError,
     ValidationOptions, ValidationState, ValueId,
     sum_schema::{CanonicalSumLayout, nullable_layout},
-    validate_branch_at,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
@@ -94,13 +93,7 @@ fn validate_nullable(
     if matches!(state.input().get(input_id), Some(InputValue::Null)) {
         return wrap_existing(state, &layout, primitive("None"), None);
     }
-    let candidate = validate_branch_at(
-        SchemaRef::owned(inner),
-        state.input(),
-        input_id,
-        state.options(),
-        depth + 1,
-    )?;
+    let candidate = state.validate_branch(SchemaRef::owned(inner), input_id, depth + 1)?;
     let selected = selected_member(inner, &candidate)?;
     import_selected(state, &layout, candidate, selected)
 }
@@ -113,26 +106,15 @@ fn validate_union(
 ) -> Result<ValueId, ValidationError> {
     if schema.choices().len() == 1 && schema.auto_collapse() {
         let choice = &schema.choices()[0];
-        let candidate = validate_branch_at(
-            SchemaRef::owned(&choice.schema),
-            state.input(),
-            input_id,
-            state.options(),
-            depth + 1,
-        )?;
+        let candidate =
+            state.validate_branch(SchemaRef::owned(&choice.schema), input_id, depth + 1)?;
         let selected = selected_member(&choice.schema, &candidate)?;
         return import_selected(state, schema.layout(), candidate, selected);
     }
     let mut errors = None;
     let mut best: Option<(Option<usize>, Exactness, SelectedMember, ValidatedArena)> = None;
     for choice in schema.choices() {
-        match validate_branch_at(
-            SchemaRef::owned(&choice.schema),
-            state.input(),
-            input_id,
-            state.options(),
-            depth + 1,
-        ) {
+        match state.validate_branch(SchemaRef::owned(&choice.schema), input_id, depth + 1) {
             Ok(candidate) if schema.mode() == UnionMode::LeftToRight => {
                 let selected = selected_member(&choice.schema, &candidate)?;
                 return import_selected(state, schema.layout(), candidate, selected);
@@ -210,19 +192,14 @@ fn validate_tagged_union(
                 schema.error(),
             )
         })?;
-    let candidate = validate_branch_at(
-        SchemaRef::owned(&choice.schema),
-        state.input(),
-        input_id,
-        state.options(),
-        depth + 1,
-    )
-    .map_err(|error| {
-        apply_override(
-            error.at(LocationItem::Branch(choice.label.to_owned())),
-            schema.error(),
-        )
-    })?;
+    let candidate = state
+        .validate_branch(SchemaRef::owned(&choice.schema), input_id, depth + 1)
+        .map_err(|error| {
+            apply_override(
+                error.at(LocationItem::Branch(choice.label.to_owned())),
+                schema.error(),
+            )
+        })?;
     let selected = selected_member(&choice.schema, &candidate)?;
     import_selected(state, schema.layout(), candidate, selected)
 }
@@ -429,6 +406,10 @@ fn input_matches(
             .choices()
             .iter()
             .any(|choice| input_matches(&choice.schema, input, input_id, level, depth + 1)),
+        Schema::Definitions(schema) => {
+            input_matches(schema.root(), input, input_id, level, depth + 1)
+        }
+        Schema::DefinitionRef { .. } => false,
         Schema::Model(model) => model_input_matches(model, input, input_id, level, depth + 1),
         Schema::List { item, .. } | Schema::Generator { item, .. } => {
             sequence_matches(item, SequenceKind::List, input, value, level, depth + 1)
