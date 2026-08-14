@@ -102,6 +102,9 @@ pub(crate) fn validate_definitions(
         SchemaRef::Static(_) if schema.tag()? == SchemaTag::DefinitionRef => {
             let name = schema.static_reference()?;
             let target = schema.static_definition_target()?;
+            if !static_reference_target_is_supported(target)? {
+                return Err(reference_target_error());
+            }
             validate_reference(state, name, target, input_id, depth)
         }
         _ => Err(schema_error("Schema node is not a definition control node")),
@@ -164,9 +167,7 @@ fn verify_references(
                 .get(name)
                 .ok_or_else(|| schema_error("Definition reference is not declared"))?;
             if !target.definition_reference_target_is_supported() {
-                return Err(schema_error(
-                    "Definition references cannot target sum or definition scopes",
-                ));
+                return Err(reference_target_error());
             }
             if target.structural_identity_at(0)? != *structural_identity
                 || super::sum_schema::schema_sort_key(target.as_ref()) != *sort_key
@@ -215,6 +216,26 @@ fn schema_error(message: &'static str) -> ValidationError {
     super::scalars::type_error("schema_invalid", message, "valid definition scope")
 }
 
+fn static_reference_target_is_supported(target: SchemaRef<'_>) -> Result<bool, ValidationError> {
+    Ok(!matches!(
+        target.tag()?,
+        SchemaTag::Literal
+            | SchemaTag::Nullable
+            | SchemaTag::Union
+            | SchemaTag::TaggedUnion
+            | SchemaTag::Definitions
+            | SchemaTag::EmbeddedJson
+    ))
+}
+
+fn reference_target_error() -> ValidationError {
+    super::scalars::type_error(
+        "schema_invalid",
+        "Definition references cannot target flattened wrappers or definition scopes",
+        "non-flattened definition target",
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,7 +249,7 @@ mod tests {
             input: &input,
             values: Arena::new(),
             options: super::super::ValidationOptions::default(),
-            definition_scopes: Vec::new(),
+            definition_scopes: Arc::new(Vec::new()),
             active_references: Vec::new(),
         };
         assert!(state.enter_reference(input.root(), "tests.Loop"));

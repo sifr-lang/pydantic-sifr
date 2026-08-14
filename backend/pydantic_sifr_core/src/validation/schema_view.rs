@@ -170,7 +170,7 @@ impl<'schema> SchemaRef<'schema> {
     pub fn child_count(self) -> Result<usize, ValidationError> {
         match self {
             Self::Owned(schema) => Ok(match schema {
-                Schema::Nullable(_) | Schema::EmbeddedJson(_) => 1,
+                Schema::Nullable(_) | Schema::Definitions(_) | Schema::EmbeddedJson(_) => 1,
                 Schema::Union(schema) => schema.choices().len(),
                 Schema::TaggedUnion(schema) => schema.choices().len(),
                 Schema::List { .. }

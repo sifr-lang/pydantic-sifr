@@ -67,8 +67,8 @@ does not select a second runtime or a fallback path.
 
 A definition scope owns one exact identity-to-schema table. A reference must
 match the structural identity and canonical kind of its target. A reference
-cannot target a sum or another definition scope. This rule keeps union layout
-canonical.
+cannot target a flattened wrapper or another definition scope. Flattened
+wrappers include literals, nullables, unions, tagged unions, and embedded JSON.
 
 Validation checks every definition before it accepts the scope. It resolves
 references inside that scope. Fresh parsed inputs, defaults, mapping keys, and

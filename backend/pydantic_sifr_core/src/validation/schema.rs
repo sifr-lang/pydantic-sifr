@@ -474,8 +474,8 @@ impl Schema {
     ) -> Result<Self, ValidationError> {
         if !target.definition_reference_target_is_supported() {
             return Err(schema_error(
-                "Definition references cannot target sum or definition scopes",
-                "non-sum definition target",
+                "Definition references cannot target flattened wrappers or definition scopes",
+                "non-flattened definition target",
             ));
         }
         Ok(Self::DefinitionRef {
@@ -493,6 +493,7 @@ impl Schema {
                 | Self::Union(_)
                 | Self::TaggedUnion(_)
                 | Self::Definitions(_)
+                | Self::EmbeddedJson(_)
         )
     }
 

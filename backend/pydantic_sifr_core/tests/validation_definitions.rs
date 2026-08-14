@@ -1,5 +1,6 @@
 use std::collections::BTreeMap;
 
+use pydantic_sifr_core::validation::SchemaRef;
 use pydantic_sifr_core::{
     CollectionConstraints, DefinitionSchema, DefinitionsSchema, ExtraPolicy, FieldDefault,
     JsonLimits, ModelField, ModelSchema, NativeValue, PreparedSchema, Schema, StringConstraints,
@@ -440,6 +441,13 @@ fn definition_references_reject_sum_targets() {
         Err(error) => error,
     };
     assert_eq!(error.details()[0].code, "schema_invalid");
+
+    let embedded = Schema::EmbeddedJson(Box::new(Schema::exact_integer()));
+    let error = match Schema::definition_reference("shared.embedded", &embedded) {
+        Ok(_) => panic!("expected embedded JSON reference rejection"),
+        Err(error) => error,
+    };
+    assert_eq!(error.details()[0].code, "schema_invalid");
 }
 
 #[test]
@@ -587,4 +595,46 @@ fn smart_union_ranks_a_mapping_with_a_referenced_string_key() {
         arena.get(entries[0].0),
         Some(ValidatedValue::String(value)) if value == "1"
     ));
+}
+
+#[test]
+fn fresh_input_resets_the_arena_local_recursion_trace() {
+    let identity = primitive("tests.FreshNode");
+    let reference = Schema::model_reference("tests.FreshNode", identity, "tests.FreshNode");
+    let target = model(
+        "tests.FreshNode",
+        identity,
+        vec![required(
+            "raw",
+            Schema::EmbeddedJson(Box::new(reference.clone())),
+        )],
+    );
+    let schema = Schema::Definitions(
+        DefinitionsSchema::new(
+            reference,
+            vec![DefinitionSchema {
+                name: "tests.FreshNode",
+                schema: target,
+            }],
+        )
+        .unwrap_or_else(|error| panic!("definition schema failed: {error}")),
+    );
+    let error = require_validation_error(json(&schema, br#"{"raw":"{\"raw\":null}"}"#));
+    assert_eq!(error.details()[0].code, "json_type");
+    assert_ne!(error.details()[0].code, "recursion_loop");
+}
+
+#[test]
+fn definitions_schema_view_reports_its_root_child() {
+    let schema = Schema::Definitions(
+        DefinitionsSchema::new(Schema::Bool, Vec::new())
+            .unwrap_or_else(|error| panic!("definition schema failed: {error}")),
+    );
+    let view = SchemaRef::owned(&schema);
+    assert_eq!(
+        view.child_count()
+            .unwrap_or_else(|error| panic!("child count failed: {error}")),
+        1
+    );
+    assert!(view.child(0).is_ok());
 }

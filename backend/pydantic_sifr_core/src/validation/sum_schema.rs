@@ -444,7 +444,6 @@ pub(crate) fn schema_sort_key(schema: &Schema) -> (u8, String) {
         Schema::Tuple(_) => (13, String::new()),
         Schema::Model(model) => (31, bare_nominal_name(model.name).to_owned()),
         Schema::DefinitionRef { sort_key, .. } => sort_key.clone(),
-        Schema::Definitions(definitions) => schema_sort_key(definitions.root()),
         Schema::FrozenSet { .. } => (31, "frozenset".to_owned()),
         Schema::Fraction(_) => (34, "Fraction".to_owned()),
         Schema::Complex(_) => (34, "Complex".to_owned()),
@@ -456,6 +455,7 @@ pub(crate) fn schema_sort_key(schema: &Schema) -> (u8, String) {
         | Schema::Nullable(_)
         | Schema::Union(_)
         | Schema::TaggedUnion(_)
+        | Schema::Definitions(_)
         | Schema::EmbeddedJson(_) => (41, String::new()),
     }
 }

@@ -36,6 +36,25 @@ fn union_node_with_metadata(
     ])
 }
 
+fn defined_union_node(name: &'static str, children: &[&'static str]) -> StaticProgramValue {
+    record(vec![
+        ("kind", StaticProgramValue::String("union")),
+        (
+            "children",
+            list(
+                children
+                    .iter()
+                    .map(|index| StaticProgramValue::Integer(index))
+                    .collect(),
+            ),
+        ),
+        ("metadata", list(Vec::new())),
+        ("error_code", StaticProgramValue::None),
+        ("error_message", StaticProgramValue::None),
+        ("definition", StaticProgramValue::String(name)),
+    ])
+}
+
 fn metadata(key: &'static str, value: &'static str) -> StaticProgramValue {
     record(vec![
         ("key", StaticProgramValue::String(key)),
@@ -210,4 +229,30 @@ fn static_smart_union_ranks_a_mapping_with_a_referenced_string_key() {
     ]);
 
     assert_eq!(selected_union_index(program, br#"{"1":2}"#), 1);
+}
+
+#[test]
+fn static_definition_reference_rejects_a_union_target() {
+    let program = schema_program(vec![
+        definition_reference_node("shared.sum"),
+        defined_union_node("shared.sum", &["2", "3"]),
+        integer_node(),
+        string_node(),
+    ]);
+    let schema = SchemaRef::from_static_program(program)
+        .unwrap_or_else(|error| panic!("static schema failed: {error}"));
+    let input = parse_json(b"1", JsonLimits::default())
+        .unwrap_or_else(|error| panic!("JSON input failed: {error}"));
+    let error = match super::super::validate_ref(
+        schema,
+        &input,
+        ValidationOptions {
+            profile: InputProfile::Json,
+            ..ValidationOptions::default()
+        },
+    ) {
+        Ok(_) => panic!("expected static reference rejection"),
+        Err(error) => error,
+    };
+    assert_eq!(error.details()[0].code, "schema_invalid");
 }

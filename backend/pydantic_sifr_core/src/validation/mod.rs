@@ -139,7 +139,7 @@ pub(crate) fn validate_at_depth(
         root,
         options,
         start_depth,
-        Vec::new(),
+        Arc::new(Vec::new()),
         Vec::new(),
     )
 }
@@ -150,7 +150,7 @@ pub(crate) fn validate_at_depth_with_context(
     root: InputId,
     options: ValidationOptions,
     start_depth: usize,
-    definition_scopes: Vec<DefinitionScope>,
+    definition_scopes: DefinitionScopes,
     active_references: Vec<(InputId, &'static str)>,
 ) -> Result<ValidatedArena, ValidationError> {
     validate_options(options)?;
@@ -170,6 +170,7 @@ pub(crate) fn validate_at_depth_with_context(
 }
 
 pub(crate) type DefinitionScope = BTreeMap<&'static str, Arc<Schema>>;
+pub(crate) type DefinitionScopes = Arc<Vec<DefinitionScope>>;
 
 pub(crate) fn validate_options(options: ValidationOptions) -> Result<(), ValidationError> {
     if options.limits.max_depth == 0
@@ -194,7 +195,7 @@ pub(crate) struct ValidationState<'a> {
     input: &'a InputArena,
     values: Arena<ValidatedValue>,
     options: ValidationOptions,
-    definition_scopes: Vec<DefinitionScope>,
+    definition_scopes: DefinitionScopes,
     active_references: Vec<(InputId, &'static str)>,
 }
 
@@ -314,7 +315,7 @@ impl ValidationState<'_> {
             input: self.input,
             values: Arena::new(),
             options: self.options,
-            definition_scopes: self.definition_scopes.clone(),
+            definition_scopes: Arc::clone(&self.definition_scopes),
             active_references: self.active_references.clone(),
         };
         let root = state.validate_node(schema, root, start_depth)?;
@@ -335,17 +336,17 @@ impl ValidationState<'_> {
             root,
             options,
             start_depth,
-            self.definition_scopes.clone(),
+            Arc::clone(&self.definition_scopes),
             Vec::new(),
         )
     }
 
     pub(crate) fn push_definition_scope(&mut self, scope: DefinitionScope) {
-        self.definition_scopes.push(scope);
+        Arc::make_mut(&mut self.definition_scopes).push(scope);
     }
 
     pub(crate) fn pop_definition_scope(&mut self) {
-        self.definition_scopes.pop();
+        Arc::make_mut(&mut self.definition_scopes).pop();
     }
 
     pub(crate) fn definition(&self, name: &'static str) -> Option<Arc<Schema>> {

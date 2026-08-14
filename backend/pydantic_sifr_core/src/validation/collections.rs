@@ -6,7 +6,7 @@ use crate::{
 };
 
 use super::{
-    CollectionConstraints, DefinitionScope, ErrorDetail, InputProfile, LocationItem, Schema,
+    CollectionConstraints, DefinitionScopes, ErrorDetail, InputProfile, LocationItem, Schema,
     SchemaRef, ValidatedArena, ValidatedValue, ValidationError, ValidationOptions, ValidationState,
     ValueId, validate_at_depth_with_context, validate_options,
 };
@@ -241,9 +241,14 @@ fn validate_mapping(
     match input {
         InputValue::Object { kind, entries } => {
             for (index, (field, value_id)) in entries.into_iter().enumerate() {
-                let key =
-                    validate_object_key(state, key_schema, &field, kind == ObjectKind::JsonObject)
-                        .map_err(|error| error.at(LocationItem::MappingKey(index)));
+                let key = validate_object_key(
+                    state,
+                    key_schema,
+                    &field,
+                    kind == ObjectKind::JsonObject,
+                    depth,
+                )
+                .map_err(|error| error.at(LocationItem::MappingKey(index)));
                 let value = state
                     .validate_node(value_schema, value_id, depth + 1)
                     .map_err(|error| error.at(LocationItem::Field(field)));
@@ -352,6 +357,7 @@ fn validate_object_key(
     schema: SchemaRef<'_>,
     field: &str,
     json_key: bool,
+    depth: usize,
 ) -> Result<ValueId, ValidationError> {
     let input = build_native_input(
         &NativeValue::String(field.to_owned()),
@@ -368,7 +374,7 @@ fn validate_object_key(
     if json_key && options.profile == InputProfile::Json {
         options.strict = false;
     }
-    let arena = state.validate_input(schema, &input, input.root(), options, 0)?;
+    let arena = state.validate_input(schema, &input, input.root(), options, depth + 1)?;
     state.import(arena)
 }
 
@@ -645,7 +651,7 @@ pub struct ValidatedIterator<'a> {
     item: Schema,
     constraints: CollectionConstraints,
     options: ValidationOptions,
-    definition_scopes: Vec<DefinitionScope>,
+    definition_scopes: DefinitionScopes,
     index: usize,
     finished: bool,
 }
@@ -657,11 +663,15 @@ pub fn validated_iterator<'a>(
 ) -> Result<ValidatedIterator<'a>, ValidationError> {
     validate_options(options)?;
     let (item, constraints, definition_scopes) = match schema {
-        Schema::Generator { item, constraints } => (item.as_ref(), constraints, Vec::new()),
+        Schema::Generator { item, constraints } => {
+            (item.as_ref(), constraints, std::sync::Arc::new(Vec::new()))
+        }
         Schema::Definitions(definitions) => match definitions.root() {
-            Schema::Generator { item, constraints } => {
-                (item.as_ref(), constraints, vec![definitions.scope()])
-            }
+            Schema::Generator { item, constraints } => (
+                item.as_ref(),
+                constraints,
+                std::sync::Arc::new(vec![definitions.scope()]),
+            ),
             _ => return Err(generator_schema_error()),
         },
         _ => return Err(generator_schema_error()),
@@ -740,7 +750,7 @@ impl Iterator for ValidatedIterator<'_> {
                 child,
                 self.options,
                 0,
-                self.definition_scopes.clone(),
+                std::sync::Arc::clone(&self.definition_scopes),
                 Vec::new(),
             )
             .map_err(|error| error.at(LocationItem::Index(index))),
