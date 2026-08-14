@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ast
 import dataclasses
 import datetime as dt
 import decimal
@@ -16,6 +15,7 @@ import math
 import os
 import pathlib
 import re
+import sys
 import types
 import typing
 import uuid
@@ -56,14 +56,21 @@ def _json_issue(value: object, path: str = "$") -> str:
 
 
 def _source_hash(value: object) -> str:
+    module = _safe_attribute(value, "__module__")
+    if not (
+        module == "tests"
+        or module.startswith("tests.")
+        or module == "pydantic"
+        or module.startswith("pydantic.")
+        or module == "pydantic_core"
+        or module.startswith("pydantic_core.")
+    ):
+        return "external-symbol"
     try:
         source = inspect.getsource(value)
     except Exception:
         return "none"
-    try:
-        normalized = ast.dump(ast.parse(inspect.cleandoc(source)), include_attributes=False)
-    except SyntaxError:
-        normalized = source.replace("\r\n", "\n")
+    normalized = inspect.cleandoc(source).replace("\r\n", "\n")
     return _digest(normalized.encode())
 
 
@@ -91,6 +98,8 @@ def _fingerprint(value: object, seen: set[int] | None = None) -> object:
         ):
             return ["uuid-string-source-value"]
         return ["str", value]
+    if value is sys.path:
+        return ["runtime-import-path"]
     if value is None or isinstance(value, (bool, int)):
         return [type(value).__name__, value]
     if value is Ellipsis:
@@ -133,31 +142,34 @@ def _fingerprint(value: object, seen: set[int] | None = None) -> object:
             [_fingerprint(item, seen) for item in value],
         ]
     if isinstance(value, types.ModuleType):
-        module_file = getattr(value, "__file__", None)
-        module_sha256 = "builtin"
-        if isinstance(module_file, str):
-            try:
-                module_sha256 = _digest(Path(module_file).read_bytes())
-            except OSError:
-                module_sha256 = "unavailable"
-        return ["module", value.__name__, module_sha256]
+        return ["module", value.__name__]
     if isinstance(value, types.GeneratorType):
         code = value.gi_code
         code_payload = [
             code.co_name,
+            code.co_qualname,
             code.co_firstlineno,
+            code.co_argcount,
+            code.co_posonlyargcount,
+            code.co_kwonlyargcount,
             list(code.co_names),
             list(code.co_varnames),
-            code.co_code.hex(),
+            list(code.co_freevars),
+            list(code.co_cellvars),
         ]
         return ["generator-expression", _digest(_canonical(code_payload))]
     if isinstance(value, types.CodeType):
         code_payload = [
             value.co_name,
+            value.co_qualname,
             value.co_firstlineno,
+            value.co_argcount,
+            value.co_posonlyargcount,
+            value.co_kwonlyargcount,
             list(value.co_names),
             list(value.co_varnames),
-            value.co_code.hex(),
+            list(value.co_freevars),
+            list(value.co_cellvars),
         ]
         return ["code", _digest(_canonical(code_payload))]
     if isinstance(value, enum.Enum):
@@ -280,9 +292,8 @@ def _normalized_source_closure(path: Path, root: Path) -> str:
         data = candidate.read_bytes()
         if candidate.suffix == ".py":
             try:
-                text = data.decode("utf-8")
-                data = ast.dump(ast.parse(text), include_attributes=False).encode()
-            except (UnicodeDecodeError, SyntaxError):
+                data = data.decode("utf-8").replace("\r\n", "\n").encode()
+            except UnicodeDecodeError:
                 pass
         normalized.append([candidate.relative_to(root).as_posix(), _digest(data)])
     return _digest(_canonical(normalized))
