@@ -439,13 +439,13 @@ fn schema_sort_key(schema: &Schema) -> (u8, String) {
         Schema::Mapping { .. } => (11, String::new()),
         Schema::Set { .. } => (12, String::new()),
         Schema::Tuple(_) => (13, String::new()),
-        Schema::Model(model) => (31, bare_class_name(model.name).to_owned()),
+        Schema::Model(model) => (31, bare_nominal_name(model.name).to_owned()),
         Schema::FrozenSet { .. } => (31, "frozenset".to_owned()),
-        Schema::Fraction(_) => (34, "pydantic_sifr.Fraction".to_owned()),
-        Schema::Complex(_) => (34, "pydantic_sifr.Complex".to_owned()),
-        Schema::Temporal(schema) => (34, format!("pydantic_sifr.{:?}", schema.kind)),
-        Schema::Pattern(_) => (34, "pydantic_sifr.Pattern".to_owned()),
-        Schema::Enum(schema) => (38, schema.name.to_owned()),
+        Schema::Fraction(_) => (34, "Fraction".to_owned()),
+        Schema::Complex(_) => (34, "Complex".to_owned()),
+        Schema::Temporal(schema) => (34, format!("{:?}", schema.kind)),
+        Schema::Pattern(_) => (34, "Pattern".to_owned()),
+        Schema::Enum(schema) => (38, bare_nominal_name(schema.name).to_owned()),
         Schema::Decimal(_) => (41, String::new()),
         Schema::Literal(_)
         | Schema::Nullable(_)
@@ -455,7 +455,7 @@ fn schema_sort_key(schema: &Schema) -> (u8, String) {
     }
 }
 
-fn bare_class_name(name: &str) -> &str {
+fn bare_nominal_name(name: &str) -> &str {
     let start = name.rfind('.').map_or(0, |index| index + 1);
     &name[start..]
 }
@@ -627,6 +627,34 @@ mod tests {
                 .structural_identity_at(0)
                 .unwrap_or_else(|error| panic!("schema identity failed: {error}"))
         });
+        assert_eq!(layout.identity(), structural_union(&expected));
+    }
+
+    #[test]
+    fn canonical_enum_order_uses_bare_names_across_modules() {
+        let enumeration = |name: &'static str, input: &'static str, discriminant: i64| {
+            Schema::Enum(
+                EnumSchema::new(
+                    name,
+                    vec![EnumVariant {
+                        name: "Only",
+                        input: LiteralValue::String(input.to_owned()),
+                        discriminant,
+                    }],
+                )
+                .unwrap_or_else(|error| panic!("enum schema failed: {error}")),
+            )
+        };
+        let alpha = enumeration("zoo.Alpha", "alpha", 1);
+        let beta = enumeration("main.Beta", "beta", 2);
+        let layout = CanonicalSumLayout::from_schemas([&beta, &alpha], 0)
+            .unwrap_or_else(|error| panic!("canonical layout failed: {error}"));
+        let expected = [&alpha, &beta].map(|schema| {
+            schema
+                .structural_identity_at(0)
+                .unwrap_or_else(|error| panic!("schema identity failed: {error}"))
+        });
+
         assert_eq!(layout.identity(), structural_union(&expected));
     }
 }

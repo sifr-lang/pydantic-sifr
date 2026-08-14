@@ -113,11 +113,43 @@ def main() -> int:
         "package_frozen_set": secondary_expression(
             package, r"\s*Schema::FrozenSet\s*\{\s*\.\.\s*\}", "package frozen set"
         ),
+        "compiler_newtype": secondary_expression(
+            compiler,
+            r"\s*Type::Newtype\s*\{\s*name,\s*\.\.\s*\}",
+            "Sifr newtype",
+        ),
+        "package_fraction": secondary_expression(
+            package, r"\s*Schema::Fraction\([^)]*\)", "package fraction"
+        ),
+        "package_complex": secondary_expression(
+            package, r"\s*Schema::Complex\([^)]*\)", "package complex"
+        ),
+        "package_temporal": secondary_expression(
+            package, r"\s*Schema::Temporal\(schema\)", "package temporal"
+        ),
+        "package_pattern": secondary_expression(
+            package, r"\s*Schema::Pattern\([^)]*\)", "package pattern"
+        ),
+        "compiler_enum": secondary_expression(
+            compiler,
+            r"\s*Type::Enum\s*\{\s*name,\s*\.\.\s*\}",
+            "Sifr enum",
+        ),
+        "package_enum": secondary_expression(
+            package, r"\s*Schema::Enum\(schema\)", "package enum"
+        ),
     }
     expected_secondary_keys = {
         "compiler_class": "ty.display_name()",
-        "package_model": "bare_class_name(model.name).to_owned()",
+        "package_model": "bare_nominal_name(model.name).to_owned()",
         "package_frozen_set": '"frozenset".to_owned()',
+        "compiler_newtype": "name.clone()",
+        "package_fraction": '"Fraction".to_owned()',
+        "package_complex": '"Complex".to_owned()',
+        "package_temporal": 'format!("{:?}", schema.kind)',
+        "package_pattern": '"Pattern".to_owned()',
+        "compiler_enum": "name.clone()",
+        "package_enum": "bare_nominal_name(schema.name).to_owned()",
     }
     if secondary_keys != expected_secondary_keys:
         raise SystemExit(
@@ -125,7 +157,7 @@ def main() -> int:
             f"actual={secondary_keys}\nexpected={expected_secondary_keys}"
         )
     if "name.rfind('.').map_or(0, |index| index + 1)" not in package:
-        raise SystemExit("package model ordering does not use the bare class name")
+        raise SystemExit("package ordering does not use the bare nominal name")
     print(f"Sifr union order check passed: {compiler_path}")
     return 0
 

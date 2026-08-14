@@ -81,6 +81,8 @@ then pairs each `pydantic.discriminator.choice` with one or more typed
 
 Union labels use the compiler's canonical member order, not annotation order.
 Supply one label for each member in that canonical order.
+Static `left_to_right` unions also select the first successful member in
+canonical order.
 
 ## Development gates
 
