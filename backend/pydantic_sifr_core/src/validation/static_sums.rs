@@ -369,7 +369,7 @@ fn input_matches(
                     .is_ok_and(|child| input_matches(child, input, input_id, level, depth + 1))
             })
         }
-        SchemaTag::Model => matches!(value, InputValue::Object { .. }),
+        SchemaTag::Model => model_input_matches(schema, input, input_id, level, depth + 1),
         SchemaTag::List | SchemaTag::Generator => {
             sequence_matches(schema, SequenceKind::List, input, value, level, depth + 1)
         }
@@ -389,7 +389,78 @@ fn input_matches(
         SchemaTag::Set => {
             sequence_matches(schema, SequenceKind::Set, input, value, level, depth + 1)
         }
-        SchemaTag::Mapping => matches!(value, InputValue::Mapping(_) | InputValue::Object { .. }),
+        SchemaTag::Mapping => mapping_input_matches(schema, input, value, level, depth + 1),
+        _ => false,
+    }
+}
+
+fn model_input_matches(
+    schema: SchemaRef<'_>,
+    input: &InputArena,
+    input_id: InputId,
+    level: MatchLevel,
+    depth: usize,
+) -> bool {
+    let Some(InputValue::Object { entries, .. }) = input.get(input_id) else {
+        return false;
+    };
+    let Ok(model) = schema.model() else {
+        return false;
+    };
+    let Ok(fields) = model.fields() else {
+        return false;
+    };
+    fields
+        .iter()
+        .copied()
+        .filter(|field| field.input())
+        .all(|field| {
+            let Ok(aliases) = field.aliases() else {
+                return false;
+            };
+            let selected = aliases
+                .iter()
+                .find_map(|alias| resolve_path(input, input_id, &alias.segments))
+                .or_else(|| {
+                    (aliases.is_empty() || model.populate_by_name().unwrap_or(false))
+                        .then(|| {
+                            let name = field.name().ok()?;
+                            entries
+                                .iter()
+                                .find(|(candidate, _)| candidate == name)
+                                .map(|(_, value)| *value)
+                        })
+                        .flatten()
+                });
+            selected.map_or_else(
+                || field.default().is_ok_and(|value| value.is_some()),
+                |value| {
+                    field.schema().is_ok_and(|field_schema| {
+                        input_matches(field_schema, input, value, level, depth)
+                    })
+                },
+            )
+        })
+}
+
+fn mapping_input_matches(
+    schema: SchemaRef<'_>,
+    input: &InputArena,
+    value: &InputValue,
+    level: MatchLevel,
+    depth: usize,
+) -> bool {
+    let (Ok(key), Ok(item)) = (schema.child(0), schema.child(1)) else {
+        return false;
+    };
+    match value {
+        InputValue::Mapping(entries) => entries.iter().all(|(key_id, value_id)| {
+            input_matches(key, input, *key_id, level, depth)
+                && input_matches(item, input, *value_id, level, depth)
+        }),
+        InputValue::Object { entries, .. } if key.tag().ok() == Some(SchemaTag::String) => entries
+            .iter()
+            .all(|(_, value_id)| input_matches(item, input, *value_id, level, depth)),
         _ => false,
     }
 }
@@ -653,3 +724,7 @@ fn invalid_literal_metadata() -> ValidationError {
         "canonical literal metadata",
     )
 }
+
+#[cfg(test)]
+#[path = "static_sums_tests.rs"]
+mod tests;
