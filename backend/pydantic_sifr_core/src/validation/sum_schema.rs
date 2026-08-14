@@ -422,6 +422,9 @@ fn collect_members(
 }
 
 fn schema_sort_key(schema: &Schema) -> (u8, String) {
+    // Keep these categories synchronized with
+    // sifr_type_system/src/union.rs::type_sort_key. Each package schema maps
+    // to the Sifr type that owns its generated structural union position.
     match schema {
         Schema::None => (0, String::new()),
         Schema::Bool => (1, String::new()),
@@ -494,4 +497,88 @@ fn verify_choices(choices: &[UnionChoice]) -> Result<(), ValidationError> {
 
 fn schema_error(message: &'static str, expected: &'static str) -> ValidationError {
     ValidationError::one(ErrorDetail::new("schema_invalid", message).expected(expected))
+}
+
+#[cfg(test)]
+mod tests {
+    use sifr_runtime::interop::structural::primitive;
+
+    use super::*;
+    use crate::validation::{
+        CollectionConstraints, EnumSchema, EnumVariant, ExtraPolicy, LiteralValue, ModelSchema,
+        RelativeTimeConstraint, TemporalKind, TemporalSchema, UnionChoice, UnionMode, UnionSchema,
+    };
+
+    #[test]
+    fn canonical_layout_matches_compiler_order_for_nominal_temporal_and_enum_members() {
+        let model = Schema::Model(
+            ModelSchema::new(
+                "tests.Record",
+                primitive("tests.Record"),
+                Vec::new(),
+                ExtraPolicy::Ignore,
+                false,
+                true,
+            )
+            .unwrap_or_else(|error| panic!("model schema failed: {error}")),
+        );
+        let frozen = Schema::FrozenSet {
+            item: Box::new(Schema::Bool),
+            constraints: CollectionConstraints::default(),
+        };
+        let temporal = Schema::Temporal(TemporalSchema {
+            kind: TemporalKind::DateTime,
+            relative: Some(RelativeTimeConstraint::Past),
+        });
+        let enumeration = Schema::Enum(
+            EnumSchema::new(
+                "tests.Status",
+                vec![EnumVariant {
+                    name: "Ready",
+                    input: LiteralValue::String("ready".to_owned()),
+                    discriminant: 1,
+                }],
+            )
+            .unwrap_or_else(|error| panic!("enum schema failed: {error}")),
+        );
+        let identities = [&model, &frozen, &temporal, &enumeration].map(|schema| {
+            schema
+                .structural_identity_at(0)
+                .unwrap_or_else(|error| panic!("schema identity failed: {error}"))
+        });
+        let build = |schemas: Vec<Schema>| {
+            UnionSchema::new(
+                schemas
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, schema)| UnionChoice {
+                        label: ["model", "frozen", "temporal", "enum"][index],
+                        schema,
+                    })
+                    .collect(),
+                UnionMode::Smart,
+                true,
+                None,
+            )
+            .unwrap_or_else(|error| panic!("union schema failed: {error}"))
+        };
+        let forward = build(vec![
+            model.clone(),
+            frozen.clone(),
+            temporal.clone(),
+            enumeration.clone(),
+        ]);
+        let reverse = build(vec![enumeration, temporal, frozen, model]);
+        assert_eq!(forward.layout().members(), reverse.layout().members());
+
+        let positions = identities.map(|identity| {
+            forward
+                .layout()
+                .index_of(identity)
+                .unwrap_or_else(|| panic!("union member is missing"))
+        });
+        assert!(positions[0] < positions[2]);
+        assert!(positions[1] < positions[2]);
+        assert!(positions[2] < positions[3]);
+    }
 }

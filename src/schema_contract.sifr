@@ -98,6 +98,8 @@ class SchemaNodePayload:
     integer_target: str | None
     integer_constraints: SchemaIntegerConstraintsPayload | None
     string_constraints: SchemaStringConstraintsPayload | None
+    metadata: list[ShapeMetadata]
+    variants: list[ShapeVariant]
 
 
 class SchemaProgramPayload:
@@ -141,6 +143,30 @@ class ModelRules:
     populate_by_name: bool
     location_by_alias: bool
     issue: str | None
+
+
+@const_eval
+def is_literal_key(key: str) -> bool:
+    return (
+        key == "pydantic.literal.none"
+        or key == "pydantic.literal.bool"
+        or key == "pydantic.literal.int"
+        or key == "pydantic.literal.str"
+        or key == "pydantic.literal.bytes"
+    )
+
+
+@const_eval
+def sum_kind(base: str, metadata: list[ShapeMetadata]) -> str:
+    for item in metadata:
+        if is_literal_key(item.key):
+            return "literal"
+        if base == "union" and (
+            item.key == "pydantic.discriminator.field"
+            or item.key == "pydantic.discriminator.index"
+        ):
+            return "tagged-union"
+    return base + ""
 
 
 @const_eval
@@ -447,6 +473,8 @@ def rebase_nodes(
                 node.integer_target,
                 node.integer_constraints,
                 node.string_constraints,
+                node.metadata,
+                node.variants,
             )
         )
     return output
@@ -473,7 +501,7 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             else:
                 integer_target = "int"
         leaf: SchemaNodePayload = SchemaNodePayload(
-            kind,
+            sum_kind(kind, inherited),
             [],
             None,
             None,
@@ -483,6 +511,8 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             integer_target,
             rules.integer_constraints,
             rules.string_constraints,
+            inherited,
+            [],
         )
         return NodeBuildResult([leaf], 0, None)
     if node.kind == "recursive_reference":
@@ -497,6 +527,8 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
+            inherited,
+            [],
         )
         return NodeBuildResult([reference], 0, None)
     if node.kind == "list" or node.kind == "set" or node.kind == "optional":
@@ -512,7 +544,7 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
         if node.kind == "optional":
             unary_kind = "nullable"
         unary: SchemaNodePayload = SchemaNodePayload(
-            unary_kind,
+            sum_kind(unary_kind, inherited),
             [built_element.root],
             None,
             None,
@@ -522,6 +554,8 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
+            inherited,
+            [],
         )
         root: int = len(built_element.nodes)
         return NodeBuildResult(built_element.nodes + [unary], root, None)
@@ -552,6 +586,8 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
+            inherited,
+            [],
         )
         root: int = len(nodes)
         return NodeBuildResult(nodes + [mapping], root, None)
@@ -566,7 +602,7 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             member_nodes = member_nodes + rebase_nodes(built_member.nodes, offset)
             member_roots.append(built_member.root + offset)
         sequence: SchemaNodePayload = SchemaNodePayload(
-            node.kind,
+            sum_kind(node.kind, inherited),
             member_roots,
             None,
             None,
@@ -576,6 +612,8 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
+            inherited,
+            [],
         )
         root: int = len(member_nodes)
         return NodeBuildResult(member_nodes + [sequence], root, None)
@@ -617,17 +655,21 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             model_rules_value.populate_by_name,
             model_rules_value.location_by_alias,
         )
+        model_definition: str | None = node.identity
+        model_value: SchemaModelPayload | None = model_payload
         model: SchemaNodePayload = SchemaNodePayload(
             "model",
             field_roots,
-            node.identity,
+            model_definition,
             None,
             override.code,
             override.message,
-            model_payload,
+            model_value,
             None,
             None,
             None,
+            inherited + node.metadata,
+            [],
         )
         root: int = len(field_nodes)
         return NodeBuildResult(field_nodes + [model], root, None)
@@ -635,10 +677,11 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
         override = error_override(inherited + node.metadata)
         if override.issue is not None:
             return NodeBuildResult([], 0, override.issue)
+        enum_definition: str | None = node.identity
         enumeration: SchemaNodePayload = SchemaNodePayload(
             "enum",
             [],
-            node.identity,
+            enum_definition,
             None,
             override.code,
             override.message,
@@ -646,6 +689,8 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
+            inherited + node.metadata,
+            node.variants,
         )
         return NodeBuildResult([enumeration], 0, None)
     if node.kind == "newtype":
@@ -658,10 +703,11 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
         built_inner: NodeBuildResult = build_node(inner, [])
         if built_inner.issue is not None:
             return built_inner
+        wrapper_definition: str | None = node.identity
         wrapper: SchemaNodePayload = SchemaNodePayload(
             "model",
             [built_inner.root],
-            node.identity,
+            wrapper_definition,
             None,
             override.code,
             override.message,
@@ -669,6 +715,8 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
+            inherited + node.metadata,
+            [],
         )
         root: int = len(built_inner.nodes)
         return NodeBuildResult(built_inner.nodes + [wrapper], root, None)
@@ -681,7 +729,13 @@ def expected_arity(kind: str) -> int:
         return 1
     if kind == "dict":
         return 2
-    if kind == "model" or kind == "tuple" or kind == "union":
+    if (
+        kind == "model"
+        or kind == "tuple"
+        or kind == "union"
+        or kind == "literal"
+        or kind == "tagged-union"
+    ):
         return -1
     return 0
 

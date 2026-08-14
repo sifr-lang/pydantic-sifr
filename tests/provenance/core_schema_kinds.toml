@@ -406,7 +406,7 @@ evidence = ["validators/text_bytes", "core/string_pipeline_order"]
 family = "schema"
 name = "tagged-union"
 class = "adapted"
-normal_form = "field/path or typed-callback discriminator"
+normal_form = "field/path discriminator"
 owner_milestone = "ps_7"
 evidence = ["validators/tagged_unions"]
 

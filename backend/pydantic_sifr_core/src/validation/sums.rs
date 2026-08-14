@@ -4,15 +4,16 @@ use sifr_runtime::interop::structural::{ShapeIdentity, primitive};
 use crate::{InputArena, InputId, InputValue, SequenceKind};
 
 use super::{
-    AliasSegment, EnumValue, ErrorDetail, LiteralSchema, LiteralValue, LocationItem, Schema,
-    SchemaErrorOverride, SchemaRef, TaggedUnionSchema, UnionMode, UnionSchema, UnionValue,
-    ValidatedArena, ValidatedValue, ValidationError, ValidationState, ValueId,
+    AliasSegment, BytesConstraints, EnumValue, ErrorDetail, LiteralSchema, LiteralValue,
+    LocationItem, Schema, SchemaErrorOverride, SchemaRef, StringConstraints, TaggedUnionSchema,
+    UnionMode, UnionSchema, UnionValue, ValidatedArena, ValidatedValue, ValidationError,
+    ValidationOptions, ValidationState, ValueId,
     sum_schema::{CanonicalSumLayout, nullable_layout},
     validate_branch_at,
 };
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-enum Exactness {
+pub(super) enum Exactness {
     Lax,
     Strict,
     Exact,
@@ -25,24 +26,17 @@ pub(crate) fn validate_sum(
     depth: usize,
 ) -> Result<ValueId, ValidationError> {
     let SchemaRef::Owned(schema) = schema else {
-        return Err(type_error(
-            "schema_invalid",
-            "Static sum schema execution is not prepared",
-            "prepared static sum schema",
-        ));
+        return super::static_sums::validate(state, schema, input_id, depth);
     };
     match schema {
         Schema::Literal(schema) => validate_literal(state, schema, input_id),
         Schema::Enum(schema) => {
             let input = state.input().get(input_id).ok_or_else(invalid_input)?;
-            let literal = input_literal(input).ok_or_else(|| {
-                type_error("enum", "Input is not a declared enum value", "enum value")
-            })?;
             let (index, variant) = schema
                 .variants()
                 .iter()
                 .enumerate()
-                .find(|(_, variant)| variant.input == literal)
+                .find(|(_, variant)| input_matches_literal(&variant.input, input, state.options()))
                 .ok_or_else(|| {
                     type_error("enum", "Input is not a declared enum value", "enum value")
                 })?;
@@ -74,11 +68,10 @@ fn validate_literal(
     input_id: InputId,
 ) -> Result<ValueId, ValidationError> {
     let input = state.input().get(input_id).ok_or_else(invalid_input)?;
-    let literal = input_literal(input).ok_or_else(|| literal_error(schema))?;
     let Some(expected) = schema
         .values()
         .iter()
-        .find(|expected| **expected == literal)
+        .find(|expected| input_matches_literal(expected, input, state.options()))
     else {
         return Err(literal_error(schema));
     };
@@ -197,24 +190,16 @@ fn validate_tagged_union(
                 schema.error(),
             )
         })?;
-    let tag = state
-        .input()
-        .get(tag_id)
-        .and_then(input_literal)
-        .ok_or_else(|| {
-            apply_override(
-                type_error(
-                    "union_tag_invalid",
-                    "Tagged union discriminator has an unsupported value",
-                    "declared discriminator value",
-                ),
-                schema.error(),
-            )
-        })?;
+    let tag_input = state.input().get(tag_id).ok_or_else(invalid_input)?;
     let choice = schema
         .choices()
         .iter()
-        .find(|choice| choice.tags.contains(&tag))
+        .find(|choice| {
+            choice
+                .tags
+                .iter()
+                .any(|tag| input_matches_literal(tag, tag_input, state.options()))
+        })
         .ok_or_else(|| {
             apply_override(
                 type_error(
@@ -426,7 +411,12 @@ fn input_matches(
         Schema::Literal(schema) => {
             input_literal(value).is_some_and(|value| schema.values().contains(&value))
         }
-        Schema::Enum(_) => false,
+        Schema::Enum(schema) => input_literal(value).is_some_and(|value| {
+            schema
+                .variants()
+                .iter()
+                .any(|variant| variant.input == value)
+        }),
         Schema::Nullable(inner) => {
             matches!(value, InputValue::Null)
                 || input_matches(inner, input, input_id, level, depth + 1)
@@ -478,7 +468,9 @@ fn input_matches(
             }
             _ => false,
         },
-        Schema::EmbeddedJson(_) => false,
+        Schema::EmbeddedJson(_) => {
+            matches!(value, InputValue::String(_) | InputValue::Bytes(_))
+        }
     }
 }
 
@@ -554,7 +546,7 @@ fn resolve_path_in_arena(
     Some(current)
 }
 
-fn validated_field_score(arena: &ValidatedArena) -> Option<usize> {
+pub(super) fn validated_field_score(arena: &ValidatedArena) -> Option<usize> {
     let mut total = 0_usize;
     let mut found_model = false;
     let mut pending = vec![arena.root()];
@@ -580,7 +572,7 @@ fn validated_field_score(arena: &ValidatedArena) -> Option<usize> {
     found_model.then_some(total)
 }
 
-const fn candidate_is_better(
+pub(super) const fn candidate_is_better(
     fields: Option<usize>,
     exactness: Exactness,
     best_fields: Option<usize>,
@@ -592,7 +584,7 @@ const fn candidate_is_better(
     }
 }
 
-fn input_literal(input: &InputValue) -> Option<LiteralValue> {
+pub(super) fn input_literal(input: &InputValue) -> Option<LiteralValue> {
     match input {
         InputValue::Null => Some(LiteralValue::None),
         InputValue::Bool(value) => Some(LiteralValue::Bool(*value)),
@@ -603,7 +595,37 @@ fn input_literal(input: &InputValue) -> Option<LiteralValue> {
     }
 }
 
-fn validated_literal(value: &LiteralValue) -> ValidatedValue {
+pub(super) fn input_matches_literal(
+    expected: &LiteralValue,
+    input: &InputValue,
+    options: ValidationOptions,
+) -> bool {
+    if options.profile != super::InputProfile::Strings {
+        return input_literal(input).as_ref() == Some(expected);
+    }
+    let schema = match expected {
+        LiteralValue::None => Schema::None,
+        LiteralValue::Bool(_) => Schema::Bool,
+        LiteralValue::Integer(_) => Schema::exact_integer(),
+        LiteralValue::String(_) => Schema::String(StringConstraints::default()),
+        LiteralValue::Bytes(_) => Schema::Bytes(BytesConstraints::default()),
+    };
+    let Some(Ok(value)) =
+        super::scalars::validate_scalar(SchemaRef::owned(&schema), input, options)
+    else {
+        return false;
+    };
+    match (expected, value) {
+        (LiteralValue::None, ValidatedValue::None) => true,
+        (LiteralValue::Bool(expected), ValidatedValue::Bool(actual)) => *expected == actual,
+        (LiteralValue::Integer(expected), ValidatedValue::ExactInt(actual)) => *expected == actual,
+        (LiteralValue::String(expected), ValidatedValue::String(actual)) => *expected == actual,
+        (LiteralValue::Bytes(expected), ValidatedValue::Bytes(actual)) => *expected == actual,
+        _ => false,
+    }
+}
+
+pub(super) fn validated_literal(value: &LiteralValue) -> ValidatedValue {
     match value {
         LiteralValue::None => ValidatedValue::None,
         LiteralValue::Bool(value) => ValidatedValue::Bool(*value),
@@ -631,7 +653,7 @@ fn literal_error(schema: &LiteralSchema) -> ValidationError {
     )
 }
 
-fn collect_branch_error(
+pub(super) fn collect_branch_error(
     errors: &mut Option<ValidationError>,
     error: ValidationError,
     limit: usize,
@@ -643,7 +665,7 @@ fn collect_branch_error(
     }
 }
 
-fn apply_override(
+pub(super) fn apply_override(
     error: ValidationError,
     declaration: Option<SchemaErrorOverride>,
 ) -> ValidationError {
@@ -654,7 +676,7 @@ fn apply_override(
     })
 }
 
-fn invalid_input() -> ValidationError {
+pub(super) fn invalid_input() -> ValidationError {
     type_error(
         "internal_input",
         "Input arena index is invalid",
@@ -662,6 +684,10 @@ fn invalid_input() -> ValidationError {
     )
 }
 
-fn type_error(code: &'static str, message: &'static str, expected: &str) -> ValidationError {
+pub(super) fn type_error(
+    code: &'static str,
+    message: &'static str,
+    expected: &str,
+) -> ValidationError {
     ValidationError::one(ErrorDetail::new(code, message).expected(expected))
 }

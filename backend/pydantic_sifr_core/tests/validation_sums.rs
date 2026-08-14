@@ -6,8 +6,8 @@ use pydantic_sifr_core::{
     FieldDefault, InputProfile, JsonLimits, LiteralSchema, LiteralValue, LocationItem, ModelField,
     ModelSchema, NativeValue, PreparedSchema, Schema, SchemaErrorOverride, StringConstraints,
     TaggedUnionChoice, TaggedUnionSchema, UnionChoice, UnionMode, UnionSchema, ValidatedArena,
-    ValidatedValue, ValidationError, ValidationLimits, ValidationOptions, parse_json, validate,
-    validate_json_and_construct,
+    ValidatedValue, ValidationError, ValidationLimits, ValidationOptions, build_native_input,
+    parse_json, validate, validate_json_and_construct,
 };
 use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::{
@@ -260,6 +260,58 @@ fn enum_inputs_map_string_and_large_integer_metadata_to_sifr_tags() {
 }
 
 #[test]
+fn strings_profile_coerces_literal_and_enum_inputs_through_scalar_rules() {
+    let literal_schema = literal(vec![LiteralValue::Integer(BigInt::from(42))]);
+    let input = build_native_input(&NativeValue::String("42".to_owned()), JsonLimits::default())
+        .unwrap_or_else(|error| panic!("literal input failed: {error}"));
+    let literal = validate(
+        &literal_schema,
+        &input,
+        ValidationOptions {
+            strict: true,
+            profile: InputProfile::Strings,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("strings literal failed: {error}"));
+    assert!(matches!(
+        literal.get(literal.root()),
+        Some(ValidatedValue::ExactInt(value)) if *value == BigInt::from(42)
+    ));
+
+    let enum_schema = Schema::Enum(
+        EnumSchema::new(
+            "tests.Switch",
+            vec![EnumVariant {
+                name: "Enabled",
+                input: LiteralValue::Bool(true),
+                discriminant: 1,
+            }],
+        )
+        .unwrap_or_else(|error| panic!("enum schema failed: {error}")),
+    );
+    let input = build_native_input(
+        &NativeValue::String("true".to_owned()),
+        JsonLimits::default(),
+    )
+    .unwrap_or_else(|error| panic!("enum input failed: {error}"));
+    let enumeration = validate(
+        &enum_schema,
+        &input,
+        ValidationOptions {
+            strict: true,
+            profile: InputProfile::Strings,
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("strings enum failed: {error}"));
+    assert!(matches!(
+        enumeration.get(enumeration.root()),
+        Some(ValidatedValue::Enum(value)) if value.variant() == "Enabled"
+    ));
+}
+
+#[test]
 fn validated_enum_and_union_values_construct_typed_structural_targets() {
     let enumeration = Schema::Enum(
         EnumSchema::new(
@@ -393,6 +445,21 @@ fn smart_union_prefers_exact_type_while_left_to_right_prefers_first_success() {
     );
     let output = json(&string_or_integer, br#""1""#).unwrap_or_else(|error| panic!("{error}"));
     assert_eq!(union_root(&output).index(), 1);
+
+    let embedded_or_string = union(
+        vec![
+            choice(
+                "embedded",
+                Schema::EmbeddedJson(Box::new(Schema::exact_integer())),
+            ),
+            choice("string", Schema::String(StringConstraints::default())),
+        ],
+        UnionMode::Smart,
+        true,
+    );
+    let output = json(&embedded_or_string, br#""1""#)
+        .unwrap_or_else(|error| panic!("embedded JSON union failed: {error}"));
+    assert_eq!(union_root(&output).index(), 0);
 }
 
 #[test]

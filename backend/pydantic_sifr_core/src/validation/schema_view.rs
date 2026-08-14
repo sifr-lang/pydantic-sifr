@@ -8,6 +8,9 @@ use super::{
     ModelField, ModelSchema, Schema, StringConstraints, ValidationError, scalars::type_error,
 };
 
+mod sums;
+pub(crate) use sums::{StaticMetadata, StaticVariant};
+
 #[derive(Clone, Copy, Debug)]
 pub enum SchemaRef<'schema> {
     Owned(&'schema Schema),
@@ -136,6 +139,7 @@ impl<'schema> SchemaRef<'schema> {
                 "decimal" => Ok(SchemaTag::Decimal),
                 "str" => Ok(SchemaTag::String),
                 "bytes" => Ok(SchemaTag::Bytes),
+                "literal" => Ok(SchemaTag::Literal),
                 "nullable" => Ok(SchemaTag::Nullable),
                 "union" => Ok(SchemaTag::Union),
                 "enum" => Ok(SchemaTag::Enum),
@@ -200,6 +204,24 @@ impl<'schema> SchemaRef<'schema> {
             Self::Static(schema) => schema.string_constraints(),
             _ => Err(schema_error("Schema node is not a string")),
         }
+    }
+
+    pub(crate) fn static_metadata(self) -> Result<Vec<StaticMetadata>, ValidationError> {
+        sums::metadata(self)
+    }
+
+    pub(crate) fn static_variants(self) -> Result<Vec<StaticVariant>, ValidationError> {
+        sums::variants(self)
+    }
+
+    pub(crate) fn static_definition(self) -> Result<&'static str, ValidationError> {
+        sums::definition(self)
+    }
+
+    pub(crate) fn static_error(
+        self,
+    ) -> Result<Option<super::SchemaErrorOverride>, ValidationError> {
+        sums::error_override(self)
     }
 }
 

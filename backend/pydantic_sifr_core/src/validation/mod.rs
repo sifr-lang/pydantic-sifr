@@ -6,6 +6,7 @@ mod scalars;
 mod schema;
 mod schema_view;
 mod special;
+mod static_sums;
 mod structural;
 mod sum_schema;
 mod sums;
@@ -203,15 +204,6 @@ impl ValidationState<'_> {
             )
         })?;
         let tag = schema.tag()?;
-        if tag == schema_view::SchemaTag::Nullable && matches!(schema, SchemaRef::Static(_)) {
-            let value = if matches!(input, InputValue::Null) {
-                ValidatedValue::Nullable(None)
-            } else {
-                let child = self.validate_node(schema.child(0)?, input_id, depth)?;
-                ValidatedValue::Nullable(Some(child))
-            };
-            return self.push(value);
-        }
         if tag == schema_view::SchemaTag::Model {
             return models::validate_model(self, schema.model()?, input_id, depth);
         }

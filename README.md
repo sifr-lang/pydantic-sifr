@@ -66,6 +66,19 @@ The milestone demo is a dependent package in
 aliases, alias paths, JSON input, strings input, structural input, and a stable
 public validation error.
 
+`demos/milestone_ps_7_demo` shows literals, payload-free enums, smart unions,
+field-discriminated tagged unions, and labelled branch errors through the same
+public API.
+
+Sum declarations use package-owned metadata. Literal keys are
+`pydantic.literal.none|bool|int|str|bytes`. Enum fields use the corresponding
+`pydantic.enum.*` keys in variant order. Integer values are canonical decimal
+strings. Byte values are hexadecimal strings. Ordinary unions accept repeated
+`pydantic.union.label` entries, `pydantic.union.mode`, and
+`pydantic.union.auto_collapse`. A tagged union declares a field/index path,
+then pairs each `pydantic.discriminator.choice` with one or more typed
+`pydantic.discriminator.tag.*` entries.
+
 ## Development gates
 
 Set `SIFR_BIN` to the exact required Sifr compiler:
