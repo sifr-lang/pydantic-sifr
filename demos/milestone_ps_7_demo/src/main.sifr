@@ -5,6 +5,7 @@ from pydantic_sifr import verify_schema
 
 # This demo is the public static-program integration receipt for PS7 sums.
 
+
 class Status(Enum):
     READY = 1
     PAUSED = 2
