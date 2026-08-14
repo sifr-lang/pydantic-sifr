@@ -439,8 +439,8 @@ fn schema_sort_key(schema: &Schema) -> (u8, String) {
         Schema::Mapping { .. } => (11, String::new()),
         Schema::Set { .. } => (12, String::new()),
         Schema::Tuple(_) => (13, String::new()),
-        Schema::Model(model) => (31, model.name.to_owned()),
-        Schema::FrozenSet { .. } => (31, "sifr.collections.frozenset".to_owned()),
+        Schema::Model(model) => (31, bare_class_name(model.name).to_owned()),
+        Schema::FrozenSet { .. } => (31, "frozenset".to_owned()),
         Schema::Fraction(_) => (34, "pydantic_sifr.Fraction".to_owned()),
         Schema::Complex(_) => (34, "pydantic_sifr.Complex".to_owned()),
         Schema::Temporal(schema) => (34, format!("pydantic_sifr.{:?}", schema.kind)),
@@ -453,6 +453,11 @@ fn schema_sort_key(schema: &Schema) -> (u8, String) {
         | Schema::TaggedUnion(_)
         | Schema::EmbeddedJson(_) => (41, String::new()),
     }
+}
+
+fn bare_class_name(name: &str) -> &str {
+    let start = name.rfind('.').map_or(0, |index| index + 1);
+    &name[start..]
 }
 
 const fn literal_sort_key(kind: LiteralKind) -> (u8, String) {
@@ -501,7 +506,7 @@ fn schema_error(message: &'static str, expected: &'static str) -> ValidationErro
 
 #[cfg(test)]
 mod tests {
-    use sifr_runtime::interop::structural::primitive;
+    use sifr_runtime::interop::structural::{primitive, union as structural_union};
 
     use super::*;
     use crate::validation::{
@@ -580,5 +585,48 @@ mod tests {
         assert!(positions[0] < positions[2]);
         assert!(positions[1] < positions[2]);
         assert!(positions[2] < positions[3]);
+    }
+
+    #[test]
+    fn canonical_class_order_uses_bare_names_across_modules_and_frozen_sets() {
+        let model = |name: &'static str| {
+            Schema::Model(
+                ModelSchema::new(
+                    name,
+                    primitive(name),
+                    Vec::new(),
+                    ExtraPolicy::Ignore,
+                    false,
+                    true,
+                )
+                .unwrap_or_else(|error| panic!("model schema failed: {error}")),
+            )
+        };
+        let alpha = model("zoo.Alpha");
+        let beta = model("main.Beta");
+        let record = model("tests.Record");
+        let frozen = Schema::FrozenSet {
+            item: Box::new(Schema::Bool),
+            constraints: CollectionConstraints::default(),
+        };
+        let layout = CanonicalSumLayout::from_schemas([&beta, &alpha, &frozen, &record], 0)
+            .unwrap_or_else(|error| panic!("canonical layout failed: {error}"));
+        let position = |schema: &Schema| {
+            let identity = schema
+                .structural_identity_at(0)
+                .unwrap_or_else(|error| panic!("schema identity failed: {error}"));
+            layout
+                .index_of(identity)
+                .unwrap_or_else(|| panic!("union member is missing"))
+        };
+
+        assert!(position(&alpha) < position(&beta));
+        assert!(position(&record) < position(&frozen));
+        let expected = [&alpha, &beta, &record, &frozen].map(|schema| {
+            schema
+                .structural_identity_at(0)
+                .unwrap_or_else(|error| panic!("schema identity failed: {error}"))
+        });
+        assert_eq!(layout.identity(), structural_union(&expected));
     }
 }

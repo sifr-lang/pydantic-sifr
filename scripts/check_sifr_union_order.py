@@ -25,6 +25,13 @@ def block_category(source: str, arm: str, label: str) -> int:
     return int(match.group(1))
 
 
+def secondary_expression(source: str, arm: str, label: str) -> str:
+    match = re.search(rf"^{arm}\s*=>\s*\(\d+,\s*(.+)\),$", source, re.MULTILINE)
+    if match is None:
+        raise SystemExit(f"missing canonical union secondary key for {label}")
+    return match.group(1).strip()
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sifr-bin", required=True)
@@ -96,6 +103,29 @@ def main() -> int:
             "Sifr/package canonical union categories differ:\n"
             f"compiler={compiler_categories}\npackage={package_categories}"
         )
+    secondary_keys = {
+        "compiler_class": secondary_expression(
+            compiler, r"\s*Type::Class\s*\{\s*\.\.\s*\}", "Sifr class"
+        ),
+        "package_model": secondary_expression(
+            package, r"\s*Schema::Model\(model\)", "package model"
+        ),
+        "package_frozen_set": secondary_expression(
+            package, r"\s*Schema::FrozenSet\s*\{\s*\.\.\s*\}", "package frozen set"
+        ),
+    }
+    expected_secondary_keys = {
+        "compiler_class": "ty.display_name()",
+        "package_model": "bare_class_name(model.name).to_owned()",
+        "package_frozen_set": '"frozenset".to_owned()',
+    }
+    if secondary_keys != expected_secondary_keys:
+        raise SystemExit(
+            "Sifr/package canonical class secondary keys differ:\n"
+            f"actual={secondary_keys}\nexpected={expected_secondary_keys}"
+        )
+    if "name.rfind('.').map_or(0, |index| index + 1)" not in package:
+        raise SystemExit("package model ordering does not use the bare class name")
     print(f"Sifr union order check passed: {compiler_path}")
     return 0
 
