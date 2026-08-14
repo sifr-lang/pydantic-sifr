@@ -488,6 +488,36 @@ fn validated_iterator_defers_item_validation_until_consumption() {
     assert!(iterator.next().is_none());
 }
 
+#[test]
+fn validated_iterator_relaxes_only_the_generator_container_kind() {
+    let input = build_native_input(
+        &NativeValue::Tuple(vec![NativeValue::Integer("1".to_owned())]),
+        JsonLimits::default(),
+    )
+    .unwrap_or_else(|error| panic!("native input failed: {error}"));
+    let schema = Schema::Generator {
+        item: Box::new(Schema::exact_integer()),
+        constraints: CollectionConstraints::default(),
+    };
+    let mut iterator = validated_iterator(
+        &schema,
+        &input,
+        ValidationOptions {
+            strict: false,
+            strict_override: Some(true),
+            ..ValidationOptions::default()
+        },
+    )
+    .unwrap_or_else(|error| panic!("iterator creation failed: {error}"));
+
+    let item = iterator
+        .next()
+        .unwrap_or_else(|| panic!("item must exist"))
+        .unwrap_or_else(|error| panic!("item validation failed: {error}"));
+    assert_eq!(root(&item), &ValidatedValue::ExactInt(BigInt::from(1)));
+    assert!(iterator.next().is_none());
+}
+
 proptest! {
     #[test]
     fn arbitrary_collection_json_never_panics(

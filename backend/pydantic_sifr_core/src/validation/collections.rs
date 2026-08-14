@@ -685,6 +685,7 @@ pub fn validated_iterator<'a>(
         SequenceKind::List,
         ValidationOptions {
             strict: false,
+            strict_override: None,
             ..options
         },
     )?;
