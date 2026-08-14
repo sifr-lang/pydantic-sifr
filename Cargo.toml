@@ -26,7 +26,7 @@ sifr_runtime = { git = "https://github.com/sifr-lang/sifr.git", rev = "4f5492531
 [workspace]
 resolver = "2"
 members = ["backend/pydantic_sifr_core"]
-exclude = [".upstream/pydantic"]
+exclude = [".sifr-compiler", ".upstream/pydantic", "target"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

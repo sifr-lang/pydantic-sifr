@@ -35,4 +35,5 @@ jobs:
         run: |
           cargo build --release -j 6 -p sifr --manifest-path .sifr-compiler/Cargo.toml
           echo "SIFR_BIN=$PWD/.sifr-compiler/target/release/sifr" >> "$GITHUB_ENV"
+          echo "SIFR_SYSROOT=$PWD/.sifr-compiler" >> "$GITHUB_ENV"
       - run: scripts/run_all_tests.sh --profile create-pr
