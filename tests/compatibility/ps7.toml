@@ -2,7 +2,55 @@ milestone = "ps_7"
 upstream_commit = "f59e929c999e8b2efc7b12fd0bc1685c1a186be3"
 
 [[family]]
+name = "validators/literal"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_sums.rs"
+difference = "Literal validation preserves exact Sifr integers and constructs one statically declared sum layout."
+
+[[family]]
+name = "validators/enum"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_sums.rs"
+difference = "Payload-free Sifr enum variants use declared scalar-value metadata and retain their nominal enum identity."
+
+[[family]]
+name = "validators/unions"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_sums.rs"
+difference = "Union choices use compiler-canonical member order, typed variant construction, labelled aggregate errors, and an explicit auto-collapse policy."
+
+[[family]]
+name = "validators/tagged_unions"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_sums.rs"
+difference = "This delivered row covers indexed field and path discriminators over statically typed choices. Typed-callback discriminators remain assigned to the later PS7 callback wave."
+
+[[family]]
+name = "validators/nullable_union"
+class = "same"
+evidence = "backend/pydantic_sifr_core/tests/validation_definitions.rs"
+difference = ""
+
+[[family]]
+name = "validators/definitions_recursion"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_definitions.rs"
+difference = "Definition references are statically typed, share one checked scope, and use arena-local recursion traces with a shared depth budget."
+
+[[family]]
 name = "validators/control_composition"
 class = "adapted"
 evidence = "backend/pydantic_sifr_core/tests/validation_control.rs"
 difference = "JSON selects a JSON branch, while native and strings inputs select a structural branch. Every branch has one declared Sifr output type. Typed chains use checked arena handoffs instead of Python objects."
+
+[[family]]
+name = "core/recursion_limit"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_definitions.rs"
+difference = "Sifr uses one explicit bounded depth budget and rejects an active definition/input pair before recursive execution can loop."
+
+[[family]]
+name = "core/smart_union_ranking"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_sums.rs"
+difference = "Smart ranking uses typed exactness and ephemeral validated-field counts, then constructs the selected Sifr union variant without Python object inspection."
