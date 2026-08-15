@@ -174,6 +174,13 @@ gate checks total coverage against the pinned upstream anchor ledger.
 ## PS7 compatibility ledger
 
 `tests/compatibility/ps7.toml` records each delivered PS7 family. The current
-rows cover strictness controls, input-profile controls, and typed chains. Each
-adapted row states the Sifr type and ownership rules. A unit gate binds the row
-to the pinned upstream anchor ledger.
+rows cover literals, enums, nullable and ordinary unions, field/path tagged
+unions, definitions and recursion, strictness controls, input-profile controls,
+typed chains, recursion limits, and smart-union ranking. Each adapted row states
+the Sifr type and ownership rules. A unit gate binds each upstream-derived row
+to the pinned anchor ledger. The Sifr-native recursion-limit and smart-ranking
+families have direct local evidence and do not claim upstream anchors. Typed
+callback discriminators, validator callbacks, and caller-owned context remain
+assigned to the later PS7 callback waves. The PS7 validator API,
+discriminated-union API, and generic-recursion API families also remain
+pending.

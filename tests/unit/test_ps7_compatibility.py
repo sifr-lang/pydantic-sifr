@@ -9,7 +9,20 @@ ROOT = Path(__file__).resolve().parents[2]
 LEDGER = ROOT / "tests/compatibility/ps7.toml"
 ANCHORS = ROOT / "tests/provenance/anchor_rules.toml"
 
-REQUIRED = {"validators/control_composition"}
+REQUIRED = {
+    "validators/control_composition",
+    "validators/definitions_recursion",
+    "validators/enum",
+    "validators/literal",
+    "validators/nullable_union",
+    "validators/tagged_unions",
+    "validators/unions",
+    "core/recursion_limit",
+    "core/smart_union_ranking",
+}
+UPSTREAM_REQUIRED = {
+    family for family in REQUIRED if not family.startswith("core/")
+}
 
 
 class Ps7CompatibilityTest(unittest.TestCase):
@@ -33,7 +46,7 @@ class Ps7CompatibilityTest(unittest.TestCase):
         fixtures = {
             row["fixture"] for row in anchors if row["milestone"] == "ps_7"
         }
-        self.assertTrue(REQUIRED.issubset(fixtures))
+        self.assertTrue(UPSTREAM_REQUIRED.issubset(fixtures))
 
 
 if __name__ == "__main__":
