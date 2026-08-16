@@ -1,7 +1,7 @@
 use pydantic_sifr_core::{
-    BytesConstraints, CollectionConstraints, IntegerConstraints, IntegerTarget, JsonIntegerProfile,
-    JsonSchemaErrorKind, JsonSchemaMode, Schema, StringConstraints, TypeAdapter,
-    generate_json_schema,
+    BytesConstraints, CollectionConstraints, EnumSchema, EnumVariant, IntegerConstraints,
+    IntegerTarget, JsonIntegerProfile, JsonSchemaErrorKind, JsonSchemaMode, LiteralSchema,
+    LiteralValue, Schema, StringConstraints, TypeAdapter, generate_json_schema,
 };
 use serde_json::json;
 
@@ -227,4 +227,74 @@ fn safe_constraints_authorize_exact_integer_under_web_profile() {
     assert_eq!(generated["minimum"], -safe);
     assert_eq!(generated["maximum"], safe);
     assert_eq!(generated["x-sifr-integer-profile"], "web");
+}
+
+#[test]
+fn integer_literals_follow_the_selected_serialization_profile() {
+    let schema = Schema::Literal(
+        LiteralSchema::new(vec![LiteralValue::Integer(42.into())])
+            .unwrap_or_else(|error| panic!("literal schema setup failed: {error}")),
+    );
+    let generated = generate_json_schema(
+        &schema,
+        JsonSchemaMode::Serialization,
+        JsonIntegerProfile::StringInts,
+    )
+    .unwrap_or_else(|error| panic!("literal schema failed: {error}"));
+
+    assert_eq!(generated["const"], "42");
+    assert_eq!(generated["x-sifr-integer-profile"], "string_ints");
+    assert_eq!(generated["x-sifr-minimum"], 42);
+    assert_eq!(generated["x-sifr-maximum"], 42);
+    assert_eq!(generated["x-sifr-format"], "integer-decimal-string");
+}
+
+#[test]
+fn unsafe_web_integer_literals_fail_closed() {
+    let unsafe_value = num_bigint::BigInt::from(9_007_199_254_740_992_i64);
+    let schema = Schema::Literal(
+        LiteralSchema::new(vec![LiteralValue::Integer(unsafe_value)])
+            .unwrap_or_else(|error| panic!("literal schema setup failed: {error}")),
+    );
+    let Err(error) = generate_json_schema(
+        &schema,
+        JsonSchemaMode::Serialization,
+        JsonIntegerProfile::Web,
+    ) else {
+        panic!("unsafe web literal must fail closed");
+    };
+
+    assert_eq!(error.kind(), JsonSchemaErrorKind::IntegerPolicy);
+    assert_eq!(error.diagnostic_code(), Some("SIFR-INT-0009"));
+}
+
+#[test]
+fn integer_enum_variants_share_literal_profile_handling() {
+    let schema = Schema::Enum(
+        EnumSchema::new(
+            "Status",
+            vec![
+                EnumVariant {
+                    name: "ready",
+                    input: LiteralValue::Integer(1.into()),
+                    discriminant: 0,
+                },
+                EnumVariant {
+                    name: "done",
+                    input: LiteralValue::Integer(2.into()),
+                    discriminant: 1,
+                },
+            ],
+        )
+        .unwrap_or_else(|error| panic!("enum schema setup failed: {error}")),
+    );
+    let generated = generate_json_schema(
+        &schema,
+        JsonSchemaMode::Serialization,
+        JsonIntegerProfile::StringInts,
+    )
+    .unwrap_or_else(|error| panic!("enum schema failed: {error}"));
+
+    assert_eq!(generated["enum"], json!(["1", "2"]));
+    assert_eq!(generated["x-sifr-integer-profile"], "string_ints");
 }

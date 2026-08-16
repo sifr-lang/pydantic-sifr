@@ -165,13 +165,15 @@ fn generate(
             Ok(Value::Object(output))
         }
         Schema::Pattern(_) => Ok(json!({"type": "string", "format": "regex"})),
-        Schema::Literal(schema) => literal_schema(schema.values()),
+        Schema::Literal(schema) => literal_schema(schema.values(), mode, integer_profile),
         Schema::Enum(schema) => literal_schema(
             &schema
                 .variants()
                 .iter()
                 .map(|variant| variant.input.clone())
                 .collect::<Vec<_>>(),
+            mode,
+            integer_profile,
         ),
         Schema::Nullable(inner) => Ok(json!({"anyOf": [child(inner)?, {"type": "null"}]})),
         Schema::Union(schema) => Ok(json!({
@@ -279,22 +281,91 @@ fn typed(name: &str) -> Map<String, Value> {
     output
 }
 
-fn literal_schema(values: &[LiteralValue]) -> Result<Value, JsonSchemaError> {
+fn literal_schema(
+    values: &[LiteralValue],
+    mode: JsonSchemaMode,
+    profile: JsonIntegerProfile,
+) -> Result<Value, JsonSchemaError> {
+    let integer_values = values
+        .iter()
+        .filter_map(|value| match value {
+            LiteralValue::Integer(value) => Some(value),
+            LiteralValue::None
+            | LiteralValue::Bool(_)
+            | LiteralValue::String(_)
+            | LiteralValue::Bytes(_) => None,
+        })
+        .collect::<Vec<_>>();
+    if profile == JsonIntegerProfile::Web
+        && integer_values
+            .iter()
+            .any(|value| !is_javascript_safe_integer(value))
+    {
+        return Err(JsonSchemaError::new(
+            JsonSchemaErrorKind::IntegerPolicy,
+            "SIFR-INT-0009: json.web integer literal is outside the JavaScript-safe range",
+        ));
+    }
     let values = values
         .iter()
-        .map(literal_value)
+        .map(|value| literal_value(value, mode, profile))
         .collect::<Result<Vec<_>, _>>()?;
+    let value_count = values.len();
+    let mut output = Map::new();
     if let [value] = values.as_slice() {
-        Ok(json!({"const": value}))
+        output.insert("const".to_owned(), value.clone());
     } else {
-        Ok(json!({"enum": values}))
+        output.insert("enum".to_owned(), Value::Array(values));
     }
+    if !integer_values.is_empty() {
+        let profile_name = match profile {
+            JsonIntegerProfile::Exact => "exact",
+            JsonIntegerProfile::Web => "web",
+            JsonIntegerProfile::StringInts => "string_ints",
+        };
+        output.insert(
+            "x-sifr-integer-profile".to_owned(),
+            Value::String(profile_name.to_owned()),
+        );
+        let minimum = integer_values.iter().copied().min().cloned();
+        let maximum = integer_values.iter().copied().max().cloned();
+        insert_optional_big_integer(&mut output, "x-sifr-minimum", &minimum)?;
+        insert_optional_big_integer(&mut output, "x-sifr-maximum", &maximum)?;
+        if profile == JsonIntegerProfile::Exact {
+            output.insert(
+                "x-sifr-generated-client-warning".to_owned(),
+                Value::String(
+                    "client must use an exact integer JSON parser for this field".to_owned(),
+                ),
+            );
+        }
+        if mode == JsonSchemaMode::Serialization
+            && profile == JsonIntegerProfile::StringInts
+            && integer_values.len() == value_count
+        {
+            output.insert(
+                "x-sifr-format".to_owned(),
+                Value::String("integer-decimal-string".to_owned()),
+            );
+        }
+    }
+    Ok(Value::Object(output))
 }
 
-fn literal_value(value: &LiteralValue) -> Result<Value, JsonSchemaError> {
+fn literal_value(
+    value: &LiteralValue,
+    mode: JsonSchemaMode,
+    profile: JsonIntegerProfile,
+) -> Result<Value, JsonSchemaError> {
     match value {
         LiteralValue::None => Ok(Value::Null),
         LiteralValue::Bool(value) => Ok(Value::Bool(*value)),
+        LiteralValue::Integer(value)
+            if mode == JsonSchemaMode::Serialization
+                && profile == JsonIntegerProfile::StringInts =>
+        {
+            Ok(Value::String(value.to_string()))
+        }
         LiteralValue::Integer(value) => big_integer_value(value),
         LiteralValue::String(value) => Ok(Value::String(value.clone())),
         LiteralValue::Bytes(_) => Err(unsupported(
@@ -442,6 +513,11 @@ fn is_javascript_safe_range(
 ) -> bool {
     let safe = num_bigint::BigInt::from(9_007_199_254_740_991_i64);
     matches!((minimum, maximum), (Some(minimum), Some(maximum)) if minimum >= &-safe.clone() && maximum <= &safe)
+}
+
+fn is_javascript_safe_integer(value: &num_bigint::BigInt) -> bool {
+    let safe = num_bigint::BigInt::from(9_007_199_254_740_991_i64);
+    value >= &-safe.clone() && value <= &safe
 }
 
 fn maximum_big_integer(
