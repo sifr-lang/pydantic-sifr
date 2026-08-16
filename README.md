@@ -129,3 +129,6 @@ The historical standalone Pydantic Core checkout is not a conformance source.
 The gate uses Sifr implementation commit
 `4f5492531e81385dd28efe25adfdd57dd678d2a9`. CI builds that exact compiler
 source. The runtime manifests and lockfiles pin the same commit.
+
+See [Certification](docs/certification.md) for the audited revisions, ledger
+digests, and the fail-closed update-pin procedure.
