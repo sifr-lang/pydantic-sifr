@@ -28,7 +28,14 @@ fn adapter_generates_schema_from_its_prepared_core_schema() {
         generated,
         json!({
             "type": "array",
-            "items": {"type": "integer", "minimum": -32768, "maximum": 32767},
+            "items": {
+                "type": "integer",
+                "minimum": -32768,
+                "maximum": 32767,
+                "x-sifr-integer-profile": "exact",
+                "x-sifr-generated-client-warning":
+                    "client must use an exact integer JSON parser for this field"
+            },
             "minItems": 1,
             "maxItems": 3
         })
@@ -135,4 +142,89 @@ fn non_positive_multiple_of_is_rejected_as_invalid_json_schema() {
         panic!("zero multipleOf must fail JSON Schema generation");
     };
     assert_eq!(error.kind(), JsonSchemaErrorKind::InvalidNumber);
+}
+
+#[test]
+fn integer_profiles_have_distinct_static_schema_representations() {
+    let schema = Schema::Integer {
+        target: IntegerTarget::I32,
+        constraints: IntegerConstraints::default(),
+    };
+    let web = generate_json_schema(
+        &schema,
+        JsonSchemaMode::Serialization,
+        JsonIntegerProfile::Web,
+    )
+    .unwrap_or_else(|error| panic!("web schema failed: {error}"));
+    assert_eq!(web["type"], "integer");
+    assert_eq!(web["minimum"], i32::MIN);
+    assert_eq!(web["maximum"], i32::MAX);
+    assert_eq!(web["x-sifr-integer-profile"], "web");
+
+    let strings = generate_json_schema(
+        &schema,
+        JsonSchemaMode::Serialization,
+        JsonIntegerProfile::StringInts,
+    )
+    .unwrap_or_else(|error| panic!("string integer schema failed: {error}"));
+    assert_eq!(strings["type"], "string");
+    assert_eq!(strings["pattern"], "^-?[0-9]+$");
+    assert_eq!(strings["x-sifr-format"], "integer-decimal-string");
+    assert_eq!(strings["x-sifr-minimum"], i32::MIN);
+    assert_eq!(strings["x-sifr-maximum"], i32::MAX);
+}
+
+#[test]
+fn validation_mode_keeps_numeric_input_for_string_integer_output() {
+    let generated = generate_json_schema(
+        &Schema::Integer {
+            target: IntegerTarget::I64,
+            constraints: IntegerConstraints::default(),
+        },
+        JsonSchemaMode::Validation,
+        JsonIntegerProfile::StringInts,
+    )
+    .unwrap_or_else(|error| panic!("validation schema failed: {error}"));
+
+    assert_eq!(generated["type"], "integer");
+    assert_eq!(generated["x-sifr-integer-profile"], "string_ints");
+}
+
+#[test]
+fn unsafe_web_range_fails_with_the_compiler_owned_diagnostic_code() {
+    let Err(error) = generate_json_schema(
+        &Schema::Integer {
+            target: IntegerTarget::I64,
+            constraints: IntegerConstraints::default(),
+        },
+        JsonSchemaMode::Serialization,
+        JsonIntegerProfile::Web,
+    ) else {
+        panic!("wide json.web integer must fail closed");
+    };
+
+    assert_eq!(error.kind(), JsonSchemaErrorKind::IntegerPolicy);
+    assert_eq!(error.diagnostic_code(), Some("SIFR-INT-0009"));
+}
+
+#[test]
+fn safe_constraints_authorize_exact_integer_under_web_profile() {
+    let safe = 9_007_199_254_740_991_i64;
+    let generated = generate_json_schema(
+        &Schema::Integer {
+            target: IntegerTarget::Exact,
+            constraints: IntegerConstraints {
+                greater_or_equal: Some((-safe).into()),
+                less_or_equal: Some(safe.into()),
+                ..IntegerConstraints::default()
+            },
+        },
+        JsonSchemaMode::Serialization,
+        JsonIntegerProfile::Web,
+    )
+    .unwrap_or_else(|error| panic!("bounded web schema failed: {error}"));
+
+    assert_eq!(generated["minimum"], -safe);
+    assert_eq!(generated["maximum"], safe);
+    assert_eq!(generated["x-sifr-integer-profile"], "web");
 }
