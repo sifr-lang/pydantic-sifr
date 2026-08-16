@@ -152,6 +152,13 @@ prepares a schema view over those static values. It does not parse or clone a
 schema graph. Successful validation prepares structural construction over the
 validated arena and moves the result into the target class.
 
+Applications can add thin class methods for familiar call syntax. Such a
+method calls one of the exported functional entry points. It does not declare
+another Rust bridge or own another schema. The PS6 demo validates one payload
+through both forms and compares every constructed field. A source contract
+test also requires the facade method to call the exported function and keeps
+the production bridge set limited to the three functional entry points.
+
 `ValidationError.message` contains one stable JSON object. The object contains
 ordered details, typed locations, expected values, and the truncation fact.
 The bridge escapes all text before it writes this object. A contained Rust
