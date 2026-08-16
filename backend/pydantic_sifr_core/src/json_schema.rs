@@ -18,6 +18,7 @@ pub enum JsonSchemaErrorKind {
     DepthLimit,
     UnsupportedSchema,
     InvalidNumber,
+    IntegerPolicy,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -35,6 +36,16 @@ impl JsonSchemaError {
     #[must_use]
     pub fn message(&self) -> &str {
         &self.message
+    }
+
+    #[must_use]
+    pub const fn diagnostic_code(&self) -> Option<&'static str> {
+        match self.kind {
+            JsonSchemaErrorKind::IntegerPolicy => Some("SIFR-INT-0009"),
+            JsonSchemaErrorKind::DepthLimit
+            | JsonSchemaErrorKind::UnsupportedSchema
+            | JsonSchemaErrorKind::InvalidNumber => None,
+        }
     }
 
     fn new(kind: JsonSchemaErrorKind, message: impl Into<String>) -> Self {
@@ -81,26 +92,6 @@ fn generate(
             target,
             constraints,
         } => {
-            if integer_profile != JsonIntegerProfile::Exact {
-                return Err(unsupported(
-                    "non-exact integer JSON profiles need an explicit schema representation",
-                ));
-            }
-            let mut output = typed("integer");
-            let (target_minimum, target_maximum) =
-                target.bounds().map_or((None, None), |(minimum, maximum)| {
-                    (Some(minimum), Some(maximum))
-                });
-            let minimum = maximum_big_integer(target_minimum, constraints.greater_or_equal.clone());
-            let maximum = minimum_big_integer(target_maximum, constraints.less_or_equal.clone());
-            insert_optional_big_integer(&mut output, "minimum", &minimum)?;
-            insert_optional_big_integer(&mut output, "maximum", &maximum)?;
-            insert_optional_big_integer(
-                &mut output,
-                "exclusiveMinimum",
-                &constraints.greater_than,
-            )?;
-            insert_optional_big_integer(&mut output, "exclusiveMaximum", &constraints.less_than)?;
             if constraints
                 .multiple_of
                 .as_ref()
@@ -110,8 +101,14 @@ fn generate(
                     "integer multipleOf must be greater than zero",
                 ));
             }
-            insert_optional_big_integer(&mut output, "multipleOf", &constraints.multiple_of)?;
-            Ok(Value::Object(output))
+            let (minimum, maximum) = integer_bounds(*target, constraints);
+            integer_schema(
+                mode,
+                integer_profile,
+                minimum,
+                maximum,
+                &constraints.multiple_of,
+            )
         }
         Schema::Float(constraints) => {
             let mut output = typed("number");
@@ -168,13 +165,15 @@ fn generate(
             Ok(Value::Object(output))
         }
         Schema::Pattern(_) => Ok(json!({"type": "string", "format": "regex"})),
-        Schema::Literal(schema) => literal_schema(schema.values()),
+        Schema::Literal(schema) => literal_schema(schema.values(), mode, integer_profile),
         Schema::Enum(schema) => literal_schema(
             &schema
                 .variants()
                 .iter()
                 .map(|variant| variant.input.clone())
                 .collect::<Vec<_>>(),
+            mode,
+            integer_profile,
         ),
         Schema::Nullable(inner) => Ok(json!({"anyOf": [child(inner)?, {"type": "null"}]})),
         Schema::Union(schema) => Ok(json!({
@@ -282,22 +281,91 @@ fn typed(name: &str) -> Map<String, Value> {
     output
 }
 
-fn literal_schema(values: &[LiteralValue]) -> Result<Value, JsonSchemaError> {
+fn literal_schema(
+    values: &[LiteralValue],
+    mode: JsonSchemaMode,
+    profile: JsonIntegerProfile,
+) -> Result<Value, JsonSchemaError> {
+    let integer_values = values
+        .iter()
+        .filter_map(|value| match value {
+            LiteralValue::Integer(value) => Some(value),
+            LiteralValue::None
+            | LiteralValue::Bool(_)
+            | LiteralValue::String(_)
+            | LiteralValue::Bytes(_) => None,
+        })
+        .collect::<Vec<_>>();
+    if profile == JsonIntegerProfile::Web
+        && integer_values
+            .iter()
+            .any(|value| !is_javascript_safe_integer(value))
+    {
+        return Err(JsonSchemaError::new(
+            JsonSchemaErrorKind::IntegerPolicy,
+            "SIFR-INT-0009: json.web integer literal is outside the JavaScript-safe range",
+        ));
+    }
     let values = values
         .iter()
-        .map(literal_value)
+        .map(|value| literal_value(value, mode, profile))
         .collect::<Result<Vec<_>, _>>()?;
+    let value_count = values.len();
+    let mut output = Map::new();
     if let [value] = values.as_slice() {
-        Ok(json!({"const": value}))
+        output.insert("const".to_owned(), value.clone());
     } else {
-        Ok(json!({"enum": values}))
+        output.insert("enum".to_owned(), Value::Array(values));
     }
+    if !integer_values.is_empty() {
+        let profile_name = match profile {
+            JsonIntegerProfile::Exact => "exact",
+            JsonIntegerProfile::Web => "web",
+            JsonIntegerProfile::StringInts => "string_ints",
+        };
+        output.insert(
+            "x-sifr-integer-profile".to_owned(),
+            Value::String(profile_name.to_owned()),
+        );
+        let minimum = integer_values.iter().copied().min().cloned();
+        let maximum = integer_values.iter().copied().max().cloned();
+        insert_optional_big_integer(&mut output, "x-sifr-minimum", &minimum)?;
+        insert_optional_big_integer(&mut output, "x-sifr-maximum", &maximum)?;
+        if profile == JsonIntegerProfile::Exact {
+            output.insert(
+                "x-sifr-generated-client-warning".to_owned(),
+                Value::String(
+                    "client must use an exact integer JSON parser for this field".to_owned(),
+                ),
+            );
+        }
+        if mode == JsonSchemaMode::Serialization
+            && profile == JsonIntegerProfile::StringInts
+            && integer_values.len() == value_count
+        {
+            output.insert(
+                "x-sifr-format".to_owned(),
+                Value::String("integer-decimal-string".to_owned()),
+            );
+        }
+    }
+    Ok(Value::Object(output))
 }
 
-fn literal_value(value: &LiteralValue) -> Result<Value, JsonSchemaError> {
+fn literal_value(
+    value: &LiteralValue,
+    mode: JsonSchemaMode,
+    profile: JsonIntegerProfile,
+) -> Result<Value, JsonSchemaError> {
     match value {
         LiteralValue::None => Ok(Value::Null),
         LiteralValue::Bool(value) => Ok(Value::Bool(*value)),
+        LiteralValue::Integer(value)
+            if mode == JsonSchemaMode::Serialization
+                && profile == JsonIntegerProfile::StringInts =>
+        {
+            Ok(Value::String(value.to_string()))
+        }
         LiteralValue::Integer(value) => big_integer_value(value),
         LiteralValue::String(value) => Ok(Value::String(value.clone())),
         LiteralValue::Bytes(_) => Err(unsupported(
@@ -356,6 +424,100 @@ fn insert_optional_float(
         output.insert(key.to_owned(), Value::Number(value));
     }
     Ok(())
+}
+
+fn integer_schema(
+    mode: JsonSchemaMode,
+    profile: JsonIntegerProfile,
+    minimum: Option<num_bigint::BigInt>,
+    maximum: Option<num_bigint::BigInt>,
+    multiple_of: &Option<num_bigint::BigInt>,
+) -> Result<Value, JsonSchemaError> {
+    if profile == JsonIntegerProfile::Web && !is_javascript_safe_range(&minimum, &maximum) {
+        return Err(JsonSchemaError::new(
+            JsonSchemaErrorKind::IntegerPolicy,
+            "SIFR-INT-0009: json.web integer schema needs a statically JavaScript-safe range or an explicit string integer profile",
+        ));
+    }
+
+    if mode == JsonSchemaMode::Serialization && profile == JsonIntegerProfile::StringInts {
+        let mut output = typed("string");
+        output.insert("pattern".to_owned(), Value::String("^-?[0-9]+$".to_owned()));
+        output.insert(
+            "x-sifr-format".to_owned(),
+            Value::String("integer-decimal-string".to_owned()),
+        );
+        output.insert(
+            "x-sifr-integer-profile".to_owned(),
+            Value::String("string_ints".to_owned()),
+        );
+        insert_optional_big_integer(&mut output, "x-sifr-minimum", &minimum)?;
+        insert_optional_big_integer(&mut output, "x-sifr-maximum", &maximum)?;
+        insert_optional_big_integer(&mut output, "x-sifr-multiple-of", multiple_of)?;
+        return Ok(Value::Object(output));
+    }
+
+    let mut output = typed("integer");
+    insert_optional_big_integer(&mut output, "minimum", &minimum)?;
+    insert_optional_big_integer(&mut output, "maximum", &maximum)?;
+    insert_optional_big_integer(&mut output, "multipleOf", multiple_of)?;
+    let profile_name = match profile {
+        JsonIntegerProfile::Exact => "exact",
+        JsonIntegerProfile::Web => "web",
+        JsonIntegerProfile::StringInts => "string_ints",
+    };
+    output.insert(
+        "x-sifr-integer-profile".to_owned(),
+        Value::String(profile_name.to_owned()),
+    );
+    if profile == JsonIntegerProfile::Exact {
+        output.insert(
+            "x-sifr-generated-client-warning".to_owned(),
+            Value::String("client must use an exact integer JSON parser for this field".to_owned()),
+        );
+    }
+    Ok(Value::Object(output))
+}
+
+fn integer_bounds(
+    target: crate::IntegerTarget,
+    constraints: &crate::IntegerConstraints,
+) -> (Option<num_bigint::BigInt>, Option<num_bigint::BigInt>) {
+    let (target_minimum, target_maximum) =
+        target.bounds().map_or((None, None), |(minimum, maximum)| {
+            (Some(minimum), Some(maximum))
+        });
+    let exclusive_minimum = constraints
+        .greater_than
+        .as_ref()
+        .map(|value| value + num_bigint::BigInt::from(1_u8));
+    let exclusive_maximum = constraints
+        .less_than
+        .as_ref()
+        .map(|value| value - num_bigint::BigInt::from(1_u8));
+    (
+        maximum_big_integer(
+            maximum_big_integer(target_minimum, constraints.greater_or_equal.clone()),
+            exclusive_minimum,
+        ),
+        minimum_big_integer(
+            minimum_big_integer(target_maximum, constraints.less_or_equal.clone()),
+            exclusive_maximum,
+        ),
+    )
+}
+
+fn is_javascript_safe_range(
+    minimum: &Option<num_bigint::BigInt>,
+    maximum: &Option<num_bigint::BigInt>,
+) -> bool {
+    let safe = num_bigint::BigInt::from(9_007_199_254_740_991_i64);
+    matches!((minimum, maximum), (Some(minimum), Some(maximum)) if minimum >= &-safe.clone() && maximum <= &safe)
+}
+
+fn is_javascript_safe_integer(value: &num_bigint::BigInt) -> bool {
+    let safe = num_bigint::BigInt::from(9_007_199_254_740_991_i64);
+    value >= &-safe.clone() && value <= &safe
 }
 
 fn maximum_big_integer(
