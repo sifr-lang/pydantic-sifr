@@ -136,21 +136,30 @@ fn fraction_and_complex_schemas_describe_their_public_string_representations() {
     )
     .unwrap_or_else(|error| panic!("fraction serialization schema failed: {error}"));
 
-    assert_eq!(validation["anyOf"][0]["minimum"], json!(1.0 / 3.0));
+    assert!(validation["anyOf"][0].get("minimum").is_none());
     assert_eq!(validation["anyOf"][1]["format"], json!("fraction"));
     assert_eq!(validation["anyOf"][1]["x-sifr-minimum"], json!("1/3"));
     assert_eq!(serialization["type"], json!("string"));
     assert_eq!(serialization["x-sifr-maximum"], json!("5/2"));
 
+    let complex_schema = Schema::Complex(ComplexConstraints {
+        magnitude_greater_or_equal: Some(1.5),
+        ..ComplexConstraints::default()
+    });
+    let complex_validation = generate_json_schema(
+        &complex_schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("complex validation schema failed: {error}"));
     let complex = generate_json_schema(
-        &Schema::Complex(ComplexConstraints {
-            magnitude_greater_or_equal: Some(1.5),
-            ..ComplexConstraints::default()
-        }),
+        &complex_schema,
         JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
         JsonIntegerProfile::Exact,
     )
     .unwrap_or_else(|error| panic!("complex schema failed: {error}"));
+    assert_eq!(complex_validation["anyOf"][0], json!({"type": "number"}));
+    assert_eq!(complex_validation["anyOf"][1]["format"], json!("complex"));
     assert_eq!(complex["type"], json!("string"));
     assert_eq!(complex["format"], json!("complex"));
     assert_eq!(complex["x-sifr-magnitude-minimum"], json!(1.5));

@@ -96,6 +96,26 @@ fn specialized_numeric_adapters_construct_and_serialize_public_values() {
             .unwrap_or_else(|error| panic!("fraction structural output failed: {error}")),
         NativeValue::String("-3/4".to_owned())
     );
+    let lax_fraction = fraction_adapter
+        .validate_structural(
+            &fraction,
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("lax fraction round trip failed: {error}"));
+    assert_eq!(lax_fraction, fraction);
+    assert!(
+        fraction_adapter
+            .validate_structural(
+                &fraction,
+                JsonLimits::default(),
+                ValidationOptions {
+                    strict: true,
+                    ..ValidationOptions::default()
+                },
+            )
+            .is_err()
+    );
 
     let complex_schema = Schema::Complex(ComplexConstraints::default());
     let complex_adapter = TypeAdapter::<Complex>::new(&complex_schema, JsonIntegerProfile::Exact)
@@ -114,6 +134,11 @@ fn specialized_numeric_adapters_construct_and_serialize_public_values() {
             .dump_json(&complex, &SerializationOptions::default())
             .unwrap_or_else(|error| panic!("complex JSON output failed: {error}")),
         br#""3+4j""#
+    );
+    assert!(
+        complex_adapter
+            .validate_json(b"3.5", JsonLimits::default(), ValidationOptions::default(),)
+            .is_ok()
     );
 }
 

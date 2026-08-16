@@ -10,6 +10,11 @@ use sifr_runtime::interop::structural::{
 };
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Exact rational value constructed by `TypeAdapter<Fraction>`.
+///
+/// Its structural projection is the canonical serialization string. Strict
+/// native validation instead requires `NativeValue::Fraction`, because strict
+/// input does not accept serialized strings.
 pub struct Fraction {
     numerator: SifrInt,
     denominator: SifrInt,
@@ -41,7 +46,7 @@ impl Fraction {
     fn from_rational(value: BigRational) -> Self {
         let numerator = SifrInt::from_bigint(value.numer().clone());
         let denominator = SifrInt::from_bigint(value.denom().clone());
-        let canonical = if denominator == SifrInt::from_i64(1) {
+        let canonical = if value.is_integer() {
             numerator.to_string()
         } else {
             format!("{numerator}/{denominator}")
@@ -100,6 +105,11 @@ impl fmt::Display for FractionError {
 impl std::error::Error for FractionError {}
 
 #[derive(Clone, Debug, PartialEq)]
+/// Complex value constructed by `TypeAdapter<Complex>`.
+///
+/// Its structural projection is the canonical serialization string. Strict
+/// native validation instead requires `NativeValue::Complex`, because strict
+/// input does not accept serialized strings.
 pub struct Complex {
     real: f64,
     imaginary: f64,
@@ -181,7 +191,7 @@ fn tuple_nodes<const N: usize, S: StructuralSource>(
 }
 
 fn canonical_complex(real: f64, imaginary: f64) -> String {
-    if real == 0.0 {
+    if real == 0.0 && !real.is_sign_negative() {
         return format!("{}j", float_text(imaginary));
     }
     let separator = if imaginary.is_sign_negative() {
@@ -194,9 +204,18 @@ fn canonical_complex(real: f64, imaginary: f64) -> String {
 
 fn float_text(value: f64) -> String {
     if value.is_nan() {
-        "NaN".to_owned()
+        "nan".to_owned()
+    } else if value == f64::INFINITY {
+        "inf".to_owned()
+    } else if value == f64::NEG_INFINITY {
+        "-inf".to_owned()
     } else {
-        value.to_string()
+        let mut output = serde_json::Number::from_f64(value)
+            .map_or_else(|| value.to_string(), |number| number.to_string());
+        if let Some(integer) = output.strip_suffix(".0") {
+            output = integer.to_owned();
+        }
+        output
     }
 }
 
@@ -218,5 +237,7 @@ mod tests {
         assert_eq!(Complex::new(0.0, 1.0).to_string(), "1j");
         assert_eq!(Complex::new(0.0, 0.0).to_string(), "0j");
         assert_eq!(Complex::new(-1.25, -4.5).to_string(), "-1.25-4.5j");
+        assert_eq!(Complex::new(-0.0, 4.0).to_string(), "-0+4j");
+        assert_eq!(Complex::new(1e300, 1.0).to_string(), "1e+300+1j");
     }
 }

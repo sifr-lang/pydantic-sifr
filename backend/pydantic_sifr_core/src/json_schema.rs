@@ -149,7 +149,7 @@ fn generate(
             "decimal JSON Schema representation is not implemented",
         )),
         Schema::Fraction(constraints) => fraction_schema(constraints, mode),
-        Schema::Complex(constraints) => complex_schema(constraints),
+        Schema::Complex(constraints) => complex_schema(constraints, mode),
         Schema::String(constraints) => {
             let mut output = typed("string");
             insert_optional_usize(&mut output, "minLength", constraints.min_length);
@@ -561,16 +561,23 @@ fn fraction_schema(
     }
 
     let mut number = typed("number");
-    insert_optional_rational_float(&mut number, "exclusiveMinimum", &constraints.greater_than)?;
-    insert_optional_rational_float(&mut number, "minimum", &constraints.greater_or_equal)?;
-    insert_optional_rational_float(&mut number, "exclusiveMaximum", &constraints.less_than)?;
-    insert_optional_rational_float(&mut number, "maximum", &constraints.less_or_equal)?;
+    insert_optional_exact_rational_float(
+        &mut number,
+        "exclusiveMinimum",
+        &constraints.greater_than,
+    )?;
+    insert_optional_exact_rational_float(&mut number, "minimum", &constraints.greater_or_equal)?;
+    insert_optional_exact_rational_float(&mut number, "exclusiveMaximum", &constraints.less_than)?;
+    insert_optional_exact_rational_float(&mut number, "maximum", &constraints.less_or_equal)?;
     let positive_multiple = constraints.multiple_of.as_ref().map(Signed::abs);
-    insert_optional_rational_float(&mut number, "multipleOf", &positive_multiple)?;
+    insert_optional_exact_rational_float(&mut number, "multipleOf", &positive_multiple)?;
     Ok(json!({"anyOf": [Value::Object(number), Value::Object(text)]}))
 }
 
-fn complex_schema(constraints: &ComplexConstraints) -> Result<Value, JsonSchemaError> {
+fn complex_schema(
+    constraints: &ComplexConstraints,
+    mode: JsonSchemaMode,
+) -> Result<Value, JsonSchemaError> {
     let mut output = typed("string");
     output.insert("format".to_owned(), Value::String("complex".to_owned()));
     output.insert(
@@ -587,7 +594,11 @@ fn complex_schema(constraints: &ComplexConstraints) -> Result<Value, JsonSchemaE
         "x-sifr-magnitude-maximum",
         constraints.magnitude_less_or_equal,
     )?;
-    Ok(Value::Object(output))
+    if mode == JsonSchemaMode::Serialization {
+        Ok(Value::Object(output))
+    } else {
+        Ok(json!({"anyOf": [{"type": "number"}, Value::Object(output)]}))
+    }
 }
 
 fn insert_fraction_constraint(
@@ -600,7 +611,7 @@ fn insert_fraction_constraint(
     }
 }
 
-fn insert_optional_rational_float(
+fn insert_optional_exact_rational_float(
     output: &mut Map<String, Value>,
     key: &str,
     value: &Option<num_rational::BigRational>,
@@ -610,10 +621,13 @@ fn insert_optional_rational_float(
     let Some(value) = value else {
         return Ok(());
     };
-    let value = value.to_f64().ok_or_else(|| {
+    let float = value.to_f64().ok_or_else(|| {
         invalid_number("fraction constraint cannot be represented as a finite JSON number")
     })?;
-    insert_optional_float(output, key, Some(value))
+    if num_rational::BigRational::from_float(float).as_ref() == Some(value) {
+        insert_optional_float(output, key, Some(float))?;
+    }
+    Ok(())
 }
 
 fn integer_schema(
