@@ -1,5 +1,6 @@
 //! Python-free native foundations for `pydantic-sifr`.
 
+mod adapter;
 pub mod arena;
 pub mod errors;
 pub mod input;
@@ -8,6 +9,7 @@ pub mod schema;
 pub mod serialization;
 pub mod validation;
 
+pub use adapter::{TypeAdapter, TypeAdapterBuildError, TypeAdapterBuildErrorKind};
 pub use arena::{Arena, ArenaError, ArenaId};
 pub use errors::{BuiltInError, ErrorOverride, ErrorRegistry, RegistryError};
 pub use input::{
