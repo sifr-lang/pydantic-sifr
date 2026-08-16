@@ -1,0 +1,86 @@
+milestone = "ps_10"
+upstream_commit = "f59e929c999e8b2efc7b12fd0bc1685c1a186be3"
+
+[[surface]]
+name = "api/base_model"
+status = "adapted"
+evidence = "src/model.sifr"
+difference = "Functional Result-returning entry points construct ordinary Sifr classes; the inherited BaseModel facade is not published."
+blocker = ""
+
+[[surface]]
+name = "api/field_configuration"
+status = "adapted"
+evidence = "src/schema_contract.sifr"
+difference = "Statically typed declaration metadata replaces runtime Field and ConfigDict objects."
+blocker = ""
+
+[[surface]]
+name = "api/validators"
+status = "blocked"
+evidence = ""
+difference = "Typed validator declarations require handler-bearing method-slot dispatch."
+blocker = "https://github.com/sifr-lang/pydantic-sifr/issues/10"
+
+[[surface]]
+name = "api/serialization"
+status = "blocked"
+evidence = ""
+difference = "Custom serializers and computed fields require handler-bearing method-slot dispatch."
+blocker = "https://github.com/sifr-lang/pydantic-sifr/issues/14"
+
+[[surface]]
+name = "api/type_adapter"
+status = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/type_adapter.rs"
+difference = "A Rust generic adapter owns one prepared schema, serializer plan, and JSON Schema view."
+blocker = ""
+
+[[surface]]
+name = "api/root_model"
+status = "blocked"
+evidence = ""
+difference = "Non-model roots work through the adapter engine, but the familiar RootModel facade is not available."
+blocker = "https://github.com/sifr-lang/pydantic-sifr/issues/10"
+
+[[surface]]
+name = "api/networks"
+status = "blocked"
+evidence = ""
+difference = "Core URL validation exists; Sifr-visible nominal network values require package-defined structural mappings."
+blocker = "https://github.com/sifr-lang/pydantic-sifr/issues/27"
+
+[[surface]]
+name = "api/pattern"
+status = "blocked"
+evidence = ""
+difference = "Core pattern compilation exists; the Sifr-visible nominal value requires a package-defined structural mapping."
+blocker = "https://github.com/sifr-lang/pydantic-sifr/issues/27"
+
+[[surface]]
+name = "core/multi_host_url_serialization"
+status = "blocked"
+evidence = ""
+difference = "Serialization needs a Sifr-visible nominal multi-host value and its package-defined structural mapping."
+blocker = "https://github.com/sifr-lang/pydantic-sifr/issues/27"
+
+[[surface]]
+name = "api/field_metadata"
+status = "adapted"
+evidence = "src/schema_contract.sifr"
+difference = "Field constraints and aliases are compile-time declaration metadata."
+blocker = ""
+
+[[surface]]
+name = "api/errors"
+status = "adapted"
+evidence = "backend/pydantic_sifr_core/src/validation/error.rs"
+difference = "Validation is fallible through Result rather than exception control flow."
+blocker = ""
+
+[[surface]]
+name = "api/json_schema"
+status = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/json_schema_dialect.rs"
+difference = "Draft 2020-12 is emitted from the package Core Schema with explicit Sifr integer profiles."
+blocker = ""
