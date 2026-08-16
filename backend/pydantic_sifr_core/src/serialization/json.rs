@@ -1,7 +1,9 @@
+use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::{
     StructuralEdge, StructuralEdgeKind, StructuralEnter, StructuralKind, StructuralProject,
     StructuralScalarRef, StructuralVisitor, VisitControl,
 };
+use sifr_runtime::json::{JsonIntegerEncoding, encode_integer_for_profile};
 
 use crate::JsonLimits;
 
@@ -147,7 +149,7 @@ impl<'value, 'config> StructuralVisitor<'value> for JsonWriter<'value, 'config> 
             self.write_scalar(value)?;
         }
         if prepared.capture_raw {
-            write_raw_scalar(&mut self.raw_output, value)?;
+            self.write_raw_scalar(value)?;
         }
         self.complete_value(prepared, is_none)?;
         self.check_output_size()
@@ -361,21 +363,30 @@ impl JsonWriter<'_, '_> {
         prepared: PreparedValue,
         is_none: bool,
     ) -> Result<(), SerializationError> {
+        let default_matches = if self.options.exclude_defaults {
+            match self
+                .plan
+                .field_policy(&self.path)
+                .and_then(super::plan::FieldPolicy::default)
+            {
+                Some(default) => native_json_bytes(
+                    default,
+                    self.plan.integer_profile(),
+                    self.options.limits.max_integer_digits,
+                    &json_path(&self.path),
+                )?
+                .is_some_and(|default| default == self.raw_output[prepared.raw_value_start..]),
+                None => false,
+            }
+        } else {
+            false
+        };
         let omit = prepared.emit
             && self
                 .frames
                 .last()
                 .is_some_and(|parent| parent.kind == StructuralKind::Record)
-            && ((self.options.exclude_none && is_none)
-                || (self.options.exclude_defaults
-                    && self
-                        .plan
-                        .field_policy(&self.path)
-                        .and_then(super::plan::FieldPolicy::default)
-                        .and_then(native_json_bytes)
-                        .is_some_and(|default| {
-                            default == self.raw_output[prepared.raw_value_start..]
-                        })));
+            && ((self.options.exclude_none && is_none) || default_matches);
         if omit {
             self.output.truncate(prepared.prefix_start);
             if let Some(parent) = self.frames.last_mut() {
@@ -411,8 +422,12 @@ impl JsonWriter<'_, '_> {
             StructuralScalarRef::None => self.output.extend_from_slice(b"null"),
             StructuralScalarRef::Bool(true) => self.output.extend_from_slice(b"true"),
             StructuralScalarRef::Bool(false) => self.output.extend_from_slice(b"false"),
-            StructuralScalarRef::SignedInteger { value, .. } => self.write_integer(value)?,
-            StructuralScalarRef::UnsignedInteger { value, .. } => self.write_integer(value)?,
+            StructuralScalarRef::SignedInteger { value, .. } => {
+                self.write_integer(&SifrInt::from_i128(value))?;
+            }
+            StructuralScalarRef::UnsignedInteger { value, .. } => {
+                self.write_integer(&SifrInt::from_u128(value))?;
+            }
             StructuralScalarRef::ExactInteger(value) => self.write_integer(value)?,
             StructuralScalarRef::Float(value) if value.is_finite() => {
                 serde_json::to_writer(&mut self.output, &value)
@@ -494,13 +509,56 @@ impl JsonWriter<'_, '_> {
         }
     }
 
-    fn write_integer(&mut self, value: impl core::fmt::Display) -> Result<(), SerializationError> {
+    fn write_integer(&mut self, value: &SifrInt) -> Result<(), SerializationError> {
         let text = value.to_string();
         if text.trim_start_matches(['-', '+']).len() > self.options.limits.max_integer_digits {
             return Err(limit_error("maximum integer digits"));
         }
-        self.output.extend_from_slice(text.as_bytes());
+        let encoding =
+            encode_integer_for_profile(value, self.plan.integer_profile(), &json_path(&self.path))
+                .map_err(SerializationError::from_integer_range)?;
+        write_integer_encoding(&mut self.output, encoding)?;
         Ok(())
+    }
+
+    fn write_raw_scalar(
+        &mut self,
+        value: StructuralScalarRef<'_>,
+    ) -> Result<(), SerializationError> {
+        match value {
+            StructuralScalarRef::None => self.raw_output.extend_from_slice(b"null"),
+            StructuralScalarRef::Bool(true) => self.raw_output.extend_from_slice(b"true"),
+            StructuralScalarRef::Bool(false) => self.raw_output.extend_from_slice(b"false"),
+            StructuralScalarRef::SignedInteger { value, .. } => {
+                self.write_raw_integer(&SifrInt::from_i128(value))?;
+            }
+            StructuralScalarRef::UnsignedInteger { value, .. } => {
+                self.write_raw_integer(&SifrInt::from_u128(value))?;
+            }
+            StructuralScalarRef::ExactInteger(value) => self.write_raw_integer(value)?,
+            StructuralScalarRef::Float(value) if value.is_finite() => {
+                serde_json::to_writer(&mut self.raw_output, &value)
+                    .map_err(|_| projection_error("finite float could not be encoded"))?;
+            }
+            StructuralScalarRef::String(value) => {
+                write_json_string(&mut self.raw_output, value)?;
+            }
+            StructuralScalarRef::Float(_) | StructuralScalarRef::Bytes(_) => {
+                return Err(SerializationError::new(
+                    SerializationErrorKind::UnsupportedJsonValue,
+                    "field default cannot be compared under the selected JSON policy",
+                ));
+            }
+            _ => return Err(projection_error("structural scalar kind is not supported")),
+        }
+        Ok(())
+    }
+
+    fn write_raw_integer(&mut self, value: &SifrInt) -> Result<(), SerializationError> {
+        let encoding =
+            encode_integer_for_profile(value, self.plan.integer_profile(), &json_path(&self.path))
+                .map_err(SerializationError::from_integer_range)?;
+        write_integer_encoding(&mut self.raw_output, encoding)
     }
 
     fn check_output_size(&self) -> Result<(), SerializationError> {
@@ -517,37 +575,33 @@ fn write_json_string(output: &mut Vec<u8>, value: &str) -> Result<(), Serializat
         .map_err(|_| projection_error("string could not be encoded as JSON"))
 }
 
-fn write_raw_scalar(
+fn write_integer_encoding(
     output: &mut Vec<u8>,
-    value: StructuralScalarRef<'_>,
+    encoding: JsonIntegerEncoding,
 ) -> Result<(), SerializationError> {
-    match value {
-        StructuralScalarRef::None => output.extend_from_slice(b"null"),
-        StructuralScalarRef::Bool(true) => output.extend_from_slice(b"true"),
-        StructuralScalarRef::Bool(false) => output.extend_from_slice(b"false"),
-        StructuralScalarRef::SignedInteger { value, .. } => {
-            output.extend_from_slice(value.to_string().as_bytes());
-        }
-        StructuralScalarRef::UnsignedInteger { value, .. } => {
-            output.extend_from_slice(value.to_string().as_bytes());
-        }
-        StructuralScalarRef::ExactInteger(value) => {
-            output.extend_from_slice(value.to_string().as_bytes());
-        }
-        StructuralScalarRef::Float(value) if value.is_finite() => {
-            serde_json::to_writer(output, &value)
-                .map_err(|_| projection_error("finite float could not be encoded"))?;
-        }
-        StructuralScalarRef::String(value) => write_json_string(output, value)?,
-        StructuralScalarRef::Float(_) | StructuralScalarRef::Bytes(_) => {
-            return Err(SerializationError::new(
-                SerializationErrorKind::UnsupportedJsonValue,
-                "field default cannot be compared under the selected JSON policy",
-            ));
-        }
-        _ => return Err(projection_error("structural scalar kind is not supported")),
+    match encoding {
+        JsonIntegerEncoding::Number(value) => output.extend_from_slice(value.as_bytes()),
+        JsonIntegerEncoding::DecimalString(value) => write_json_string(output, &value)?,
     }
     Ok(())
+}
+
+fn json_path(path: &[SelectionSegment]) -> String {
+    let mut output = String::from("$");
+    for segment in path {
+        match segment {
+            SelectionSegment::Field(field) => {
+                output.push('.');
+                output.push_str(field);
+            }
+            SelectionSegment::Index(index) => {
+                output.push('[');
+                output.push_str(&index.to_string());
+                output.push(']');
+            }
+        }
+    }
+    output
 }
 
 fn validate_limits(limits: JsonLimits) -> Result<(), SerializationError> {
