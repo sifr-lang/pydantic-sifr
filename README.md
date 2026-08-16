@@ -73,9 +73,11 @@ format, or runtime fallback.
 
 ## Model validation
 
-The package exports `model_validate`, `model_validate_json`, and
-`model_validate_strings`. These functions construct an ordinary Sifr class.
-They use one compiler-sealed schema program and one checked validation arena.
+The package exports `model_validate`, `model_validate_json`,
+`model_validate_strings`, `model_dump_json`, and `model_json_schema`. These
+functions use one compiler-sealed schema program. Validation constructs an
+ordinary Sifr class through one checked arena. Serialization and JSON Schema
+generation read the same sealed program.
 
 Native structural input uses compiler-generated visitation. The adapter writes
 directly into the input arena and does not create a generic model tree. The

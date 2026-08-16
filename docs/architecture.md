@@ -3,8 +3,8 @@
 The package has two release-synchronized components.
 
 - Sifr source owns deterministic schema derivation and static specialization.
-- The `pydantic_sifr_core` Rust crate owns envelope checks, input arenas, JSON
-  parsing, the runtime error registry, and execution-plan foundations.
+- The `pydantic_sifr_core` Rust crate owns sealed-program access, input arenas,
+  JSON parsing, validation, serialization plans, and JSON Schema generation.
 
 ## Static program boundary
 
@@ -18,20 +18,18 @@ and nodes.
 It reports invalid schemas before runtime. The compiler seals the successful
 result for one concrete type.
 
-The native core accepts only `VerifiedSchemaProgram`. Its fields are private.
-It compares all contract versions, the feature bitmap, program identity, shape
-identity, and payload size with the generated bridge. It does not decode,
-traverse, compile, or semantically verify the schema graph. No older format or
-runtime fallback exists.
+The native core accepts the compiler's sealed static program through
+`PreparedSchema::from_static`. The compiler-owned envelope verifies contract
+versions, program identity, and shape identity before the core reads a node.
+The package has no second envelope type, older format, or runtime fallback.
 
-The Sifr package root exports `ValidationError`, `verify_schema`, and the three
-model-validation functions. Schema payload classes, contract version values,
-and the native core's verified-program type are internal. The package does not
-export aliases for those construction types.
+The Sifr package root exports typed validation, serialization, and JSON Schema
+errors; `verify_schema`; three validation functions; `model_dump_json`; and
+`model_json_schema`. Schema payload classes and contract values are internal.
 
 The round-trip gate emits a representative specialization with the released
 Sifr compiler. It compares the exact bytes and identity with checked-in
-fixtures. A Rust test accepts the same fixture through the envelope checker.
+fixtures. A Rust test accepts the same fixture through `PreparedSchema`.
 
 ## Input boundary
 
@@ -60,8 +58,8 @@ message and context set. An override cannot change a built-in declaration.
 
 Malformed schemas return stable package diagnostics during specialization.
 Malformed JSON returns typed runtime errors with stable codes and source
-locations. Separate property and fuzz targets exercise JSON and program
-envelopes under explicit resource limits.
+locations. Separate property and fuzz targets exercise JSON and prepared
+schemas under explicit resource limits.
 
 ## Shared validation engine
 

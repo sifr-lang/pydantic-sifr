@@ -5,6 +5,14 @@ class ValidationError(Error):
     message: str
 
 
+class SerializationError(Error):
+    message: str
+
+
+class JsonSchemaError(Error):
+    message: str
+
+
 @rust.structural
 @rust(bridge.model.validate)
 def model_validate[T: StaticProgram, Input: Structural](
@@ -24,3 +32,17 @@ def model_validate_json[T: StaticProgram](
 def model_validate_strings[T: StaticProgram](
     payload: bytes,
 ) -> Result[T, ValidationError | RustPanicError]: ...
+
+
+@rust.structural
+@rust(bridge.model.dump_json)
+def model_dump_json[T: StaticProgram](
+    value: T,
+) -> Result[bytes, SerializationError | RustPanicError]: ...
+
+
+@rust.structural
+@rust(bridge.model.json_schema)
+def model_json_schema[T: StaticProgram](
+    target: T,
+) -> Result[bytes, JsonSchemaError | RustPanicError]: ...

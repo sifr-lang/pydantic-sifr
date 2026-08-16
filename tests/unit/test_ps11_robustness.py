@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[2]
 MERGE_GATE = ROOT / "scripts/run_merge_only_tests.sh"
 EXPECTED_TARGETS = {
     "json_foundation",
-    "schema_envelope",
+    "prepared_schema",
     "scalar_validation",
     "collection_validation",
     "special_validation",
@@ -43,7 +43,7 @@ class Ps11RobustnessTest(unittest.TestCase):
         )
         for marker in (
             "arbitrary_json_bytes_never_panic",
-            "arbitrary_envelope_fields_never_panic",
+            "arbitrary_prepared_schema_fields_never_panic",
             "arbitrary_collection_json_never_panics",
             "arbitrary_scalar_json_never_panics",
             "arbitrary_special_json_never_panics",

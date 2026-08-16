@@ -2,30 +2,21 @@
 
 mod adapter;
 pub mod arena;
-pub mod errors;
 pub mod input;
 pub mod json_schema;
-pub mod plan;
-pub mod schema;
 pub mod serialization;
 mod specialized_numeric;
 pub mod validation;
 
 pub use adapter::{TypeAdapter, TypeAdapterBuildError, TypeAdapterBuildErrorKind};
 pub use arena::{Arena, ArenaError, ArenaId};
-pub use errors::{BuiltInError, ErrorOverride, ErrorRegistry, RegistryError};
 pub use input::{
     InputArena, InputId, InputValue, JsonInputError, JsonLimits, NativeInputError, NativeValue,
     ObjectKind, SequenceKind, build_native_input, parse_json, project_structural_input,
 };
 pub use json_schema::{
     JSON_SCHEMA_DIALECT, JsonSchemaError, JsonSchemaErrorKind, JsonSchemaMode, JsonSchemaOptions,
-    generate_json_schema,
-};
-pub use plan::{ExecutionPlan, PlanOp};
-pub use schema::{
-    CompilerProgramEnvelope, ContractVersions, MAX_PROGRAM_BYTES, ProgramHeader, SchemaKind,
-    SchemaVerificationError, VerifiedSchemaProgram, verify_program,
+    generate_json_schema, generate_prepared_json_schema, generate_prepared_json_schema_bytes,
 };
 pub use serialization::{
     JsonIntegerProfile, JsonIntegerRangeError, SelectionPath, SelectionSegment, SerializationError,
@@ -45,6 +36,7 @@ pub use validation::{
     TaggedUnionSchema, TemporalKind, TemporalSchema, TimeValue, UnionChoice, UnionMode,
     UnionSchema, UnionValue, UrlConstraints, ValidatedArena, ValidatedIterator, ValidatedValue,
     ValidationError, ValidationLimits, ValidationOptions, ValueId, validate,
-    validate_and_construct, validate_json_and_construct, validate_native_and_construct,
-    validate_strings_and_construct, validate_structural_and_construct, validated_iterator,
+    validate_and_construct, validate_json_and_construct, validate_json_strings_and_construct,
+    validate_native_and_construct, validate_strings_and_construct,
+    validate_structural_and_construct, validated_iterator,
 };

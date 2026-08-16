@@ -34,13 +34,13 @@ are absent from the production dependency graph.
 
 ## Robustness testing
 
-The merge gate runs 4,096 property cases for the schema envelope, JSON input,
+The merge gate runs 4,096 property cases for prepared schemas, JSON input,
 scalar validation, collection validation, and special-value validation suites.
 Those suites include bounded-depth, bounded-size, malformed-input, and
 panic-free properties.
 
 The gate also compiles and executes six fuzz targets. Each target gets 1,000
-bounded randomized inputs: JSON foundations, schema envelopes, scalar
+bounded randomized inputs: JSON foundations, prepared schemas, scalar
 validation, collection validation, special-value validation, and typed
 construction. Seed corpora cover representative scalar, collection, and
 special inputs. These are not sanitizer-guided fuzz campaigns.

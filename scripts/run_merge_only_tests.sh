@@ -7,13 +7,13 @@ cd "${root}"
 
 PROPTEST_CASES=4096 CARGO_BUILD_JOBS=6 \
   cargo test --release -p pydantic_sifr_core \
-  --test schema_contract --test json_foundation \
+  --test prepared_schema --test json_foundation \
   --test validation_scalars --test validation_collections \
   --test validation_special
 CARGO_BUILD_JOBS=6 \
   cargo check --manifest-path fuzz/Cargo.toml --bin json_foundation
 CARGO_BUILD_JOBS=6 \
-  cargo check --manifest-path fuzz/Cargo.toml --bin schema_envelope
+  cargo check --manifest-path fuzz/Cargo.toml --bin prepared_schema
 CARGO_BUILD_JOBS=6 \
   cargo check --manifest-path fuzz/Cargo.toml --bin scalar_validation
 CARGO_BUILD_JOBS=6 \
@@ -26,7 +26,7 @@ CARGO_BUILD_JOBS=6 \
   cargo run --manifest-path fuzz/Cargo.toml --bin json_foundation -- \
   -runs=1000
 CARGO_BUILD_JOBS=6 \
-  cargo run --manifest-path fuzz/Cargo.toml --bin schema_envelope -- \
+  cargo run --manifest-path fuzz/Cargo.toml --bin prepared_schema -- \
   -runs=1000
 CARGO_BUILD_JOBS=6 \
   cargo run --manifest-path fuzz/Cargo.toml --bin scalar_validation -- \

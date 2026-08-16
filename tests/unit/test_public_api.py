@@ -35,7 +35,11 @@ class PublicApiTest(unittest.TestCase):
         self.assertEqual(
             package_root_exports(source),
             [
+                "JsonSchemaError",
+                "SerializationError",
                 "ValidationError",
+                "model_dump_json",
+                "model_json_schema",
                 "model_validate",
                 "model_validate_json",
                 "model_validate_strings",

@@ -523,7 +523,7 @@ impl<'schema> FieldRef<'schema> {
             Self::Owned(field) => Ok(field.default.as_ref().map(DefaultRef::Owned)),
             Self::Static(field) => {
                 let value = field.value("default")?;
-                if matches!(value, StaticProgramValue::None) {
+                if matches!(value, StaticProgramValue::None) && field.required()? {
                     Ok(None)
                 } else {
                     Ok(Some(DefaultRef::Static(value)))
@@ -548,7 +548,11 @@ impl<'schema> FieldRef<'schema> {
     pub(crate) fn serialization_alias(self) -> Option<String> {
         match self {
             Self::Owned(field) => field.metadata.get("pydantic.serialization_alias").cloned(),
-            Self::Static(_) => None,
+            Self::Static(field) => match field.value("serialization_alias") {
+                Ok(StaticProgramValue::String(value)) => Some((*value).to_owned()),
+                Ok(StaticProgramValue::None) | Err(_) => None,
+                Ok(_) => None,
+            },
         }
     }
 
@@ -592,6 +596,10 @@ impl StaticFieldRef {
 
     fn text(self, name: &'static str) -> Result<&'static str, ValidationError> {
         string(self.value(name)?, name)
+    }
+
+    fn required(self) -> Result<bool, ValidationError> {
+        bool_value(self.value("required")?, "field required")
     }
 }
 

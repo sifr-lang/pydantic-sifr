@@ -84,6 +84,20 @@ where
     validate_and_construct(schema, &input, options)
 }
 
+pub fn validate_json_strings_and_construct<T>(
+    schema: &PreparedSchema<'_>,
+    input: &[u8],
+    json_limits: JsonLimits,
+    mut options: ValidationOptions,
+) -> Result<T, ValidationError>
+where
+    T: StructuralConstruct,
+{
+    options.profile = InputProfile::Strings;
+    let input = parse_json(input, json_limits).map_err(json_input_error)?;
+    validate_and_construct(schema, &input, options)
+}
+
 fn construction_error(
     error: sifr_runtime::interop::structural::StructuralContractError,
 ) -> ValidationError {

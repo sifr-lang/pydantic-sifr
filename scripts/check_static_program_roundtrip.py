@@ -35,6 +35,7 @@ def one_match(pattern: re.Pattern[str], emitted: str, label: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sifr-bin", required=True)
+    parser.add_argument("--update", action="store_true")
     args = parser.parse_args()
     emitted = subprocess.run(
         [args.sifr_bin, "emit", str(SOURCE)],
@@ -45,6 +46,9 @@ def main() -> int:
     ).stdout
     actual_program = parse_numbers(one_match(BYTE_PATTERN, emitted, "program"))
     actual_identity = parse_numbers(one_match(IDENTITY_PATTERN, emitted, "identity"))
+    if args.update:
+        PROGRAM_FIXTURE.write_bytes(actual_program + b"\n")
+        IDENTITY_FIXTURE.write_text(actual_identity.hex() + "\n", encoding="utf-8")
     expected_program = PROGRAM_FIXTURE.read_bytes().removesuffix(b"\n")
     expected_identity = bytes.fromhex(IDENTITY_FIXTURE.read_text().strip())
     if actual_program != expected_program:

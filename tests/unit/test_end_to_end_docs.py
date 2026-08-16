@@ -26,6 +26,10 @@ class EndToEndDocsTest(unittest.TestCase):
         quickstart = (ROOT / "docs/quickstart.md").read_text(encoding="utf-8")
         for name in (
             "ValidationError",
+            "SerializationError",
+            "JsonSchemaError",
+            "model_dump_json",
+            "model_json_schema",
             "model_validate",
             "model_validate_json",
             "model_validate_strings",

@@ -22,6 +22,8 @@ class SameEngineTest(unittest.TestCase):
                 "bridge.model.validate",
                 "bridge.model.validate_json",
                 "bridge.model.validate_strings",
+                "bridge.model.dump_json",
+                "bridge.model.json_schema",
             ],
         )
 

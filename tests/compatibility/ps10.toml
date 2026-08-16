@@ -32,8 +32,8 @@ blocker = "https://github.com/sifr-lang/pydantic-sifr/issues/14"
 [[surface]]
 name = "api/type_adapter"
 status = "adapted"
-evidence = "backend/pydantic_sifr_core/tests/type_adapter.rs"
-difference = "A Rust generic adapter owns one prepared schema, serializer plan, and JSON Schema view."
+evidence = "src/model.sifr"
+difference = "Target-inferred Sifr functions expose validation, JSON serialization, and JSON Schema over one sealed schema; the Rust core also has a reusable typed adapter."
 blocker = ""
 
 [[surface]]
@@ -81,6 +81,6 @@ blocker = ""
 [[surface]]
 name = "api/json_schema"
 status = "adapted"
-evidence = "backend/pydantic_sifr_core/tests/json_schema_dialect.rs"
-difference = "Draft 2020-12 is emitted from the package Core Schema with explicit Sifr integer profiles."
+evidence = "src/model.sifr"
+difference = "model_json_schema emits Draft 2020-12 from the target type's sealed static schema."
 blocker = ""
