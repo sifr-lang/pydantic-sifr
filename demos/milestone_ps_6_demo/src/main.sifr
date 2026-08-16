@@ -69,21 +69,34 @@ class UserInput:
 
 def main() -> Result[None, ValidationError | RustPanicError]:
     try:
-        user: User = User.model_validate_json(
-            b'{"user_id":7,"name":"Ada","address":{"city":"NY","address_data":[{"postal":10001}]}}'
-        )
+        payload: bytes = b'{"user_id":7,"name":"Ada","address":{"city":"NY","address_data":[{"postal":10001}]}}'
+        user: User = User.model_validate_json(payload)
+        functional_user: User = validate_model_json(payload)
         expected_id: int64 = 7
         expected_postal: int64 = 10001
         assert user.id == expected_id
         assert user.active
         assert user.address.postal_code == expected_postal
+        assert functional_user.id == user.id
+        assert functional_user.name == user.name
+        assert functional_user.active == user.active
+        assert functional_user.address.city == user.address.city
+        assert functional_user.address.postal_code == user.address.postal_code
         strings: User = User.model_validate_strings(
+            b'{"user_id":"8","name":"Lin","address":{"city":"SF","address_data":[{"postal":"94105"}]}}'
+        )
+        functional_strings: User = validate_model_strings(
             b'{"user_id":"8","name":"Lin","address":{"city":"SF","address_data":[{"postal":"94105"}]}}'
         )
         expected_strings_id: int64 = 8
         expected_strings_postal: int64 = 94105
         assert strings.id == expected_strings_id
         assert strings.address.postal_code == expected_strings_postal
+        assert functional_strings.id == strings.id
+        assert functional_strings.name == strings.name
+        assert functional_strings.active == strings.active
+        assert functional_strings.address.city == strings.address.city
+        assert functional_strings.address.postal_code == strings.address.postal_code
         structural: User = validate_model(
             UserInput(
                 "9",
