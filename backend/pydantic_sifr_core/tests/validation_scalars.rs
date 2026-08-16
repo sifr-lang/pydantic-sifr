@@ -2,6 +2,7 @@ use bigdecimal::BigDecimal;
 use num_bigint::BigInt;
 use num_complex::Complex64;
 use num_rational::BigRational;
+use proptest::prelude::*;
 use pydantic_sifr_core::{
     BytesConstraints, BytesJsonMode, ComplexConstraints, DecimalConstraints, FloatConstraints,
     FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, JsonLimits, NativeValue,
@@ -445,4 +446,44 @@ fn json_bytes_base64_policy_decodes_and_rejects_invalid_input() {
         },
     ));
     assert_eq!(first_code(&error), "bytes_base64");
+}
+
+proptest! {
+    #[test]
+    fn arbitrary_scalar_json_never_panics(
+        bytes in proptest::collection::vec(any::<u8>(), 0..8192),
+        selector in any::<u8>(),
+    ) {
+        let Ok(input) = parse_json(&bytes, JsonLimits {
+            max_input_bytes: 8192,
+            max_depth: 16,
+            max_nodes: 1024,
+            max_string_bytes: 8192,
+            max_integer_digits: 1024,
+            max_collection_items: 1024,
+        }) else {
+            return Ok(());
+        };
+        let schema = match selector % 8 {
+            0 => Schema::Bool,
+            1 => Schema::exact_integer(),
+            2 => Schema::Float(FloatConstraints::default()),
+            3 => Schema::Decimal(DecimalConstraints::default()),
+            4 => Schema::String(StringConstraints::default()),
+            5 => Schema::Bytes(BytesConstraints::default()),
+            6 => Schema::Fraction(FractionConstraints::default()),
+            _ => Schema::Complex(ComplexConstraints::default()),
+        };
+        let result = std::panic::catch_unwind(|| {
+            validate(
+                &schema,
+                &input,
+                ValidationOptions {
+                    profile: InputProfile::Json,
+                    ..ValidationOptions::default()
+                },
+            )
+        });
+        prop_assert!(result.is_ok());
+    }
 }

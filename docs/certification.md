@@ -32,6 +32,19 @@ does not compare implementation-specific messages.
 The oracle is a development and certification input only. Python and Pydantic
 are absent from the production dependency graph.
 
+## Robustness testing
+
+The merge gate runs 4,096 property cases for the schema envelope, JSON input,
+scalar validation, collection validation, and special-value validation suites.
+Those suites include bounded-depth, bounded-size, malformed-input, and
+panic-free properties.
+
+The gate also compiles and executes six fuzz targets. Each target gets 1,000
+bounded randomized inputs: JSON foundations, schema envelopes, scalar
+validation, collection validation, special-value validation, and typed
+construction. Seed corpora cover representative scalar, collection, and
+special inputs. These are not sanitizer-guided fuzz campaigns.
+
 ## Update the Pydantic pin
 
 Use one clean checkout at the proposed exact commit. Do not combine revisions.
