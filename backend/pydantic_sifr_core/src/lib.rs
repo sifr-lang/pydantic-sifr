@@ -4,6 +4,7 @@ mod adapter;
 pub mod arena;
 pub mod errors;
 pub mod input;
+pub mod json_schema;
 pub mod plan;
 pub mod schema;
 pub mod serialization;
@@ -16,6 +17,7 @@ pub use input::{
     InputArena, InputId, InputValue, JsonInputError, JsonLimits, NativeInputError, NativeValue,
     ObjectKind, SequenceKind, build_native_input, parse_json, project_structural_input,
 };
+pub use json_schema::{JsonSchemaError, JsonSchemaErrorKind, JsonSchemaMode, generate_json_schema};
 pub use plan::{ExecutionPlan, PlanOp};
 pub use schema::{
     CompilerProgramEnvelope, ContractVersions, MAX_PROGRAM_BYTES, ProgramHeader, SchemaKind,
