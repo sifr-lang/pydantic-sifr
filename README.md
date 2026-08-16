@@ -9,6 +9,10 @@ The repository is under active construction. The package now has static model
 schemas, one shared validation engine, typed model construction, and public
 JSON, structural, and strings entry points.
 
+The [compatibility matrix](docs/compatibility.md) lists every selected public
+surface as same, adapted, or blocked. Blocked entries are not implemented by a
+fallback or compatibility shim.
+
 ## Foundation contract
 
 Schema programs use format version 1. The Sifr frontend const function produces

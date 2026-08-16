@@ -184,3 +184,11 @@ callback discriminators, validator callbacks, and caller-owned context remain
 assigned to the later PS7 callback waves. The PS7 validator API,
 discriminated-union API, and generic-recursion API families also remain
 pending.
+
+## PS10 compatibility matrix
+
+`tests/compatibility/ps10.toml` is the machine-readable source for the public
+matrix in `docs/compatibility.md`. It distinguishes delivered adaptations from
+compiler-blocked APIs. A blocked row must name an owning issue and cannot name
+local evidence as though the API were available. The unit gate also binds the
+selected PS10 upstream families to the pinned anchor ledger.
