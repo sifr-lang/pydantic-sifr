@@ -13,6 +13,9 @@ ROOT = Path(__file__).resolve().parents[1]
 CASES = {
     "tests/sifr/invalid_custom_error.sifr": "custom error declaration is incomplete",
     "tests/sifr/invalid_builtin_error.sifr": "built-in error message cannot change",
+    "tests/sifr/invalid_collection_constraint.sifr": (
+        "field constraints are not supported for collections"
+    ),
 }
 
 
@@ -25,6 +28,7 @@ def main() -> int:
         with tempfile.TemporaryDirectory(prefix="pydantic-sifr-negative-") as temp:
             probe = Path(temp)
             shutil.copyfile(ROOT / "src/errors.sifr", probe / "errors.sifr")
+            shutil.copyfile(ROOT / "src/schema_types.sifr", probe / "schema_types.sifr")
             contract = (ROOT / "src/schema_contract.sifr").read_text(
                 encoding="utf-8"
             ).replace("pydantic_sifr.schema_contract", "schema_contract")

@@ -235,6 +235,28 @@ impl<'schema> SchemaRef<'schema> {
         sums::definition(self)
     }
 
+    pub(crate) fn static_definitions(self) -> Result<Vec<Self>, ValidationError> {
+        let Self::Static(schema) = self else {
+            return Ok(Vec::new());
+        };
+        schema
+            .nodes
+            .iter()
+            .enumerate()
+            .filter_map(|(index, _)| {
+                let candidate = StaticSchemaRef {
+                    nodes: schema.nodes,
+                    index,
+                };
+                match candidate.optional_definition() {
+                    Ok(Some(_)) => Some(Ok(Self::Static(candidate))),
+                    Ok(None) => None,
+                    Err(error) => Some(Err(error)),
+                }
+            })
+            .collect()
+    }
+
     pub(crate) fn static_error(
         self,
     ) -> Result<Option<super::SchemaErrorOverride>, ValidationError> {
@@ -334,6 +356,13 @@ impl StaticSchemaRef {
             nodes: self.nodes,
             index,
         })
+    }
+
+    fn optional_definition(self) -> Result<Option<&'static str>, ValidationError> {
+        match field(self.node_record()?, "definition")? {
+            StaticProgramValue::None => Ok(None),
+            value => string(value, "schema definition").map(Some),
+        }
     }
 
     fn model(self) -> Result<StaticModelRef, ValidationError> {
@@ -548,7 +577,11 @@ impl<'schema> FieldRef<'schema> {
     pub(crate) fn serialization_alias(self) -> Option<String> {
         match self {
             Self::Owned(field) => field.metadata.get("pydantic.serialization_alias").cloned(),
-            Self::Static(_) => None,
+            Self::Static(field) => match field.value("serialization_alias") {
+                Ok(StaticProgramValue::String(value)) => Some((*value).to_owned()),
+                Ok(StaticProgramValue::None) | Err(_) => None,
+                Ok(_) => None,
+            },
         }
     }
 

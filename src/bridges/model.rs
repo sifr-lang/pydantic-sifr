@@ -1,8 +1,10 @@
 use core::fmt;
 
 use pydantic_sifr_core::{
-    InputProfile, JsonLimits, PreparedSchema, ValidationError, ValidationOptions, parse_json,
-    validate_and_construct, validate_json_and_construct, validate_structural_and_construct,
+    JsonIntegerProfile, JsonLimits, JsonSchemaMode, JsonSchemaOptions, PreparedSchema,
+    SerializationOptions, SerializationPlan, ValidationError, ValidationOptions,
+    generate_prepared_json_schema_bytes, serialize_json, validate_json_and_construct,
+    validate_json_strings_and_construct, validate_structural_and_construct,
 };
 use sifr_runtime::interop::structural::StructuralProject;
 use sifr_runtime::interop::structural::{StaticProgramType, StructuralConstruct};
@@ -28,6 +30,32 @@ impl fmt::Display for ModelValidationError {
 
 impl std::error::Error for ModelValidationError {}
 
+#[derive(Debug)]
+pub struct ModelSerializationError {
+    message: String,
+}
+
+impl fmt::Display for ModelSerializationError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ModelSerializationError {}
+
+#[derive(Debug)]
+pub struct ModelJsonSchemaError {
+    message: String,
+}
+
+impl fmt::Display for ModelJsonSchemaError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ModelJsonSchemaError {}
+
 pub fn validate_json<T>(payload: &[u8]) -> Result<T, ModelValidationError>
 where
     T: StructuralConstruct + StaticProgramType,
@@ -49,23 +77,11 @@ where
 {
     let schema = PreparedSchema::from_static::<T>()
         .map_err(|error| ModelValidationError::from_validation(&error))?;
-    let input = parse_json(payload, JsonLimits::default())
-        .map_err(|error| ModelValidationError {
-            errors_json: format!(
-                "{{\"errors\":[{{\"code\":\"{}\",\"message\":\"{}\",\"location\":[{},{}]}}],\"truncated\":false}}",
-                escape_json(error.code),
-                escape_json(&error.message),
-                error.line,
-                error.column,
-            ),
-        })?;
-    validate_and_construct(
+    validate_json_strings_and_construct(
         &schema,
-        &input,
-        ValidationOptions {
-            profile: InputProfile::Strings,
-            ..ValidationOptions::default()
-        },
+        payload,
+        JsonLimits::default(),
+        ValidationOptions::default(),
     )
     .map_err(|error| ModelValidationError::from_validation(&error))
 }
@@ -84,6 +100,47 @@ where
         ValidationOptions::default(),
     )
     .map_err(|error| ModelValidationError::from_validation(&error))
+}
+
+pub fn dump_json<T>(value: &T) -> Result<Vec<u8>, ModelSerializationError>
+where
+    T: StructuralProject + StaticProgramType,
+{
+    let schema = PreparedSchema::from_static::<T>().map_err(serialization_setup_error)?;
+    let plan =
+        SerializationPlan::from_prepared(schema, JsonIntegerProfile::Exact).map_err(|error| {
+            ModelSerializationError {
+                message: error.to_string(),
+            }
+        })?;
+    serialize_json(&plan, value, &SerializationOptions::default()).map_err(|error| {
+        ModelSerializationError {
+            message: error.to_string(),
+        }
+    })
+}
+
+pub fn json_schema<T>(_target: &T) -> Result<Vec<u8>, ModelJsonSchemaError>
+where
+    T: StructuralProject + StaticProgramType,
+{
+    let schema = PreparedSchema::from_static::<T>().map_err(|error| ModelJsonSchemaError {
+        message: error.to_string(),
+    })?;
+    generate_prepared_json_schema_bytes(
+        &schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, true),
+        JsonIntegerProfile::Exact,
+    )
+    .map_err(|error| ModelJsonSchemaError {
+        message: error.to_string(),
+    })
+}
+
+fn serialization_setup_error(error: ValidationError) -> ModelSerializationError {
+    ModelSerializationError {
+        message: error.to_string(),
+    }
 }
 
 fn validation_error_json(error: &ValidationError) -> String {

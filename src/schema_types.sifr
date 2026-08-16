@@ -1,0 +1,141 @@
+from .errors import SchemaIssue
+
+
+class ShapeMetadata:
+    key: str
+    value_type: str
+    value: str
+
+
+class ShapeField:
+    name: str
+    type: ShapeNode
+    required: bool
+    default: bool | int | float | str | bytes | None
+    metadata: list[ShapeMetadata]
+
+
+class ShapeVariant:
+    name: str
+    value: int | None
+    metadata: list[ShapeMetadata]
+
+
+class ShapeNode:
+    kind: str
+    name: str
+    identity: str
+    element: ShapeNode | None
+    key: ShapeNode | None
+    value: ShapeNode | None
+    members: list[ShapeNode]
+    type_arguments: list[ShapeNode]
+    fields: list[ShapeField]
+    metadata: list[ShapeMetadata]
+    variants: list[ShapeVariant]
+    inner: ShapeNode | None
+
+
+class ShapeInput:
+    canonical_identity: str
+    root: ShapeNode
+
+
+class SchemaAliasSegmentPayload:
+    kind: str
+    name: str | None
+    index: str | None
+
+
+class SchemaFieldPayload:
+    name: str
+    node: int
+    required: bool
+    default: bool | int | float | str | bytes | None
+    validation_alias: list[SchemaAliasSegmentPayload]
+    serialization_alias: str | None
+
+
+class SchemaModelPayload:
+    name: str
+    identity: str
+    fields: list[SchemaFieldPayload]
+    extra: str
+    populate_by_name: bool
+    location_by_alias: bool
+
+
+class SchemaIntegerConstraintsPayload:
+    greater_than: str | None
+    greater_or_equal: str | None
+    less_than: str | None
+    less_or_equal: str | None
+    multiple_of: str | None
+
+
+class SchemaStringConstraintsPayload:
+    min_length: str | None
+    max_length: str | None
+    strip_whitespace: bool
+    to_lower: bool
+    to_upper: bool
+    ascii_only: bool
+
+
+class SchemaNodePayload:
+    kind: str
+    children: list[int]
+    definition: str | None
+    reference: str | None
+    error_code: str | None
+    error_message: str | None
+    model: SchemaModelPayload | None
+    integer_target: str | None
+    integer_constraints: SchemaIntegerConstraintsPayload | None
+    string_constraints: SchemaStringConstraintsPayload | None
+    metadata: list[ShapeMetadata]
+    variants: list[ShapeVariant]
+
+
+class SchemaProgramPayload:
+    schema_program_version: int
+    structural_contract_version: int
+    structural_call_version: int
+    callback_abi_version: int
+    feature_bitmap: int
+    canonical_shape_identity: str
+    root: int
+    nodes: list[SchemaNodePayload]
+
+
+class SchemaOutcome:
+    status: str
+    value: SchemaProgramPayload | None
+    issues: list[SchemaIssue]
+
+
+class ErrorOverrideResult:
+    code: str | None
+    message: str | None
+    issue: str | None
+
+
+class NodeBuildResult:
+    nodes: list[SchemaNodePayload]
+    root: int
+    issue: str | None
+
+
+class FieldRules:
+    validation_alias: list[SchemaAliasSegmentPayload]
+    serialization_alias: str | None
+    integer_constraints: SchemaIntegerConstraintsPayload
+    string_constraints: SchemaStringConstraintsPayload
+    issue: str | None
+
+
+class ModelRules:
+    extra: str
+    populate_by_name: bool
+    location_by_alias: bool
+    issue: str | None

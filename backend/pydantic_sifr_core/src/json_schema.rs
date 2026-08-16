@@ -5,9 +5,11 @@ use serde_json::{Map, Number, Value, json};
 use sifr_runtime::json::JsonIntegerProfile;
 
 use crate::{
-    ComplexConstraints, ExtraPolicy, FractionConstraints, LiteralValue, Schema,
+    ComplexConstraints, ExtraPolicy, FractionConstraints, LiteralValue, PreparedSchema, Schema,
     validation::TemporalKind,
 };
+
+mod static_schema;
 
 const MAX_JSON_SCHEMA_DEPTH: usize = 256;
 pub const JSON_SCHEMA_DIALECT: &str = "https://json-schema.org/draft/2020-12/schema";
@@ -96,6 +98,35 @@ pub fn generate_json_schema(
         Value::String(JSON_SCHEMA_DIALECT.to_owned()),
     );
     Ok(Value::Object(core::mem::take(document)))
+}
+
+pub fn generate_prepared_json_schema(
+    schema: &PreparedSchema<'_>,
+    options: JsonSchemaOptions,
+    integer_profile: JsonIntegerProfile,
+) -> Result<Value, JsonSchemaError> {
+    match schema.schema() {
+        crate::validation::SchemaRef::Owned(schema) => {
+            generate_json_schema(schema, options, integer_profile)
+        }
+        schema @ crate::validation::SchemaRef::Static(_) => {
+            static_schema::generate(schema, options, integer_profile)
+        }
+    }
+}
+
+pub fn generate_prepared_json_schema_bytes(
+    schema: &PreparedSchema<'_>,
+    options: JsonSchemaOptions,
+    integer_profile: JsonIntegerProfile,
+) -> Result<Vec<u8>, JsonSchemaError> {
+    let document = generate_prepared_json_schema(schema, options, integer_profile)?;
+    serde_json::to_vec(&document).map_err(|error| {
+        JsonSchemaError::new(
+            JsonSchemaErrorKind::UnsupportedSchema,
+            format!("JSON Schema document could not be encoded: {error}"),
+        )
+    })
 }
 
 fn generate(

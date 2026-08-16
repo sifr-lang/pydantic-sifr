@@ -17,8 +17,9 @@ mod value;
 
 pub use collections::{ValidatedIterator, validated_iterator};
 pub use construction::{
-    validate_and_construct, validate_json_and_construct, validate_native_and_construct,
-    validate_strings_and_construct, validate_structural_and_construct,
+    validate_and_construct, validate_json_and_construct, validate_json_strings_and_construct,
+    validate_native_and_construct, validate_strings_and_construct,
+    validate_structural_and_construct,
 };
 pub use definitions::{DefinitionSchema, DefinitionsSchema};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
@@ -30,7 +31,9 @@ pub use schema::{
     RelativeTimeConstraint, Schema, StringConstraints, StringPattern, TemporalKind, TemporalSchema,
     UrlConstraints,
 };
+pub(crate) use schema_view::{ExtraRef, FieldRef, ModelRef};
 pub use schema_view::{SchemaRef, SchemaTag};
+pub(crate) use static_sums::declared_values as static_declared_values;
 pub use sum_schema::{
     DiscriminatorPath, EnumSchema, EnumVariant, LiteralSchema, LiteralValue, SchemaErrorOverride,
     TaggedUnionChoice, TaggedUnionSchema, UnionChoice, UnionMode, UnionSchema,
@@ -243,6 +246,21 @@ pub(crate) struct ValidationState<'a> {
 
 impl ValidationState<'_> {
     pub(crate) fn validate_node(
+        &mut self,
+        schema: SchemaRef<'_>,
+        input_id: InputId,
+        depth: usize,
+    ) -> Result<ValueId, ValidationError> {
+        let result = self.validate_node_without_override(schema, input_id, depth);
+        match (schema, result) {
+            (SchemaRef::Static(_), Err(error)) => {
+                Err(sums::apply_override(error, schema.static_error()?))
+            }
+            (_, result) => result,
+        }
+    }
+
+    fn validate_node_without_override(
         &mut self,
         schema: SchemaRef<'_>,
         input_id: InputId,

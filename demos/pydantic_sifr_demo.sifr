@@ -1,5 +1,10 @@
+from pydantic_sifr import JsonSchemaError
+from pydantic_sifr import SerializationError
 from pydantic_sifr import ValidationError
+from pydantic_sifr import model_dump_json
+from pydantic_sifr import model_json_schema
 from pydantic_sifr import model_validate_json
+from pydantic_sifr import model_validate_strings
 from pydantic_sifr import verify_schema
 
 
@@ -7,6 +12,9 @@ from pydantic_sifr import verify_schema
 @metadata("pydantic.extra", "forbid")
 @metadata("field", "id", "pydantic.alias.field", "user_id")
 @metadata("field", "id", "pydantic.gt", "0")
+@metadata("field", "id", "pydantic.error.package", "demo")
+@metadata("field", "id", "pydantic.error.code", "positive_id")
+@metadata("field", "id", "pydantic.error.message", "ID must be positive")
 @metadata("field", "name", "pydantic.min_length", "1")
 class User:
     id: int64
@@ -14,24 +22,59 @@ class User:
     active: bool = True
 
 
-def main() -> Result[None, ValidationError | RustPanicError]:
+def main() -> Result[
+    None,
+    ValidationError | SerializationError | JsonSchemaError | RustPanicError,
+]:
     try:
         user: User = model_validate_json(b'{"user_id":7,"name":"Ada"}')
         expected_id: int64 = 7
         assert user.id == expected_id
         assert user.name == "Ada"
         assert user.active
+        dumped: bytes = model_dump_json(user)
+        assert dumped == b'{"id":7,"name":"Ada","active":true}'
+        json_schema: bytes = model_json_schema(user)
+        assert len(json_schema) > 0
+        try:
+            schema_text: str = json_schema.decode()
+            assert (
+                '"$schema":"https://json-schema.org/draft/2020-12/schema"'
+                in schema_text
+            )
+            assert '"user_id"' in schema_text
+        except ParseError:
+            assert False
+
+        strings_error_seen: bool = False
+        try:
+            invalid_strings: User = model_validate_strings(b"{")
+            assert invalid_strings.id != expected_id
+        except ValidationError as error:
+            strings_error_seen = (
+                error.message.startswith('{"errors":[{"code":"json_invalid"')
+                and '"expected":"valid bounded JSON","location":[]' in error.message
+            )
+        except RustPanicError as error:
+            raise error
+        assert strings_error_seen
 
         error_seen: bool = False
         try:
             invalid: User = model_validate_json(b'{"user_id":0,"name":"","extra":true}')
             assert invalid.id != expected_id
         except ValidationError as error:
-            error_seen = error.message.startswith('{"errors":[{"code":"greater_than"')
+            error_seen = error.message.startswith(
+                '{"errors":[{"code":"demo.positive_id"'
+            )
         except RustPanicError as error:
             raise error
         assert error_seen
     except ValidationError as error:
+        raise error
+    except SerializationError as error:
+        raise error
+    except JsonSchemaError as error:
         raise error
     except RustPanicError as error:
         raise error

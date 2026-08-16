@@ -536,6 +536,21 @@ fn enum_values(
         .collect()
 }
 
+pub(crate) fn declared_values(schema: SchemaRef<'_>) -> Result<Vec<LiteralValue>, ValidationError> {
+    match schema.tag()? {
+        SchemaTag::Literal => literal_values(&schema.static_metadata()?, "pydantic.literal"),
+        SchemaTag::Enum => {
+            let variants = schema.static_variants()?;
+            enum_values(schema, &variants)
+        }
+        _ => Err(type_error(
+            "schema_invalid",
+            "Static schema does not declare literal values",
+            "literal or enum schema",
+        )),
+    }
+}
+
 fn parse_literal(metadata: &StaticMetadata, prefix: &str) -> Result<LiteralValue, ValidationError> {
     let kind = metadata.key.strip_prefix(prefix).unwrap_or_default();
     match kind {

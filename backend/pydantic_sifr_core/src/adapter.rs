@@ -5,7 +5,7 @@ use sifr_runtime::interop::structural::{StructuralConstruct, StructuralProject, 
 use crate::{
     JsonIntegerProfile, JsonLimits, JsonSchemaError, JsonSchemaOptions, NativeValue,
     PreparedSchema, Schema, SerializationError, SerializationOptions, SerializationPlan,
-    SerializationPlanError, ValidationError, ValidationOptions, generate_json_schema,
+    SerializationPlanError, ValidationError, ValidationOptions, generate_prepared_json_schema,
     serialize_json, serialize_structural, validate_json_and_construct,
     validate_native_and_construct, validate_strings_and_construct,
     validate_structural_and_construct,
@@ -52,7 +52,6 @@ impl fmt::Display for TypeAdapterBuildError {
 impl std::error::Error for TypeAdapterBuildError {}
 
 pub struct TypeAdapter<'schema, T> {
-    schema: &'schema Schema,
     prepared: PreparedSchema<'schema>,
     serializer: SerializationPlan,
     target: PhantomData<fn() -> T>,
@@ -64,6 +63,13 @@ impl<'schema, T: StructuralType> TypeAdapter<'schema, T> {
         integer_profile: JsonIntegerProfile,
     ) -> Result<Self, TypeAdapterBuildError> {
         let prepared = PreparedSchema::new(schema).map_err(invalid_schema)?;
+        Self::from_prepared(prepared, integer_profile)
+    }
+
+    pub fn from_prepared(
+        prepared: PreparedSchema<'schema>,
+        integer_profile: JsonIntegerProfile,
+    ) -> Result<Self, TypeAdapterBuildError> {
         if prepared.structural_identity() != T::shape_identity() {
             return Err(TypeAdapterBuildError::new(
                 TypeAdapterBuildErrorKind::ShapeMismatch,
@@ -73,7 +79,6 @@ impl<'schema, T: StructuralType> TypeAdapter<'schema, T> {
         let serializer = SerializationPlan::from_prepared(prepared, integer_profile)
             .map_err(invalid_serialization_plan)?;
         Ok(Self {
-            schema,
             prepared,
             serializer,
             target: PhantomData,
@@ -94,7 +99,7 @@ impl<'schema, T: StructuralType> TypeAdapter<'schema, T> {
         &self,
         options: JsonSchemaOptions,
     ) -> Result<serde_json::Value, JsonSchemaError> {
-        generate_json_schema(self.schema, options, self.serializer.integer_profile())
+        generate_prepared_json_schema(&self.prepared, options, self.serializer.integer_profile())
     }
 }
 

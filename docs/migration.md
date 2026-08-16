@@ -56,6 +56,8 @@ from pydantic_sifr import ValidationError
 from pydantic_sifr import model_validate
 from pydantic_sifr import model_validate_json
 from pydantic_sifr import model_validate_strings
+from pydantic_sifr import model_dump_json
+from pydantic_sifr import model_json_schema
 
 
 def parse_user(payload: bytes) -> Result[User, ValidationError | RustPanicError]:
@@ -71,6 +73,10 @@ def parse_user(payload: bytes) -> Result[User, ValidationError | RustPanicError]
 Use `model_validate` for a typed structural input. Use
 `model_validate_strings` when scalar leaves contain text that needs declared
 coercion.
+
+Use `model_dump_json(value)` for JSON output. Use
+`model_json_schema(value)` to select the value's sealed schema and emit a Draft
+2020-12 document. The schema function does not inspect the value.
 
 You can add thin class methods when an application needs method syntax. These
 methods must call the same functional entry points.

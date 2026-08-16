@@ -9,7 +9,11 @@ Import the public validator and schema verifier. Attach the verifier to the
 class that defines the validation target.
 
 ```sifr
+from pydantic_sifr import JsonSchemaError
+from pydantic_sifr import SerializationError
 from pydantic_sifr import ValidationError
+from pydantic_sifr import model_dump_json
+from pydantic_sifr import model_json_schema
 from pydantic_sifr import model_validate_json
 from pydantic_sifr import verify_schema
 
@@ -21,12 +25,21 @@ class User:
     name: str
 
 
-def main() -> Result[None, ValidationError | RustPanicError]:
+def main() -> Result[
+    None,
+    ValidationError | SerializationError | JsonSchemaError | RustPanicError,
+]:
     try:
         user: User = model_validate_json(b'{"id":7,"name":"Ada"}')
         expected_id: int64 = 7
         assert user.id == expected_id
+        output: bytes = model_dump_json(user)
+        schema: bytes = model_json_schema(user)
     except ValidationError as error:
+        raise error
+    except SerializationError as error:
+        raise error
+    except JsonSchemaError as error:
         raise error
     except RustPanicError as error:
         raise error
@@ -36,6 +49,10 @@ def main() -> Result[None, ValidationError | RustPanicError]:
 The compiler creates and seals one schema program for `User`. The native core
 parses the JSON, validates it, and constructs `User` directly. A validation
 failure returns `ValidationError` with stable codes and locations.
+
+`model_dump_json` serializes a typed value. `model_json_schema` uses its typed
+argument only to select the sealed schema and returns a Draft 2020-12 document.
+Both functions use the same static program as validation.
 
 ## Run the end-to-end demos
 
