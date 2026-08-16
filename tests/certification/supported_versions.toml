@@ -1,0 +1,9 @@
+schema = 1
+
+[[combination]]
+sifr_source_rev = "4f5492531e81385dd28efe25adfdd57dd678d2a9"
+sifr_cli_version = "0.0.0"
+sifr_package_requirement = ">=0.3,<0.4"
+package_version = "0.1.0-beta.1"
+core_version = "0.1.0-beta.1"
+status = "certified"

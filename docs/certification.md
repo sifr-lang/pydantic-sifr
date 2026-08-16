@@ -79,3 +79,21 @@ Use one exact Sifr commit for the compiler and runtime.
    reviewed candidate.
 
 Do not add a compatibility pin, fallback compiler, or alternate runtime.
+
+## Certified release tuple
+
+The release supports one certified combination. It does not select an older
+compiler or runtime when this combination is unavailable.
+
+| Component | Certified identity |
+| --- | --- |
+| Sifr compiler and runtime source | `4f5492531e81385dd28efe25adfdd57dd678d2a9` |
+| Sifr CLI version | `0.0.0` |
+| Sifr package requirement | `>=0.3,<0.4` |
+| `pydantic_sifr` package | `0.1.0-beta.1` |
+| `pydantic_sifr_core` crate | `0.1.0-beta.1` |
+
+`tests/certification/supported_versions.toml` is the machine-readable record.
+The companion gates run `scripts/check_supported_versions.py` against the exact
+compiler binary. The check also binds both Cargo manifests and `sifr.toml` to
+the same tuple. A tuple change requires a new certification run.

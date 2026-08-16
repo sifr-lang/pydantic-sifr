@@ -33,6 +33,7 @@ fi
 
 sifr_bin="${SIFR_BIN:?set SIFR_BIN to the exact required Sifr compiler}"
 "${sifr_bin}" --version
+python3 scripts/check_supported_versions.py --sifr-bin "${sifr_bin}"
 python3 scripts/check_sifr_union_order.py --sifr-bin "${sifr_bin}"
 "${sifr_bin}" fmt --check src
 "${sifr_bin}" check src/__init__.sifr
