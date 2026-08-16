@@ -13,7 +13,7 @@ cargo bench -p pydantic_sifr_core --bench foundations -- --noplot
 
 Measurement host: Apple M2 Pro, macOS 26.6.1, Rust 1.94.0. Criterion used
 30 samples and a three-second measurement window. The measured implementation
-commit is recorded below after the source commit is created.
+commit is `f8ae63a6069186b0bf811c23649a74cdf5955b96`.
 
 | Operation | Median time |
 | --- | ---: |
