@@ -1,3 +1,4 @@
+use proptest::prelude::*;
 use pydantic_sifr_core::{
     ClockSnapshot, CollectionConstraints, InputProfile, JsonLimits, NativeValue, PatternSchema,
     RelativeTimeConstraint, Schema, StringConstraints, TemporalKind, TemporalSchema,
@@ -422,4 +423,45 @@ fn url_validation_enforces_source_length_and_allowed_schemes() {
             .map(String::as_str),
         Some("http")
     );
+}
+
+proptest! {
+    #[test]
+    fn arbitrary_special_json_never_panics(
+        bytes in proptest::collection::vec(any::<u8>(), 0..8192),
+        selector in any::<u8>(),
+    ) {
+        let Ok(input) = parse_json(&bytes, JsonLimits {
+            max_input_bytes: 8192,
+            max_depth: 16,
+            max_nodes: 1024,
+            max_string_bytes: 8192,
+            max_integer_digits: 1024,
+            max_collection_items: 1024,
+        }) else {
+            return Ok(());
+        };
+        let schema = match selector % 5 {
+            0 => Schema::Url(UrlConstraints::default()),
+            1 => Schema::Uuid { version: None },
+            2 => temporal(TemporalKind::Date, None),
+            3 => temporal(TemporalKind::DateTime, None),
+            _ => Schema::Pattern(PatternSchema {
+                case_insensitive: false,
+                multi_line: false,
+                dot_matches_new_line: false,
+            }),
+        };
+        let result = std::panic::catch_unwind(|| {
+            validate(
+                &schema,
+                &input,
+                ValidationOptions {
+                    profile: InputProfile::Json,
+                    ..ValidationOptions::default()
+                },
+            )
+        });
+        prop_assert!(result.is_ok());
+    }
 }

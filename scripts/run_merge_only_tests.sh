@@ -23,6 +23,12 @@ CARGO_BUILD_JOBS=6 \
 CARGO_BUILD_JOBS=6 \
   cargo check --manifest-path fuzz/Cargo.toml --bin typed_construction
 CARGO_BUILD_JOBS=6 \
+  cargo run --manifest-path fuzz/Cargo.toml --bin json_foundation -- \
+  -runs=1000
+CARGO_BUILD_JOBS=6 \
+  cargo run --manifest-path fuzz/Cargo.toml --bin schema_envelope -- \
+  -runs=1000
+CARGO_BUILD_JOBS=6 \
   cargo run --manifest-path fuzz/Cargo.toml --bin scalar_validation -- \
   -seed_inputs=fuzz/corpus/scalar_validation/integer.json,fuzz/corpus/scalar_validation/string.json \
   -runs=1000
