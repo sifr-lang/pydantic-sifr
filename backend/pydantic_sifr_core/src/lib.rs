@@ -20,8 +20,8 @@ pub use schema::{
     SchemaVerificationError, VerifiedSchemaProgram, verify_program,
 };
 pub use serialization::{
-    SerializationPlan, SerializationPlanError, SerializerFieldPlan, SerializerNode,
-    SerializerNodeId,
+    SerializationError, SerializationErrorKind, SerializationPlan, SerializationPlanError,
+    SerializerFieldPlan, SerializerNode, SerializerNodeId, serialize_json, serialize_structural,
 };
 pub use validation::{
     AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, ChainSchema, ClockSnapshot,
