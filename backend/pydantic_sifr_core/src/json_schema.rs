@@ -1,9 +1,13 @@
 use core::fmt;
 
+use num_traits::{Signed, Zero};
 use serde_json::{Map, Number, Value, json};
 use sifr_runtime::json::JsonIntegerProfile;
 
-use crate::{ExtraPolicy, LiteralValue, Schema, validation::TemporalKind};
+use crate::{
+    ComplexConstraints, ExtraPolicy, FractionConstraints, LiteralValue, Schema,
+    validation::TemporalKind,
+};
 
 const MAX_JSON_SCHEMA_DEPTH: usize = 256;
 
@@ -144,9 +148,8 @@ fn generate(
         Schema::Decimal(_) => Err(unsupported(
             "decimal JSON Schema representation is not implemented",
         )),
-        Schema::Fraction(_) | Schema::Complex(_) => Err(unsupported(
-            "specialized numeric JSON Schema representation is not implemented",
-        )),
+        Schema::Fraction(constraints) => fraction_schema(constraints, mode),
+        Schema::Complex(constraints) => complex_schema(constraints),
         Schema::String(constraints) => {
             let mut output = typed("string");
             insert_optional_usize(&mut output, "minLength", constraints.min_length);
@@ -529,6 +532,88 @@ fn insert_optional_float(
         output.insert(key.to_owned(), Value::Number(value));
     }
     Ok(())
+}
+
+fn fraction_schema(
+    constraints: &FractionConstraints,
+    mode: JsonSchemaMode,
+) -> Result<Value, JsonSchemaError> {
+    if constraints.multiple_of.as_ref().is_some_and(Zero::is_zero) {
+        return Err(invalid_number("fraction multipleOf must not be zero"));
+    }
+    let mut text = typed("string");
+    text.insert("format".to_owned(), Value::String("fraction".to_owned()));
+    insert_fraction_constraint(
+        &mut text,
+        "x-sifr-exclusive-minimum",
+        &constraints.greater_than,
+    );
+    insert_fraction_constraint(&mut text, "x-sifr-minimum", &constraints.greater_or_equal);
+    insert_fraction_constraint(
+        &mut text,
+        "x-sifr-exclusive-maximum",
+        &constraints.less_than,
+    );
+    insert_fraction_constraint(&mut text, "x-sifr-maximum", &constraints.less_or_equal);
+    insert_fraction_constraint(&mut text, "x-sifr-multiple-of", &constraints.multiple_of);
+    if mode == JsonSchemaMode::Serialization {
+        return Ok(Value::Object(text));
+    }
+
+    let mut number = typed("number");
+    insert_optional_rational_float(&mut number, "exclusiveMinimum", &constraints.greater_than)?;
+    insert_optional_rational_float(&mut number, "minimum", &constraints.greater_or_equal)?;
+    insert_optional_rational_float(&mut number, "exclusiveMaximum", &constraints.less_than)?;
+    insert_optional_rational_float(&mut number, "maximum", &constraints.less_or_equal)?;
+    let positive_multiple = constraints.multiple_of.as_ref().map(Signed::abs);
+    insert_optional_rational_float(&mut number, "multipleOf", &positive_multiple)?;
+    Ok(json!({"anyOf": [Value::Object(number), Value::Object(text)]}))
+}
+
+fn complex_schema(constraints: &ComplexConstraints) -> Result<Value, JsonSchemaError> {
+    let mut output = typed("string");
+    output.insert("format".to_owned(), Value::String("complex".to_owned()));
+    output.insert(
+        "x-sifr-allow-non-finite".to_owned(),
+        Value::Bool(constraints.allow_non_finite),
+    );
+    insert_optional_float(
+        &mut output,
+        "x-sifr-magnitude-minimum",
+        constraints.magnitude_greater_or_equal,
+    )?;
+    insert_optional_float(
+        &mut output,
+        "x-sifr-magnitude-maximum",
+        constraints.magnitude_less_or_equal,
+    )?;
+    Ok(Value::Object(output))
+}
+
+fn insert_fraction_constraint(
+    output: &mut Map<String, Value>,
+    key: &str,
+    value: &Option<num_rational::BigRational>,
+) {
+    if let Some(value) = value {
+        output.insert(key.to_owned(), Value::String(value.to_string()));
+    }
+}
+
+fn insert_optional_rational_float(
+    output: &mut Map<String, Value>,
+    key: &str,
+    value: &Option<num_rational::BigRational>,
+) -> Result<(), JsonSchemaError> {
+    use num_traits::ToPrimitive;
+
+    let Some(value) = value else {
+        return Ok(());
+    };
+    let value = value.to_f64().ok_or_else(|| {
+        invalid_number("fraction constraint cannot be represented as a finite JSON number")
+    })?;
+    insert_optional_float(output, key, Some(value))
 }
 
 fn integer_schema(

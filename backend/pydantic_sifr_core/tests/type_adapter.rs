@@ -1,7 +1,7 @@
 use pydantic_sifr_core::{
-    CollectionConstraints, IntegerConstraints, IntegerTarget, JsonIntegerProfile, JsonLimits,
-    NativeValue, Schema, SerializationOptions, TypeAdapter, TypeAdapterBuildErrorKind,
-    ValidationOptions,
+    CollectionConstraints, Complex, ComplexConstraints, Fraction, FractionConstraints,
+    IntegerConstraints, IntegerTarget, JsonIntegerProfile, JsonLimits, NativeValue, Schema,
+    SerializationOptions, TypeAdapter, TypeAdapterBuildErrorKind, ValidationOptions,
 };
 
 #[test]
@@ -67,6 +67,53 @@ fn reusable_adapter_validates_every_input_profile_and_serializes() {
             NativeValue::Integer("7".to_owned()),
             NativeValue::Integer("8".to_owned()),
         ])
+    );
+}
+
+#[test]
+fn specialized_numeric_adapters_construct_and_serialize_public_values() {
+    let fraction_schema = Schema::Fraction(FractionConstraints::default());
+    let fraction_adapter =
+        TypeAdapter::<Fraction>::new(&fraction_schema, JsonIntegerProfile::Exact)
+            .unwrap_or_else(|error| panic!("fraction adapter setup failed: {error}"));
+    let fraction = fraction_adapter
+        .validate_json(
+            br#""6/-8""#,
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("fraction validation failed: {error}"));
+    assert_eq!(fraction.to_string(), "-3/4");
+    assert_eq!(
+        fraction_adapter
+            .dump_json(&fraction, &SerializationOptions::default())
+            .unwrap_or_else(|error| panic!("fraction JSON output failed: {error}")),
+        br#""-3/4""#
+    );
+    assert_eq!(
+        fraction_adapter
+            .dump_structural(&fraction, &SerializationOptions::default())
+            .unwrap_or_else(|error| panic!("fraction structural output failed: {error}")),
+        NativeValue::String("-3/4".to_owned())
+    );
+
+    let complex_schema = Schema::Complex(ComplexConstraints::default());
+    let complex_adapter = TypeAdapter::<Complex>::new(&complex_schema, JsonIntegerProfile::Exact)
+        .unwrap_or_else(|error| panic!("complex adapter setup failed: {error}"));
+    let complex = complex_adapter
+        .validate_json(
+            br#""3+4j""#,
+            JsonLimits::default(),
+            ValidationOptions::default(),
+        )
+        .unwrap_or_else(|error| panic!("complex validation failed: {error}"));
+    assert_eq!(complex.real(), 3.0);
+    assert_eq!(complex.imaginary(), 4.0);
+    assert_eq!(
+        complex_adapter
+            .dump_json(&complex, &SerializationOptions::default())
+            .unwrap_or_else(|error| panic!("complex JSON output failed: {error}")),
+        br#""3+4j""#
     );
 }
 
