@@ -16,10 +16,12 @@ from pydantic_sifr import verify_schema
 @metadata("field", "id", "pydantic.error.code", "positive_id")
 @metadata("field", "id", "pydantic.error.message", "ID must be positive")
 @metadata("field", "name", "pydantic.min_length", "1")
+@metadata("field", "nickname", "pydantic.min_length", "2")
 class User:
     id: int64
     name: str
     active: bool = True
+    nickname: str | None = None
 
 
 def main() -> Result[
@@ -32,8 +34,9 @@ def main() -> Result[
         assert user.id == expected_id
         assert user.name == "Ada"
         assert user.active
+        assert user.nickname is None
         dumped: bytes = model_dump_json(user)
-        assert dumped == b'{"id":7,"name":"Ada","active":true}'
+        assert dumped == b'{"id":7,"name":"Ada","active":true,"nickname":null}'
         json_schema: bytes = model_json_schema(user)
         assert len(json_schema) > 0
         try:
@@ -43,6 +46,7 @@ def main() -> Result[
                 in schema_text
             )
             assert '"user_id"' in schema_text
+            assert '"required":["user_id","name"]' in schema_text
         except ParseError:
             assert False
 

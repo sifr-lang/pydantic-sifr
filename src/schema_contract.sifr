@@ -438,6 +438,13 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             kind = primitive_kind(node.name)
         if kind == "":
             return NodeBuildResult([], 0, "unsupported structural primitive")
+        if sum_kind(kind, inherited) == "literal" and (
+            has_integer_constraints(copy_metadata(inherited))
+            or has_string_constraints(copy_metadata(inherited))
+        ):
+            return NodeBuildResult(
+                [], 0, "field constraints are not supported for literal fields"
+            )
         invalid_constraints: str | None = constraint_issue(
             kind, copy_metadata(inherited)
         )
@@ -465,6 +472,12 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
         )
         return NodeBuildResult([leaf], 0, None)
     if node.kind == "recursive_reference":
+        if has_integer_constraints(copy_metadata(inherited)) or has_string_constraints(
+            copy_metadata(inherited)
+        ):
+            return NodeBuildResult(
+                [], 0, "field constraints are not supported for recursive references"
+            )
         reference: SchemaNodePayload = SchemaNodePayload(
             "definition-ref",
             [],
@@ -556,12 +569,11 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
         root: int = len(nodes)
         return NodeBuildResult(nodes + [mapping], root, None)
     if node.kind == "tuple" or node.kind == "union":
-        if node.kind == "tuple" and (
-            has_integer_constraints(copy_metadata(inherited))
-            or has_string_constraints(copy_metadata(inherited))
+        if has_integer_constraints(copy_metadata(inherited)) or has_string_constraints(
+            copy_metadata(inherited)
         ):
             return NodeBuildResult(
-                [], 0, "field constraints are not supported for tuples"
+                [], 0, "field constraints are not supported for tuples or unions"
             )
         member_nodes: list[SchemaNodePayload] = []
         member_roots: list[int] = []
@@ -605,7 +617,33 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
         field_roots: list[int] = []
         model_fields: list[SchemaFieldPayload] = []
         for field in node.fields:
-            built_field: NodeBuildResult = build_node(field.type, field.metadata)
+            repeated_definition: bool = False
+            if field.type.kind == "nominal":
+                for existing in field_nodes:
+                    if existing.definition == field.type.identity + "":
+                        repeated_definition = True
+            built_field: NodeBuildResult = NodeBuildResult([], 0, None)
+            if repeated_definition:
+                field_override: ErrorOverrideResult = error_override(field.metadata)
+                if field_override.issue is not None:
+                    return NodeBuildResult([], 0, field_override.issue)
+                reference_node: SchemaNodePayload = SchemaNodePayload(
+                    "definition-ref",
+                    [],
+                    None,
+                    field.type.identity + "",
+                    field_override.code,
+                    field_override.message,
+                    None,
+                    None,
+                    None,
+                    None,
+                    copy_metadata(field.metadata),
+                    [],
+                )
+                built_field = NodeBuildResult([reference_node], 0, None)
+            else:
+                built_field = build_node(field.type, field.metadata)
             if built_field.issue is not None:
                 return built_field
             offset: int = len(field_nodes)
@@ -678,38 +716,7 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
         )
         return NodeBuildResult([enumeration], 0, None)
     if node.kind == "newtype":
-        if has_integer_constraints(copy_metadata(inherited)) or has_string_constraints(
-            copy_metadata(inherited)
-        ):
-            return NodeBuildResult(
-                [], 0, "field constraints are not supported for newtype fields"
-            )
-        override = error_override(inherited + node.metadata)
-        if override.issue is not None:
-            return NodeBuildResult([], 0, override.issue)
-        inner: ShapeNode | None = node.inner
-        if inner is None:
-            return NodeBuildResult([], 0, "newtype schema node has no inner type")
-        built_inner: NodeBuildResult = build_node(inner, [])
-        if built_inner.issue is not None:
-            return built_inner
-        wrapper_definition: str | None = node.identity
-        wrapper: SchemaNodePayload = SchemaNodePayload(
-            "model",
-            [built_inner.root],
-            wrapper_definition,
-            None,
-            override.code,
-            override.message,
-            None,
-            None,
-            None,
-            None,
-            inherited + node.metadata,
-            [],
-        )
-        root: int = len(built_inner.nodes)
-        return NodeBuildResult(built_inner.nodes + [wrapper], root, None)
+        return NodeBuildResult([], 0, "newtype schemas are not supported")
     return NodeBuildResult([], 0, "structural shape cannot form a schema program")
 
 
@@ -755,6 +762,8 @@ def verify_nodes(nodes: list[SchemaNodePayload], root: int) -> str | None:
             return "non-reference schema node has a reference"
         if node.kind == "definition-ref" and node.reference is None:
             return "definition reference has no identity"
+        if node.kind == "model" and node.model is None:
+            return "model schema node has no model payload"
         if node.error_code is None and node.error_message is not None:
             return "schema node has an error message without a code"
         if node.error_code is not None and node.error_message is None:

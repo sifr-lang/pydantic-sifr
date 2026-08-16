@@ -9,27 +9,43 @@ use super::{
     typed, unsupported,
 };
 
+const MAX_STATIC_JSON_SCHEMA_NODES: usize = 4096;
+
 pub(super) fn generate(
     schema: SchemaRef<'_>,
     options: JsonSchemaOptions,
     integer_profile: JsonIntegerProfile,
 ) -> Result<Value, JsonSchemaError> {
-    let mut document = generate_node(schema, options, integer_profile, 0)?;
+    let mut generated_nodes = 0;
+    let mut definitions = Vec::new();
+    let mut document = generate_node(
+        schema,
+        options,
+        integer_profile,
+        0,
+        &mut generated_nodes,
+        &mut definitions,
+    )?;
     let Some(document) = document.as_object_mut() else {
         return Err(unsupported("JSON Schema document root is not an object"));
     };
-    let definitions = schema
-        .static_definitions()
-        .map_err(schema_error)?
-        .into_iter()
-        .map(|definition| {
-            let name = definition.static_definition().map_err(schema_error)?;
-            let value = generate_node(definition, options, integer_profile, 1)?;
-            Ok((name.to_owned(), value))
-        })
-        .collect::<Result<Map<_, _>, JsonSchemaError>>()?;
-    if !definitions.is_empty() {
-        document.insert("$defs".to_owned(), Value::Object(definitions));
+    let mut generated_definitions = Map::new();
+    let mut definition_index = 0;
+    while definition_index < definitions.len() {
+        let (name, definition) = definitions[definition_index].clone();
+        let value = generate_node(
+            definition,
+            options,
+            integer_profile,
+            1,
+            &mut generated_nodes,
+            &mut definitions,
+        )?;
+        generated_definitions.insert(name, value);
+        definition_index += 1;
+    }
+    if !generated_definitions.is_empty() {
+        document.insert("$defs".to_owned(), Value::Object(generated_definitions));
     }
     document.insert(
         "$schema".to_owned(),
@@ -38,11 +54,13 @@ pub(super) fn generate(
     Ok(Value::Object(core::mem::take(document)))
 }
 
-fn generate_node(
-    schema: SchemaRef<'_>,
+fn generate_node<'schema>(
+    schema: SchemaRef<'schema>,
     options: JsonSchemaOptions,
     integer_profile: JsonIntegerProfile,
     depth: usize,
+    generated_nodes: &mut usize,
+    definitions: &mut Vec<(String, SchemaRef<'schema>)>,
 ) -> Result<Value, JsonSchemaError> {
     if depth > MAX_JSON_SCHEMA_DEPTH {
         return Err(JsonSchemaError::new(
@@ -50,9 +68,23 @@ fn generate_node(
             "JSON Schema generation exceeded the static schema depth limit",
         ));
     }
-    let child = |index| {
+    *generated_nodes = generated_nodes.saturating_add(1);
+    if *generated_nodes > MAX_STATIC_JSON_SCHEMA_NODES {
+        return Err(JsonSchemaError::new(
+            JsonSchemaErrorKind::DepthLimit,
+            "JSON Schema generation exceeded the static node limit",
+        ));
+    }
+    let mut child = |index| {
         let child = schema.child(index).map_err(schema_error)?;
-        generate_node(child, options, integer_profile, depth + 1)
+        generate_node(
+            child,
+            options,
+            integer_profile,
+            depth + 1,
+            generated_nodes,
+            definitions,
+        )
     };
     match schema.tag().map_err(schema_error)? {
         SchemaTag::None => Ok(json!({"type": "null"})),
@@ -97,18 +129,45 @@ fn generate_node(
         ),
         SchemaTag::Nullable => Ok(json!({"anyOf": [child(0)?, {"type": "null"}]})),
         SchemaTag::Union => Ok(json!({
-            "anyOf": children(schema, options, integer_profile, depth + 1)?
+            "anyOf": children(
+                schema,
+                options,
+                integer_profile,
+                depth + 1,
+                generated_nodes,
+                definitions,
+            )?
         })),
         SchemaTag::TaggedUnion => Ok(json!({
-            "oneOf": children(schema, options, integer_profile, depth + 1)?
+            "oneOf": children(
+                schema,
+                options,
+                integer_profile,
+                depth + 1,
+                generated_nodes,
+                definitions,
+            )?
         })),
-        SchemaTag::DefinitionRef => Ok(json!({
-            "$ref": format!(
-                "#/$defs/{}",
-                escape_json_pointer(schema.static_reference().map_err(schema_error)?)
-            )
-        })),
-        SchemaTag::Model => model_schema(schema, options, integer_profile, depth),
+        SchemaTag::DefinitionRef => {
+            let name = schema.static_reference().map_err(schema_error)?;
+            if !definitions.iter().any(|(existing, _)| existing == name) {
+                definitions.push((
+                    name.to_owned(),
+                    schema.static_definition_target().map_err(schema_error)?,
+                ));
+            }
+            Ok(json!({
+                "$ref": format!("#/$defs/{}", escape_json_pointer(name))
+            }))
+        }
+        SchemaTag::Model => model_schema(
+            schema,
+            options,
+            integer_profile,
+            depth,
+            generated_nodes,
+            definitions,
+        ),
         SchemaTag::List | SchemaTag::Set => {
             let mut output = typed("array");
             output.insert("items".to_owned(), child(0)?);
@@ -118,7 +177,14 @@ fn generate_node(
             Ok(Value::Object(output))
         }
         SchemaTag::Tuple => {
-            let items = children(schema, options, integer_profile, depth + 1)?;
+            let items = children(
+                schema,
+                options,
+                integer_profile,
+                depth + 1,
+                generated_nodes,
+                definitions,
+            )?;
             let count = items.len();
             Ok(json!({
                 "type": "array",
@@ -154,11 +220,13 @@ fn generate_node(
     }
 }
 
-fn children(
-    schema: SchemaRef<'_>,
+fn children<'schema>(
+    schema: SchemaRef<'schema>,
     options: JsonSchemaOptions,
     integer_profile: JsonIntegerProfile,
     depth: usize,
+    generated_nodes: &mut usize,
+    definitions: &mut Vec<(String, SchemaRef<'schema>)>,
 ) -> Result<Vec<Value>, JsonSchemaError> {
     (0..schema.child_count().map_err(schema_error)?)
         .map(|index| {
@@ -167,16 +235,20 @@ fn children(
                 options,
                 integer_profile,
                 depth,
+                generated_nodes,
+                definitions,
             )
         })
         .collect()
 }
 
-fn model_schema(
-    schema: SchemaRef<'_>,
+fn model_schema<'schema>(
+    schema: SchemaRef<'schema>,
     options: JsonSchemaOptions,
     integer_profile: JsonIntegerProfile,
     depth: usize,
+    generated_nodes: &mut usize,
+    definitions: &mut Vec<(String, SchemaRef<'schema>)>,
 ) -> Result<Value, JsonSchemaError> {
     let model = schema.model().map_err(schema_error)?;
     let mut properties = Map::new();
@@ -198,6 +270,8 @@ fn model_schema(
                 options,
                 integer_profile,
                 depth + 1,
+                generated_nodes,
+                definitions,
             )?,
         );
         if options.mode == JsonSchemaMode::Serialization
@@ -263,4 +337,158 @@ fn field_name(
 
 fn schema_error(error: crate::ValidationError) -> JsonSchemaError {
     JsonSchemaError::new(JsonSchemaErrorKind::UnsupportedSchema, error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use sifr_runtime::interop::structural::StaticProgramValue;
+
+    use super::*;
+
+    fn record(fields: Vec<(&'static str, StaticProgramValue)>) -> StaticProgramValue {
+        StaticProgramValue::Record(Box::leak(fields.into_boxed_slice()))
+    }
+
+    fn list(values: Vec<StaticProgramValue>) -> StaticProgramValue {
+        StaticProgramValue::List(Box::leak(values.into_boxed_slice()))
+    }
+
+    fn field(node: &'static str, required: bool) -> StaticProgramValue {
+        record(vec![
+            ("name", StaticProgramValue::String("next")),
+            ("node", StaticProgramValue::Integer(node)),
+            ("required", StaticProgramValue::Bool(required)),
+            ("default", StaticProgramValue::None),
+            ("validation_alias", list(Vec::new())),
+            ("serialization_alias", StaticProgramValue::None),
+        ])
+    }
+
+    fn model_node(
+        definition: &'static str,
+        child: &'static str,
+        required: bool,
+    ) -> StaticProgramValue {
+        record(vec![
+            ("kind", StaticProgramValue::String("model")),
+            ("children", list(vec![StaticProgramValue::Integer(child)])),
+            ("definition", StaticProgramValue::String(definition)),
+            ("reference", StaticProgramValue::None),
+            (
+                "model",
+                record(vec![
+                    ("name", StaticProgramValue::String(definition)),
+                    ("fields", list(vec![field(child, required)])),
+                    ("extra", StaticProgramValue::String("forbid")),
+                    ("populate_by_name", StaticProgramValue::Bool(false)),
+                    ("location_by_alias", StaticProgramValue::Bool(true)),
+                ]),
+            ),
+        ])
+    }
+
+    fn schema_program(nodes: Vec<StaticProgramValue>) -> &'static StaticProgramValue {
+        Box::leak(Box::new(record(vec![
+            ("nodes", list(nodes)),
+            ("root", StaticProgramValue::Integer("0")),
+        ])))
+    }
+
+    #[test]
+    fn unreferenced_root_definition_is_not_duplicated_in_defs() {
+        let scalar = record(vec![
+            ("kind", StaticProgramValue::String("str")),
+            ("children", list(Vec::new())),
+            ("definition", StaticProgramValue::None),
+            ("reference", StaticProgramValue::None),
+            ("string_constraints", StaticProgramValue::None),
+        ]);
+        let unreachable_reference = record(vec![
+            ("kind", StaticProgramValue::String("definition-ref")),
+            ("children", list(Vec::new())),
+            ("definition", StaticProgramValue::None),
+            ("reference", StaticProgramValue::String("Orphan")),
+        ]);
+        let schema = SchemaRef::from_static_program(schema_program(vec![
+            model_node("User", "1", true),
+            scalar,
+            unreachable_reference,
+            model_node("Orphan", "1", true),
+        ]))
+        .unwrap_or_else(|error| panic!("static schema failed: {error}"));
+        let document = generate(
+            schema,
+            JsonSchemaOptions::new(JsonSchemaMode::Validation, true),
+            JsonIntegerProfile::Exact,
+        )
+        .unwrap_or_else(|error| panic!("JSON Schema failed: {error}"));
+        assert!(document.get("$defs").is_none());
+        assert_eq!(document["properties"]["next"]["type"], "string");
+    }
+
+    #[test]
+    fn recursive_reference_emits_one_reachable_definition() {
+        let nullable = record(vec![
+            ("kind", StaticProgramValue::String("nullable")),
+            ("children", list(vec![StaticProgramValue::Integer("2")])),
+            ("definition", StaticProgramValue::None),
+            ("reference", StaticProgramValue::None),
+        ]);
+        let reference = record(vec![
+            ("kind", StaticProgramValue::String("definition-ref")),
+            ("children", list(Vec::new())),
+            ("definition", StaticProgramValue::None),
+            ("reference", StaticProgramValue::String("Node")),
+        ]);
+        let schema = SchemaRef::from_static_program(schema_program(vec![
+            model_node("Node", "1", true),
+            nullable,
+            reference,
+        ]))
+        .unwrap_or_else(|error| panic!("static schema failed: {error}"));
+        let document = generate(
+            schema,
+            JsonSchemaOptions::new(JsonSchemaMode::Validation, true),
+            JsonIntegerProfile::Exact,
+        )
+        .unwrap_or_else(|error| panic!("JSON Schema failed: {error}"));
+        let definitions = document["$defs"]
+            .as_object()
+            .unwrap_or_else(|| panic!("recursive schema has no definitions"));
+        assert_eq!(definitions.len(), 1);
+        assert_eq!(
+            definitions["Node"]["properties"]["next"]["anyOf"][0]["$ref"],
+            "#/$defs/Node"
+        );
+    }
+
+    #[test]
+    fn none_default_uses_required_flag_in_static_schema() {
+        let nullable = record(vec![
+            ("kind", StaticProgramValue::String("nullable")),
+            ("children", list(vec![StaticProgramValue::Integer("2")])),
+            ("definition", StaticProgramValue::None),
+            ("reference", StaticProgramValue::None),
+        ]);
+        let scalar = record(vec![
+            ("kind", StaticProgramValue::String("str")),
+            ("children", list(Vec::new())),
+            ("definition", StaticProgramValue::None),
+            ("reference", StaticProgramValue::None),
+            ("string_constraints", StaticProgramValue::None),
+        ]);
+        let schema = SchemaRef::from_static_program(schema_program(vec![
+            model_node("OptionalModel", "1", false),
+            nullable,
+            scalar,
+        ]))
+        .unwrap_or_else(|error| panic!("static schema failed: {error}"));
+        let document = generate(
+            schema,
+            JsonSchemaOptions::new(JsonSchemaMode::Validation, true),
+            JsonIntegerProfile::Exact,
+        )
+        .unwrap_or_else(|error| panic!("JSON Schema failed: {error}"));
+        assert_eq!(document["required"], json!([]));
+    }
 }

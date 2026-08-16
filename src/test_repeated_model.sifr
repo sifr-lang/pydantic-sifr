@@ -1,0 +1,17 @@
+from .schema_contract import verify_schema as verify_repeated_schema
+
+
+class RepeatedChild:
+    value: int
+
+
+@const_specialize("schema_contract", "verify_schema")
+class RepeatedParent:
+    left: RepeatedChild
+    right: RepeatedChild
+
+
+def test_repeated_model_schema() -> None:
+    parent: RepeatedParent = RepeatedParent(RepeatedChild(1), RepeatedChild(2))
+    assert parent.left.value == 1
+    assert parent.right.value == 2

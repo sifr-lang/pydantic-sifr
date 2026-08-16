@@ -16,6 +16,15 @@ CASES = {
     "tests/sifr/invalid_collection_constraint.sifr": (
         "field constraints are not supported for collections"
     ),
+    "tests/sifr/invalid_literal_constraint.sifr": (
+        "field constraints are not supported for literal fields"
+    ),
+    "tests/sifr/invalid_recursive_constraint.sifr": (
+        "field constraints are not supported for recursive references"
+    ),
+    "tests/sifr/invalid_union_constraint.sifr": (
+        "field constraints are not supported for tuples or unions"
+    ),
 }
 
 

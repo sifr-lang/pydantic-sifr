@@ -235,28 +235,6 @@ impl<'schema> SchemaRef<'schema> {
         sums::definition(self)
     }
 
-    pub(crate) fn static_definitions(self) -> Result<Vec<Self>, ValidationError> {
-        let Self::Static(schema) = self else {
-            return Ok(Vec::new());
-        };
-        schema
-            .nodes
-            .iter()
-            .enumerate()
-            .filter_map(|(index, _)| {
-                let candidate = StaticSchemaRef {
-                    nodes: schema.nodes,
-                    index,
-                };
-                match candidate.optional_definition() {
-                    Ok(Some(_)) => Some(Ok(Self::Static(candidate))),
-                    Ok(None) => None,
-                    Err(error) => Some(Err(error)),
-                }
-            })
-            .collect()
-    }
-
     pub(crate) fn static_error(
         self,
     ) -> Result<Option<super::SchemaErrorOverride>, ValidationError> {
@@ -356,13 +334,6 @@ impl StaticSchemaRef {
             nodes: self.nodes,
             index,
         })
-    }
-
-    fn optional_definition(self) -> Result<Option<&'static str>, ValidationError> {
-        match field(self.node_record()?, "definition")? {
-            StaticProgramValue::None => Ok(None),
-            value => string(value, "schema definition").map(Some),
-        }
     }
 
     fn model(self) -> Result<StaticModelRef, ValidationError> {
@@ -552,7 +523,7 @@ impl<'schema> FieldRef<'schema> {
             Self::Owned(field) => Ok(field.default.as_ref().map(DefaultRef::Owned)),
             Self::Static(field) => {
                 let value = field.value("default")?;
-                if matches!(value, StaticProgramValue::None) {
+                if matches!(value, StaticProgramValue::None) && field.required()? {
                     Ok(None)
                 } else {
                     Ok(Some(DefaultRef::Static(value)))
@@ -625,6 +596,10 @@ impl StaticFieldRef {
 
     fn text(self, name: &'static str) -> Result<&'static str, ValidationError> {
         string(self.value(name)?, name)
+    }
+
+    fn required(self) -> Result<bool, ValidationError> {
+        bool_value(self.value("required")?, "field required")
     }
 }
 

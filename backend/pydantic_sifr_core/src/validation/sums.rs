@@ -789,11 +789,23 @@ pub(super) fn apply_override(
     error: ValidationError,
     declaration: Option<SchemaErrorOverride>,
 ) -> ValidationError {
-    declaration.map_or(error, |declaration| {
-        ValidationError::one(
-            ErrorDetail::new(declaration.code, declaration.message).expected("valid union input"),
-        )
-    })
+    let Some(declaration) = declaration else {
+        return error;
+    };
+    let Some(original) = error.details().first() else {
+        return error;
+    };
+    if matches!(
+        original.code,
+        "internal_input" | "resource_limit" | "recursion_limit" | "schema_invalid"
+    ) {
+        return error;
+    }
+    let mut detail =
+        ErrorDetail::new(declaration.code, declaration.message).expected(original.expected.clone());
+    detail.location = original.location.clone();
+    detail.context = original.context.clone();
+    ValidationError::one(detail)
 }
 
 pub(super) fn invalid_input() -> ValidationError {

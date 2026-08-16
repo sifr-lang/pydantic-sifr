@@ -1,0 +1,7 @@
+from pydantic_sifr.schema_contract import verify_schema
+
+
+@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
+@metadata("field", "next", "pydantic.min_length", "1")
+class InvalidRecursiveConstraint:
+    next: InvalidRecursiveConstraint | None
