@@ -69,3 +69,8 @@ See the [migration guide](migration.md) for field and configuration mappings.
 See the [compatibility ledger](compatibility.md) for supported and blocked
 surfaces. See [certification](certification.md) for the exact release tuple and
 test procedure.
+
+The canonical single-file example is
+[`demos/pydantic_sifr_demo.sifr`](../demos/pydantic_sifr_demo.sifr). The gate
+runs that exact file in a dependent package and compares its output with the
+checked snapshot.
