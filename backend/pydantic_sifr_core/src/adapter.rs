@@ -3,10 +3,10 @@ use core::{fmt, marker::PhantomData};
 use sifr_runtime::interop::structural::{StructuralConstruct, StructuralProject, StructuralType};
 
 use crate::{
-    JsonIntegerProfile, JsonLimits, NativeValue, PreparedSchema, Schema, SerializationError,
-    SerializationOptions, SerializationPlan, SerializationPlanError, ValidationError,
-    ValidationOptions, serialize_json, serialize_structural, validate_json_and_construct,
-    validate_native_and_construct, validate_strings_and_construct,
+    JsonIntegerProfile, JsonLimits, JsonSchemaError, JsonSchemaMode, NativeValue, PreparedSchema,
+    Schema, SerializationError, SerializationOptions, SerializationPlan, SerializationPlanError,
+    ValidationError, ValidationOptions, generate_json_schema, serialize_json, serialize_structural,
+    validate_json_and_construct, validate_native_and_construct, validate_strings_and_construct,
     validate_structural_and_construct,
 };
 
@@ -51,6 +51,7 @@ impl fmt::Display for TypeAdapterBuildError {
 impl std::error::Error for TypeAdapterBuildError {}
 
 pub struct TypeAdapter<'schema, T> {
+    schema: &'schema Schema,
     prepared: PreparedSchema<'schema>,
     serializer: SerializationPlan,
     target: PhantomData<fn() -> T>,
@@ -71,6 +72,7 @@ impl<'schema, T: StructuralType> TypeAdapter<'schema, T> {
         let serializer = SerializationPlan::from_prepared(prepared, integer_profile)
             .map_err(invalid_serialization_plan)?;
         Ok(Self {
+            schema,
             prepared,
             serializer,
             target: PhantomData,
@@ -85,6 +87,10 @@ impl<'schema, T: StructuralType> TypeAdapter<'schema, T> {
     #[must_use]
     pub const fn serialization_plan(&self) -> &SerializationPlan {
         &self.serializer
+    }
+
+    pub fn json_schema(&self, mode: JsonSchemaMode) -> Result<serde_json::Value, JsonSchemaError> {
+        generate_json_schema(self.schema, mode, self.serializer.integer_profile())
     }
 }
 
