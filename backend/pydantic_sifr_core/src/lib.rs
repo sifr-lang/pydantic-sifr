@@ -17,7 +17,9 @@ pub use input::{
     InputArena, InputId, InputValue, JsonInputError, JsonLimits, NativeInputError, NativeValue,
     ObjectKind, SequenceKind, build_native_input, parse_json, project_structural_input,
 };
-pub use json_schema::{JsonSchemaError, JsonSchemaErrorKind, JsonSchemaMode, generate_json_schema};
+pub use json_schema::{
+    JsonSchemaError, JsonSchemaErrorKind, JsonSchemaMode, JsonSchemaOptions, generate_json_schema,
+};
 pub use plan::{ExecutionPlan, PlanOp};
 pub use schema::{
     CompilerProgramEnvelope, ContractVersions, MAX_PROGRAM_BYTES, ProgramHeader, SchemaKind,
