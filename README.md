@@ -13,6 +13,9 @@ The [compatibility matrix](docs/compatibility.md) lists every selected public
 surface as same, adapted, or blocked. Blocked entries are not implemented by a
 fallback or compatibility shim.
 
+The [migration guide](docs/migration.md) maps Pydantic models, fields,
+configuration, validation calls, and errors to the supported Sifr API.
+
 ## Foundation contract
 
 Schema programs use format version 1. The Sifr frontend const function produces
