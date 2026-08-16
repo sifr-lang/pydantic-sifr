@@ -77,22 +77,6 @@ fn mode_specific_controls_select_the_declared_core_schema_branch() {
 }
 
 #[test]
-fn unsupported_schema_fails_instead_of_emitting_a_permissive_fallback() {
-    let Err(error) = generate_json_schema(
-        &Schema::Fraction(Default::default()),
-        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
-        JsonIntegerProfile::Exact,
-    ) else {
-        panic!("specialized numeric schema must fail closed until implemented");
-    };
-
-    assert_eq!(
-        error.kind(),
-        pydantic_sifr_core::JsonSchemaErrorKind::UnsupportedSchema
-    );
-}
-
-#[test]
 fn fixed_integer_bounds_are_intersected_with_declared_constraints() {
     let generated = generate_json_schema(
         &Schema::Integer {
@@ -127,6 +111,59 @@ fn bytes_and_decimal_fail_closed_until_their_representations_are_exact() {
         };
         assert_eq!(error.kind(), JsonSchemaErrorKind::UnsupportedSchema);
     }
+}
+
+#[test]
+fn fraction_and_complex_schemas_describe_their_public_string_representations() {
+    use num_rational::BigRational;
+    use pydantic_sifr_core::{ComplexConstraints, FractionConstraints};
+
+    let fraction = Schema::Fraction(FractionConstraints {
+        greater_or_equal: Some(BigRational::new(1.into(), 3.into())),
+        less_or_equal: Some(BigRational::new(5.into(), 2.into())),
+        ..FractionConstraints::default()
+    });
+    let validation = generate_json_schema(
+        &fraction,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("fraction validation schema failed: {error}"));
+    let serialization = generate_json_schema(
+        &fraction,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("fraction serialization schema failed: {error}"));
+
+    assert!(validation["anyOf"][0].get("minimum").is_none());
+    assert_eq!(validation["anyOf"][1]["format"], json!("fraction"));
+    assert_eq!(validation["anyOf"][1]["x-sifr-minimum"], json!("1/3"));
+    assert_eq!(serialization["type"], json!("string"));
+    assert_eq!(serialization["x-sifr-maximum"], json!("5/2"));
+
+    let complex_schema = Schema::Complex(ComplexConstraints {
+        magnitude_greater_or_equal: Some(1.5),
+        ..ComplexConstraints::default()
+    });
+    let complex_validation = generate_json_schema(
+        &complex_schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("complex validation schema failed: {error}"));
+    let complex = generate_json_schema(
+        &complex_schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("complex schema failed: {error}"));
+    assert_eq!(complex_validation["anyOf"][0], json!({"type": "number"}));
+    assert_eq!(complex_validation["anyOf"][1]["format"], json!("complex"));
+    assert_eq!(complex["type"], json!("string"));
+    assert_eq!(complex["format"], json!("complex"));
+    assert_eq!(complex["x-sifr-magnitude-minimum"], json!(1.5));
+    assert_eq!(complex["x-sifr-allow-non-finite"], json!(false));
 }
 
 #[test]

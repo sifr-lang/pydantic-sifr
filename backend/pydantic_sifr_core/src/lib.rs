@@ -8,6 +8,7 @@ pub mod json_schema;
 pub mod plan;
 pub mod schema;
 pub mod serialization;
+mod specialized_numeric;
 pub mod validation;
 
 pub use adapter::{TypeAdapter, TypeAdapterBuildError, TypeAdapterBuildErrorKind};
@@ -30,6 +31,7 @@ pub use serialization::{
     SerializationErrorKind, SerializationOptions, SerializationPlan, SerializationPlanError,
     SerializerFieldPlan, SerializerNode, SerializerNodeId, serialize_json, serialize_structural,
 };
+pub use specialized_numeric::{Complex, Fraction, FractionError};
 pub use validation::{
     AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, ChainSchema, ClockSnapshot,
     CollectionConstraints, ComplexConstraints, DateTimeValue, DateValue, DecimalConstraints,
