@@ -24,6 +24,11 @@ identity, and payload size with the generated bridge. It does not decode,
 traverse, compile, or semantically verify the schema graph. No older format or
 runtime fallback exists.
 
+The Sifr package root exports `ValidationError`, `verify_schema`, and the three
+model-validation functions. Schema payload classes, contract version values,
+and the native core's verified-program type are internal. The package does not
+export aliases for those construction types.
+
 The round-trip gate emits a representative specialization with the released
 Sifr compiler. It compares the exact bytes and identity with checked-in
 fixtures. A Rust test accepts the same fixture through the envelope checker.

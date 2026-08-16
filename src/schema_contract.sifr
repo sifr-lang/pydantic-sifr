@@ -1,12 +1,6 @@
 from .errors import SchemaIssue, SchemaIssueArgs
 
 
-SCHEMA_PROGRAM_FORMAT_VERSION: int = 1
-STRUCTURAL_CONTRACT_VERSION: int = 1
-STRUCTURAL_CALL_VERSION: int = 1
-CALLBACK_ABI_VERSION: int = 1
-
-
 class ShapeMetadata:
     key: str
     value_type: str
