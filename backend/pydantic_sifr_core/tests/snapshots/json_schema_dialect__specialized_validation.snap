@@ -1,0 +1,46 @@
+---
+source: backend/pydantic_sifr_core/tests/json_schema_dialect.rs
+expression: "document(&specialized_schema(), JsonSchemaMode::Validation, false)"
+---
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "complex": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "format": "complex",
+          "type": "string",
+          "x-sifr-allow-non-finite": false
+        }
+      ]
+    },
+    "fraction": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "format": "fraction",
+          "type": "string",
+          "x-sifr-minimum": "1/3"
+        }
+      ]
+    },
+    "label": {
+      "maxLength": 16,
+      "minLength": 1,
+      "type": "string"
+    }
+  },
+  "required": [
+    "fraction",
+    "complex",
+    "label"
+  ],
+  "title": "tests.SnapshotSpecialized",
+  "type": "object"
+}

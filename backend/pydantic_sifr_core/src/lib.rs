@@ -19,7 +19,8 @@ pub use input::{
     ObjectKind, SequenceKind, build_native_input, parse_json, project_structural_input,
 };
 pub use json_schema::{
-    JsonSchemaError, JsonSchemaErrorKind, JsonSchemaMode, JsonSchemaOptions, generate_json_schema,
+    JSON_SCHEMA_DIALECT, JsonSchemaError, JsonSchemaErrorKind, JsonSchemaMode, JsonSchemaOptions,
+    generate_json_schema,
 };
 pub use plan::{ExecutionPlan, PlanOp};
 pub use schema::{

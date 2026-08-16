@@ -30,6 +30,7 @@ fn adapter_generates_schema_from_its_prepared_core_schema() {
     assert_eq!(
         generated,
         json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
             "type": "array",
             "items": {
                 "type": "integer",
@@ -72,8 +73,22 @@ fn mode_specific_controls_select_the_declared_core_schema_branch() {
     )
     .unwrap_or_else(|error| panic!("serialization schema failed: {error}"));
 
-    assert_eq!(validation, json!({"type": "string", "minLength": 2}));
-    assert_eq!(serialization, json!({"type": "string", "maxLength": 4}));
+    assert_eq!(
+        validation,
+        json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "minLength": 2
+        })
+    );
+    assert_eq!(
+        serialization,
+        json!({
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "type": "string",
+            "maxLength": 4
+        })
+    );
 }
 
 #[test]
