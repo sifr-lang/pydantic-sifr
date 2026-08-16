@@ -3,10 +3,7 @@ use core::fmt;
 use serde_json::{Map, Number, Value, json};
 use sifr_runtime::json::JsonIntegerProfile;
 
-use crate::{
-    ExtraPolicy, LiteralValue, Schema,
-    validation::{BytesJsonMode, TemporalKind},
-};
+use crate::{ExtraPolicy, LiteralValue, Schema, validation::TemporalKind};
 
 const MAX_JSON_SCHEMA_DEPTH: usize = 256;
 
@@ -90,18 +87,29 @@ fn generate(
                 ));
             }
             let mut output = typed("integer");
-            if let Some((minimum, maximum)) = target.bounds() {
-                insert_big_integer(&mut output, "minimum", &minimum)?;
-                insert_big_integer(&mut output, "maximum", &maximum)?;
-            }
+            let (target_minimum, target_maximum) =
+                target.bounds().map_or((None, None), |(minimum, maximum)| {
+                    (Some(minimum), Some(maximum))
+                });
+            let minimum = maximum_big_integer(target_minimum, constraints.greater_or_equal.clone());
+            let maximum = minimum_big_integer(target_maximum, constraints.less_or_equal.clone());
+            insert_optional_big_integer(&mut output, "minimum", &minimum)?;
+            insert_optional_big_integer(&mut output, "maximum", &maximum)?;
             insert_optional_big_integer(
                 &mut output,
                 "exclusiveMinimum",
                 &constraints.greater_than,
             )?;
-            insert_optional_big_integer(&mut output, "minimum", &constraints.greater_or_equal)?;
             insert_optional_big_integer(&mut output, "exclusiveMaximum", &constraints.less_than)?;
-            insert_optional_big_integer(&mut output, "maximum", &constraints.less_or_equal)?;
+            if constraints
+                .multiple_of
+                .as_ref()
+                .is_some_and(|value| value <= &num_bigint::BigInt::from(0_u8))
+            {
+                return Err(invalid_number(
+                    "integer multipleOf must be greater than zero",
+                ));
+            }
             insert_optional_big_integer(&mut output, "multipleOf", &constraints.multiple_of)?;
             Ok(Value::Object(output))
         }
@@ -111,10 +119,20 @@ fn generate(
             insert_optional_float(&mut output, "minimum", constraints.greater_or_equal)?;
             insert_optional_float(&mut output, "exclusiveMaximum", constraints.less_than)?;
             insert_optional_float(&mut output, "maximum", constraints.less_or_equal)?;
+            if constraints
+                .multiple_of
+                .is_some_and(|value| !value.is_finite() || value <= 0.0)
+            {
+                return Err(invalid_number(
+                    "floating-point multipleOf must be finite and greater than zero",
+                ));
+            }
             insert_optional_float(&mut output, "multipleOf", constraints.multiple_of)?;
             Ok(Value::Object(output))
         }
-        Schema::Decimal(_) => Ok(json!({"anyOf": [{"type": "number"}, {"type": "string"}]})),
+        Schema::Decimal(_) => Err(unsupported(
+            "decimal JSON Schema representation is not implemented",
+        )),
         Schema::Fraction(_) | Schema::Complex(_) => Err(unsupported(
             "specialized numeric JSON Schema representation is not implemented",
         )),
@@ -130,18 +148,9 @@ fn generate(
             }
             Ok(Value::Object(output))
         }
-        Schema::Bytes(constraints) => {
-            let mut output = typed("string");
-            insert_optional_usize(&mut output, "minLength", constraints.min_length);
-            insert_optional_usize(&mut output, "maxLength", constraints.max_length);
-            if constraints.json_mode == BytesJsonMode::Base64 {
-                output.insert(
-                    "contentEncoding".to_owned(),
-                    Value::String("base64".to_owned()),
-                );
-            }
-            Ok(Value::Object(output))
-        }
+        Schema::Bytes(_) => Err(unsupported(
+            "byte JSON Schema representation is not implemented",
+        )),
         Schema::Temporal(schema) => Ok(json!({
             "type": "string",
             "format": match schema.kind {
@@ -347,6 +356,30 @@ fn insert_optional_float(
         output.insert(key.to_owned(), Value::Number(value));
     }
     Ok(())
+}
+
+fn maximum_big_integer(
+    left: Option<num_bigint::BigInt>,
+    right: Option<num_bigint::BigInt>,
+) -> Option<num_bigint::BigInt> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.max(right)),
+        (left, right) => left.or(right),
+    }
+}
+
+fn minimum_big_integer(
+    left: Option<num_bigint::BigInt>,
+    right: Option<num_bigint::BigInt>,
+) -> Option<num_bigint::BigInt> {
+    match (left, right) {
+        (Some(left), Some(right)) => Some(left.min(right)),
+        (left, right) => left.or(right),
+    }
+}
+
+fn invalid_number(message: &'static str) -> JsonSchemaError {
+    JsonSchemaError::new(JsonSchemaErrorKind::InvalidNumber, message)
 }
 
 fn unsupported(message: &'static str) -> JsonSchemaError {

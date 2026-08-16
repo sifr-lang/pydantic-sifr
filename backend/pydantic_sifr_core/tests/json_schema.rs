@@ -1,6 +1,7 @@
 use pydantic_sifr_core::{
-    CollectionConstraints, IntegerConstraints, IntegerTarget, JsonIntegerProfile, JsonSchemaMode,
-    Schema, StringConstraints, TypeAdapter, generate_json_schema,
+    BytesConstraints, CollectionConstraints, IntegerConstraints, IntegerTarget, JsonIntegerProfile,
+    JsonSchemaErrorKind, JsonSchemaMode, Schema, StringConstraints, TypeAdapter,
+    generate_json_schema,
 };
 use serde_json::json;
 
@@ -79,4 +80,59 @@ fn unsupported_schema_fails_instead_of_emitting_a_permissive_fallback() {
         error.kind(),
         pydantic_sifr_core::JsonSchemaErrorKind::UnsupportedSchema
     );
+}
+
+#[test]
+fn fixed_integer_bounds_are_intersected_with_declared_constraints() {
+    let generated = generate_json_schema(
+        &Schema::Integer {
+            target: IntegerTarget::I32,
+            constraints: IntegerConstraints {
+                greater_or_equal: Some((-10_000_000_000_i64).into()),
+                less_or_equal: Some(10_000_000_000_i64.into()),
+                ..IntegerConstraints::default()
+            },
+        },
+        JsonSchemaMode::Validation,
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("integer schema failed: {error}"));
+
+    assert_eq!(generated["minimum"], json!(i32::MIN));
+    assert_eq!(generated["maximum"], json!(i32::MAX));
+}
+
+#[test]
+fn bytes_and_decimal_fail_closed_until_their_representations_are_exact() {
+    for schema in [
+        Schema::Bytes(BytesConstraints::default()),
+        Schema::Decimal(Default::default()),
+    ] {
+        let Err(error) = generate_json_schema(
+            &schema,
+            JsonSchemaMode::Validation,
+            JsonIntegerProfile::Exact,
+        ) else {
+            panic!("schema without an exact representation must fail closed");
+        };
+        assert_eq!(error.kind(), JsonSchemaErrorKind::UnsupportedSchema);
+    }
+}
+
+#[test]
+fn non_positive_multiple_of_is_rejected_as_invalid_json_schema() {
+    let Err(error) = generate_json_schema(
+        &Schema::Integer {
+            target: IntegerTarget::Exact,
+            constraints: IntegerConstraints {
+                multiple_of: Some(0.into()),
+                ..IntegerConstraints::default()
+            },
+        },
+        JsonSchemaMode::Validation,
+        JsonIntegerProfile::Exact,
+    ) else {
+        panic!("zero multipleOf must fail JSON Schema generation");
+    };
+    assert_eq!(error.kind(), JsonSchemaErrorKind::InvalidNumber);
 }
