@@ -312,7 +312,7 @@ fn validate_default(
     state.import(output).map(Some)
 }
 
-fn static_default(
+pub(crate) fn static_default(
     value: &'static sifr_runtime::interop::structural::StaticProgramValue,
 ) -> Result<crate::NativeValue, ValidationError> {
     use sifr_runtime::interop::structural::StaticProgramValue;

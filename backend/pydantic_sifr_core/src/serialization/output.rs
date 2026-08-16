@@ -2,9 +2,9 @@ use core::fmt;
 
 use sifr_runtime::interop::structural::StructuralProject;
 
-use crate::{InputArena, InputId, InputValue, JsonLimits, NativeValue, ObjectKind, SequenceKind};
+use crate::{InputArena, InputId, InputValue, NativeValue, ObjectKind, SequenceKind};
 
-use super::SerializationPlan;
+use super::{SelectionSegment, SerializationOptions, SerializationPlan, selection::selected};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum SerializationErrorKind {
@@ -50,17 +50,23 @@ impl std::error::Error for SerializationError {}
 pub fn serialize_structural<T: StructuralProject>(
     plan: &SerializationPlan,
     value: &T,
-    limits: JsonLimits,
+    options: &SerializationOptions,
 ) -> Result<NativeValue, SerializationError> {
     verify_shape::<T>(plan)?;
-    let input = crate::project_structural_input(value, limits).map_err(|error| {
+    let input = crate::project_structural_input(value, options.limits).map_err(|error| {
         let kind = match error {
             crate::NativeInputError::Limit(_) => SerializationErrorKind::Limit,
             _ => SerializationErrorKind::InvalidProjection,
         };
         SerializationError::new(kind, error.to_string())
     })?;
-    native_value(&input, input.root())
+    let value = native_value(&input, input.root())?;
+    apply_options(plan, &value, options, &mut Vec::new()).ok_or_else(|| {
+        SerializationError::new(
+            SerializationErrorKind::InvalidProjection,
+            "serialization selection removed the root value",
+        )
+    })
 }
 
 pub(super) fn verify_shape<T: StructuralProject>(
@@ -140,4 +146,126 @@ fn native_value(input: &InputArena, id: InputId) -> Result<NativeValue, Serializ
                 .collect::<Result<Vec<_>, SerializationError>>()?,
         )),
     }
+}
+
+fn apply_options(
+    plan: &SerializationPlan,
+    value: &NativeValue,
+    options: &SerializationOptions,
+    path: &mut Vec<SelectionSegment>,
+) -> Option<NativeValue> {
+    match value {
+        NativeValue::Object(entries) => {
+            let mut output = Vec::with_capacity(entries.len());
+            for (name, value) in entries {
+                path.push(SelectionSegment::Field(name.clone()));
+                let keep = selected(options, path);
+                let policy = plan.field_policy(path);
+                let excluded_by_value = (options.exclude_none && *value == NativeValue::Null)
+                    || (options.exclude_defaults
+                        && policy
+                            .and_then(super::plan::FieldPolicy::default)
+                            .is_some_and(|default| default == value));
+                if keep
+                    && !excluded_by_value
+                    && let Some(value) = apply_options(plan, value, options, path)
+                {
+                    let output_name = if options.by_alias {
+                        policy
+                            .and_then(super::plan::FieldPolicy::alias)
+                            .unwrap_or(name)
+                    } else {
+                        name
+                    };
+                    output.push((output_name.to_owned(), value));
+                }
+                path.pop();
+            }
+            Some(NativeValue::Object(output))
+        }
+        NativeValue::List(values)
+        | NativeValue::Tuple(values)
+        | NativeValue::Set(values)
+        | NativeValue::FrozenSet(values) => {
+            let output = values
+                .iter()
+                .enumerate()
+                .filter_map(|(index, value)| {
+                    path.push(SelectionSegment::Index(index));
+                    let output = selected(options, path)
+                        .then(|| apply_options(plan, value, options, path))
+                        .flatten();
+                    path.pop();
+                    output
+                })
+                .collect();
+            Some(match value {
+                NativeValue::List(_) => NativeValue::List(output),
+                NativeValue::Tuple(_) => NativeValue::Tuple(output),
+                NativeValue::Set(_) => NativeValue::Set(output),
+                NativeValue::FrozenSet(_) => NativeValue::FrozenSet(output),
+                _ => return None,
+            })
+        }
+        NativeValue::Mapping(entries) => Some(NativeValue::Mapping(
+            entries
+                .iter()
+                .filter_map(|(key, value)| {
+                    Some((
+                        apply_options(plan, key, options, path)?,
+                        apply_options(plan, value, options, path)?,
+                    ))
+                })
+                .collect(),
+        )),
+        _ => Some(value.clone()),
+    }
+}
+
+pub(super) fn native_json_bytes(value: &NativeValue) -> Option<Vec<u8>> {
+    let mut output = Vec::new();
+    write_native_json(value, &mut output)?;
+    Some(output)
+}
+
+fn write_native_json(value: &NativeValue, output: &mut Vec<u8>) -> Option<()> {
+    match value {
+        NativeValue::Null => output.extend_from_slice(b"null"),
+        NativeValue::Bool(true) => output.extend_from_slice(b"true"),
+        NativeValue::Bool(false) => output.extend_from_slice(b"false"),
+        NativeValue::Integer(value) => output.extend_from_slice(value.as_bytes()),
+        NativeValue::Float(value) if value.is_finite() => {
+            serde_json::to_writer(output, value).ok()?;
+        }
+        NativeValue::String(value) => {
+            serde_json::to_writer(output, value).ok()?;
+        }
+        NativeValue::List(values)
+        | NativeValue::Tuple(values)
+        | NativeValue::Set(values)
+        | NativeValue::FrozenSet(values) => {
+            output.push(b'[');
+            for (index, value) in values.iter().enumerate() {
+                if index > 0 {
+                    output.push(b',');
+                }
+                write_native_json(value, output)?;
+            }
+            output.push(b']');
+        }
+        NativeValue::Object(entries) => {
+            output.push(b'{');
+            for (index, (name, value)) in entries.iter().enumerate() {
+                if index > 0 {
+                    output.push(b',');
+                }
+                serde_json::to_writer(&mut *output, name).ok()?;
+                output.push(b':');
+                write_native_json(value, output)?;
+            }
+            output.push(b'}');
+        }
+        _ => return None,
+    }
+    Some(())
 }

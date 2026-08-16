@@ -532,6 +532,26 @@ impl<'schema> FieldRef<'schema> {
         }
     }
 
+    pub(crate) fn materialized_default(
+        self,
+    ) -> Result<Option<crate::NativeValue>, ValidationError> {
+        self.default()?.map_or(Ok(None), |default| {
+            let value = match default {
+                DefaultRef::Owned(FieldDefault::Static(value)) => value.clone(),
+                DefaultRef::Owned(FieldDefault::Factory(factory)) => factory(),
+                DefaultRef::Static(value) => super::models::static_default(value)?,
+            };
+            Ok(Some(value))
+        })
+    }
+
+    pub(crate) fn serialization_alias(self) -> Option<String> {
+        match self {
+            Self::Owned(field) => field.metadata.get("pydantic.serialization_alias").cloned(),
+            Self::Static(_) => None,
+        }
+    }
+
     pub fn aliases(self) -> Result<Vec<AliasPath>, ValidationError> {
         match self {
             Self::Owned(field) => Ok(field.validation_aliases.clone()),
