@@ -16,6 +16,10 @@ fallback or compatibility shim.
 The [migration guide](docs/migration.md) maps Pydantic models, fields,
 configuration, validation calls, and errors to the supported Sifr API.
 
+The [quick start](docs/quickstart.md) shows the public package workflow. It
+also links the two checked end-to-end demos and explains the behavior that each
+demo verifies.
+
 ## Foundation contract
 
 Schema programs use format version 1. The Sifr frontend const function produces
@@ -78,14 +82,14 @@ directly into the input arena and does not create a generic model tree. The
 adapter sorts unordered mappings and sets before validation, which keeps error
 order stable.
 
-The milestone demo is a dependent package in
-`demos/milestone_ps_6_demo`. It shows nested models, defaults, constraints,
-aliases, alias paths, JSON input, strings input, structural input, and a stable
-public validation error.
+The first end-to-end demo is a dependent package in
+[`demos/milestone_ps_6_demo`](demos/milestone_ps_6_demo). It shows nested
+models, defaults, constraints, aliases, alias paths, JSON input, strings input,
+structural input, and a stable public validation error.
 
-`demos/milestone_ps_7_demo` shows literals, payload-free enums, smart unions,
-field-discriminated tagged unions, recursive models, and
-labelled branch errors through the same public API.
+[`demos/milestone_ps_7_demo`](demos/milestone_ps_7_demo) shows literals,
+payload-free enums, smart unions, field-discriminated tagged unions, recursive
+models, and labelled branch errors through the same public API.
 
 Sum declarations use package-owned metadata. Literal keys are
 `pydantic.literal.none|bool|int|str|bytes`. Enum fields use the corresponding
