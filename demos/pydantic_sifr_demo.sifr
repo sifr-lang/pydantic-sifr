@@ -1,0 +1,39 @@
+from pydantic_sifr import ValidationError
+from pydantic_sifr import model_validate_json
+from pydantic_sifr import verify_schema
+
+
+@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
+@metadata("pydantic.extra", "forbid")
+@metadata("field", "id", "pydantic.alias.field", "user_id")
+@metadata("field", "id", "pydantic.gt", "0")
+@metadata("field", "name", "pydantic.min_length", "1")
+class User:
+    id: int64
+    name: str
+    active: bool = True
+
+
+def main() -> Result[None, ValidationError | RustPanicError]:
+    try:
+        user: User = model_validate_json(b'{"user_id":7,"name":"Ada"}')
+        expected_id: int64 = 7
+        assert user.id == expected_id
+        assert user.name == "Ada"
+        assert user.active
+
+        error_seen: bool = False
+        try:
+            invalid: User = model_validate_json(b'{"user_id":0,"name":"","extra":true}')
+            assert invalid.id != expected_id
+        except ValidationError as error:
+            error_seen = error.message.startswith('{"errors":[{"code":"greater_than"')
+        except RustPanicError as error:
+            raise error
+        assert error_seen
+    except ValidationError as error:
+        raise error
+    except RustPanicError as error:
+        raise error
+    print("pydantic-sifr canonical demo passed")
+    return None
