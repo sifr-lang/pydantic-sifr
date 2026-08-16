@@ -1,0 +1,22 @@
+---
+source: backend/pydantic_sifr_core/tests/json_schema_dialect.rs
+expression: "document(&aliased_schema(), JsonSchemaMode::Serialization, true)"
+---
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "public_id": {
+      "maximum": 2147483647,
+      "minimum": -2147483648,
+      "type": "integer",
+      "x-sifr-generated-client-warning": "client must use an exact integer JSON parser for this field",
+      "x-sifr-integer-profile": "exact"
+    }
+  },
+  "required": [
+    "public_id"
+  ],
+  "title": "tests.SnapshotAlias",
+  "type": "object"
+}

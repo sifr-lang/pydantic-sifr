@@ -1,0 +1,30 @@
+---
+source: backend/pydantic_sifr_core/tests/json_schema_dialect.rs
+expression: "document(&recursive_schema(), JsonSchemaMode::Validation, false)"
+---
+{
+  "$defs": {
+    "SnapshotNode": {
+      "additionalProperties": false,
+      "properties": {
+        "next": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SnapshotNode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "next"
+      ],
+      "title": "tests.SnapshotNode",
+      "type": "object"
+    }
+  },
+  "$ref": "#/$defs/SnapshotNode",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

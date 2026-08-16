@@ -10,6 +10,7 @@ use crate::{
 };
 
 const MAX_JSON_SCHEMA_DEPTH: usize = 256;
+pub const JSON_SCHEMA_DIALECT: &str = "https://json-schema.org/draft/2020-12/schema";
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum JsonSchemaMode {
@@ -86,7 +87,15 @@ pub fn generate_json_schema(
     options: JsonSchemaOptions,
     integer_profile: JsonIntegerProfile,
 ) -> Result<Value, JsonSchemaError> {
-    generate(schema, options, integer_profile, 0)
+    let mut document = generate(schema, options, integer_profile, 0)?;
+    let Some(document) = document.as_object_mut() else {
+        return Err(unsupported("JSON Schema document root is not an object"));
+    };
+    document.insert(
+        "$schema".to_owned(),
+        Value::String(JSON_SCHEMA_DIALECT.to_owned()),
+    );
+    Ok(Value::Object(core::mem::take(document)))
 }
 
 fn generate(
