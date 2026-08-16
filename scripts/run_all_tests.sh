@@ -24,6 +24,7 @@ if [[ -d .upstream/pydantic ]]; then
     --upstream .upstream/pydantic --check
   python3 scripts/provenance/generate_core_schema_kinds.py \
     --upstream .upstream/pydantic --check
+  python3 scripts/run_differential_validation.py
   python3 scripts/check_core_kind_binding.py
 else
   echo "missing .upstream/pydantic; clone the pinned source before running gates" >&2

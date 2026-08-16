@@ -20,6 +20,18 @@ SHA-256 is
 `b221bebe7c78f5ac2eeac3c47e51f9097fc5ca068e25f4d3e7a380d243faff49`.
 No compatibility row is deferred to PS11.
 
+## Differential validation
+
+`scripts/run_differential_validation.py` executes five shared cases against
+the pinned Pydantic Core 2.47.0 environment and the native core. The cases
+cover lax integer coercion, strict integer rejection, ordered string
+transforms and constraints, list item coercion, and indexed list errors. The
+gate compares canonical success values or stable error code and location. It
+does not compare implementation-specific messages.
+
+The oracle is a development and certification input only. Python and Pydantic
+are absent from the production dependency graph.
+
 ## Update the Pydantic pin
 
 Use one clean checkout at the proposed exact commit. Do not combine revisions.
