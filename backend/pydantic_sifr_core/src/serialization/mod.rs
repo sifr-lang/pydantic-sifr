@@ -10,3 +10,4 @@ pub use plan::{
     SerializerNodeId,
 };
 pub use selection::{SelectionPath, SelectionSegment, SerializationOptions};
+pub use sifr_runtime::json::{JsonIntegerProfile, JsonIntegerRangeError};

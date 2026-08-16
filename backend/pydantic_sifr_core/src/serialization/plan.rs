@@ -1,6 +1,7 @@
 use core::fmt;
 
 use sifr_runtime::interop::structural::ShapeIdentity;
+use sifr_runtime::json::JsonIntegerProfile;
 
 use crate::{NativeValue, PreparedSchema, SchemaTag, validation::SchemaRef};
 
@@ -75,13 +76,17 @@ impl SerializerNode {
 #[derive(Clone, Debug, PartialEq)]
 pub struct SerializationPlan {
     structural_identity: ShapeIdentity,
+    integer_profile: JsonIntegerProfile,
     root: SerializerNodeId,
     nodes: Vec<SerializerNode>,
     field_policies: Vec<FieldPolicy>,
 }
 
 impl SerializationPlan {
-    pub fn from_prepared(schema: PreparedSchema<'_>) -> Result<Self, SerializationPlanError> {
+    pub fn from_prepared(
+        schema: PreparedSchema<'_>,
+        integer_profile: JsonIntegerProfile,
+    ) -> Result<Self, SerializationPlanError> {
         let mut builder = PlanBuilder {
             nodes: Vec::new(),
             field_policies: Vec::new(),
@@ -89,6 +94,7 @@ impl SerializationPlan {
         let root = builder.compile(schema.schema(), 0, &mut Vec::new())?;
         Ok(Self {
             structural_identity: schema.structural_identity(),
+            integer_profile,
             root,
             nodes: builder.nodes,
             field_policies: builder.field_policies,
@@ -98,6 +104,11 @@ impl SerializationPlan {
     #[must_use]
     pub const fn structural_identity(&self) -> ShapeIdentity {
         self.structural_identity
+    }
+
+    #[must_use]
+    pub const fn integer_profile(&self) -> JsonIntegerProfile {
+        self.integer_profile
     }
 
     #[must_use]

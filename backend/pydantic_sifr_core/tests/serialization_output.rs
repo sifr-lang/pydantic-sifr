@@ -1,6 +1,6 @@
 use pydantic_sifr_core::{
-    ExtraPolicy, FieldDefault, IntegerConstraints, IntegerTarget, JsonLimits, ModelField,
-    ModelSchema, NativeValue, PreparedSchema, Schema, SelectionPath, SelectionSegment,
+    ExtraPolicy, FieldDefault, IntegerConstraints, IntegerTarget, JsonIntegerProfile, JsonLimits,
+    ModelField, ModelSchema, NativeValue, PreparedSchema, Schema, SelectionPath, SelectionSegment,
     SerializationErrorKind, SerializationOptions, SerializationPlan, serialize_json,
     serialize_structural,
 };
@@ -8,6 +8,7 @@ use sifr_runtime::interop::structural::{
     ShapeIdentity, StructuralEdge, StructuralEdgeKind, StructuralEnter, StructuralKind,
     StructuralProject, StructuralType, StructuralVisitor, VisitControl, primitive,
 };
+use sifr_runtime::{DEFAULT_MAX_INTEGER_DIGITS, SifrInt};
 
 struct CurrentModel {
     name: String,
@@ -109,7 +110,7 @@ fn output_rejects_shape_mismatches_before_projection() {
     let schema = Schema::String(Default::default());
     let prepared = PreparedSchema::new(&schema)
         .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
-    let plan = SerializationPlan::from_prepared(prepared)
+    let plan = SerializationPlan::from_prepared(prepared, JsonIntegerProfile::Exact)
         .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
     let value = 7_i64;
 
@@ -124,7 +125,7 @@ fn streaming_json_enforces_output_limits_and_explicit_byte_policy() {
     let string_schema = Schema::String(Default::default());
     let prepared = PreparedSchema::new(&string_schema)
         .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
-    let string_plan = SerializationPlan::from_prepared(prepared)
+    let string_plan = SerializationPlan::from_prepared(prepared, JsonIntegerProfile::Exact)
         .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
     let options = SerializationOptions {
         limits: JsonLimits {
@@ -141,7 +142,7 @@ fn streaming_json_enforces_output_limits_and_explicit_byte_policy() {
     let bytes_schema = Schema::Bytes(Default::default());
     let prepared = PreparedSchema::new(&bytes_schema)
         .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
-    let bytes_plan = SerializationPlan::from_prepared(prepared)
+    let bytes_plan = SerializationPlan::from_prepared(prepared, JsonIntegerProfile::Exact)
         .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
     let Err(error) = serialize_json(
         &bytes_plan,
@@ -231,7 +232,101 @@ fn default_omission_precedes_nested_selection() {
     assert_eq!(structural, NativeValue::Object(Vec::new()));
 }
 
+#[test]
+fn selected_integer_profiles_use_the_runtime_encoder_recursively() {
+    let schema = Schema::List {
+        item: Box::new(Schema::Integer {
+            target: IntegerTarget::I64,
+            constraints: IntegerConstraints::default(),
+        }),
+        constraints: Default::default(),
+    };
+    let prepared = PreparedSchema::new(&schema)
+        .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
+    let plan = SerializationPlan::from_prepared(prepared, JsonIntegerProfile::StringInts)
+        .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
+
+    let json = serialize_json(
+        &plan,
+        &vec![-7_i64, 9_i64],
+        &SerializationOptions::default(),
+    )
+    .unwrap_or_else(|error| panic!("string-integer JSON failed: {error}"));
+    assert_eq!(json, br#"["-7","9"]"#);
+
+    let exact_schema = Schema::Integer {
+        target: IntegerTarget::Exact,
+        constraints: IntegerConstraints::default(),
+    };
+    let exact_prepared = PreparedSchema::new(&exact_schema)
+        .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
+    let exact_plan = SerializationPlan::from_prepared(exact_prepared, JsonIntegerProfile::Exact)
+        .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
+    let exact_value = SifrInt::parse_decimal(
+        "1234567890123456789012345678901234567890",
+        DEFAULT_MAX_INTEGER_DIGITS,
+    )
+    .unwrap_or_else(|error| panic!("exact integer setup failed: {error}"));
+    let exact_json = serialize_json(&exact_plan, &exact_value, &SerializationOptions::default())
+        .unwrap_or_else(|error| panic!("exact-integer JSON failed: {error}"));
+    assert_eq!(exact_json, b"1234567890123456789012345678901234567890");
+}
+
+#[test]
+fn string_integer_profile_applies_to_default_comparison() {
+    let schema = current_model_schema();
+    let prepared = PreparedSchema::new(&schema)
+        .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
+    let plan = SerializationPlan::from_prepared(prepared, JsonIntegerProfile::StringInts)
+        .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
+    let value = CurrentModel {
+        name: "after".to_owned(),
+        scores: vec![1_i64, 2_i64, 3_i64],
+        note: None,
+    };
+    let options = SerializationOptions {
+        exclude_defaults: true,
+        ..SerializationOptions::default()
+    };
+
+    let json = serialize_json(&plan, &value, &options)
+        .unwrap_or_else(|error| panic!("string-integer default filtering failed: {error}"));
+    assert_eq!(json, b"{}");
+}
+
+#[test]
+fn web_integer_range_error_preserves_typed_profile_and_model_path() {
+    let schema = current_model_schema();
+    let prepared = PreparedSchema::new(&schema)
+        .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
+    let plan = SerializationPlan::from_prepared(prepared, JsonIntegerProfile::Web)
+        .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
+    let value = CurrentModel {
+        name: "range".to_owned(),
+        scores: vec![9_007_199_254_740_992_i64],
+        note: None,
+    };
+
+    let Err(error) = serialize_json(&plan, &value, &SerializationOptions::default()) else {
+        panic!("json.web must reject integers outside the JavaScript-safe range");
+    };
+    assert_eq!(error.kind(), SerializationErrorKind::IntegerRange);
+    let range = error
+        .integer_range_error()
+        .unwrap_or_else(|| panic!("typed integer range payload is missing"));
+    assert_eq!(range.profile(), "json.web");
+    assert_eq!(range.path(), "$.scores[0]");
+}
+
 fn current_model_plan() -> SerializationPlan {
+    let schema = current_model_schema();
+    let prepared = PreparedSchema::new(&schema)
+        .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
+    SerializationPlan::from_prepared(prepared, JsonIntegerProfile::Exact)
+        .unwrap_or_else(|error| panic!("serializer plan failed: {error}"))
+}
+
+fn current_model_schema() -> Schema {
     let mut name = ModelField::required("name", Schema::String(Default::default()));
     name.default = Some(FieldDefault::Static(NativeValue::String(
         "after".to_owned(),
@@ -260,7 +355,7 @@ fn current_model_plan() -> SerializationPlan {
         NativeValue::Integer("2".to_owned()),
         NativeValue::Integer("3".to_owned()),
     ])));
-    let schema = Schema::Model(
+    Schema::Model(
         ModelSchema::new(
             "CurrentModel",
             CurrentModel::shape_identity(),
@@ -270,9 +365,5 @@ fn current_model_plan() -> SerializationPlan {
             true,
         )
         .unwrap_or_else(|error| panic!("model schema failed: {error}")),
-    );
-    let prepared = PreparedSchema::new(&schema)
-        .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
-    SerializationPlan::from_prepared(prepared)
-        .unwrap_or_else(|error| panic!("serializer plan failed: {error}"))
+    )
 }

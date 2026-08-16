@@ -1,6 +1,10 @@
 use core::fmt;
 
+use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::StructuralProject;
+use sifr_runtime::json::{
+    JsonIntegerEncoding, JsonIntegerProfile, JsonIntegerRangeError, encode_integer_for_profile,
+};
 
 use crate::{InputArena, InputId, InputValue, NativeValue, ObjectKind, SequenceKind};
 
@@ -12,12 +16,14 @@ pub enum SerializationErrorKind {
     InvalidProjection,
     Limit,
     UnsupportedJsonValue,
+    IntegerRange,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct SerializationError {
     kind: SerializationErrorKind,
     message: String,
+    integer_range: Option<JsonIntegerRangeError>,
 }
 
 impl SerializationError {
@@ -31,10 +37,24 @@ impl SerializationError {
         &self.message
     }
 
+    #[must_use]
+    pub fn integer_range_error(&self) -> Option<&JsonIntegerRangeError> {
+        self.integer_range.as_ref()
+    }
+
     pub(super) fn new(kind: SerializationErrorKind, message: impl Into<String>) -> Self {
         Self {
             kind,
             message: message.into(),
+            integer_range: None,
+        }
+    }
+
+    pub(super) fn from_integer_range(error: JsonIntegerRangeError) -> Self {
+        Self {
+            kind: SerializationErrorKind::IntegerRange,
+            message: error.to_string(),
+            integer_range: Some(error),
         }
     }
 }
@@ -222,23 +242,67 @@ fn apply_options(
     }
 }
 
-pub(super) fn native_json_bytes(value: &NativeValue) -> Option<Vec<u8>> {
+pub(super) fn native_json_bytes(
+    value: &NativeValue,
+    profile: JsonIntegerProfile,
+    max_integer_digits: usize,
+    path: &str,
+) -> Result<Option<Vec<u8>>, SerializationError> {
     let mut output = Vec::new();
-    write_native_json(value, &mut output)?;
-    Some(output)
+    if write_native_json(value, &mut output, profile, max_integer_digits, path)? {
+        Ok(Some(output))
+    } else {
+        Ok(None)
+    }
 }
 
-fn write_native_json(value: &NativeValue, output: &mut Vec<u8>) -> Option<()> {
+fn write_native_json(
+    value: &NativeValue,
+    output: &mut Vec<u8>,
+    profile: JsonIntegerProfile,
+    max_integer_digits: usize,
+    path: &str,
+) -> Result<bool, SerializationError> {
     match value {
         NativeValue::Null => output.extend_from_slice(b"null"),
         NativeValue::Bool(true) => output.extend_from_slice(b"true"),
         NativeValue::Bool(false) => output.extend_from_slice(b"false"),
-        NativeValue::Integer(value) => output.extend_from_slice(value.as_bytes()),
+        NativeValue::Integer(value) => {
+            let integer = SifrInt::parse_decimal(value, max_integer_digits).map_err(|_| {
+                SerializationError::new(
+                    SerializationErrorKind::InvalidProjection,
+                    "serializer default contains an invalid integer",
+                )
+            })?;
+            match encode_integer_for_profile(&integer, profile, path)
+                .map_err(SerializationError::from_integer_range)?
+            {
+                JsonIntegerEncoding::Number(value) => output.extend_from_slice(value.as_bytes()),
+                JsonIntegerEncoding::DecimalString(value) => {
+                    serde_json::to_writer(output, &value).map_err(|_| {
+                        SerializationError::new(
+                            SerializationErrorKind::InvalidProjection,
+                            "serializer default string could not be encoded",
+                        )
+                    })?;
+                }
+            }
+        }
         NativeValue::Float(value) if value.is_finite() => {
-            serde_json::to_writer(output, value).ok()?;
+            serde_json::to_writer(output, value).map_err(|_| {
+                SerializationError::new(
+                    SerializationErrorKind::InvalidProjection,
+                    "serializer default float could not be encoded",
+                )
+            })?;
         }
         NativeValue::String(value) => {
-            serde_json::to_writer(output, value).ok()?;
+            serde_json::to_writer(output, value).map_err(|_| {
+                SerializationError::new(
+                    SerializationErrorKind::InvalidProjection,
+                    "serializer default string could not be encoded",
+                )
+            })?;
         }
         NativeValue::List(values)
         | NativeValue::Tuple(values)
@@ -249,7 +313,15 @@ fn write_native_json(value: &NativeValue, output: &mut Vec<u8>) -> Option<()> {
                 if index > 0 {
                     output.push(b',');
                 }
-                write_native_json(value, output)?;
+                if !write_native_json(
+                    value,
+                    output,
+                    profile,
+                    max_integer_digits,
+                    &format!("{path}[{index}]"),
+                )? {
+                    return Ok(false);
+                }
             }
             output.push(b']');
         }
@@ -259,13 +331,26 @@ fn write_native_json(value: &NativeValue, output: &mut Vec<u8>) -> Option<()> {
                 if index > 0 {
                     output.push(b',');
                 }
-                serde_json::to_writer(&mut *output, name).ok()?;
+                serde_json::to_writer(&mut *output, name).map_err(|_| {
+                    SerializationError::new(
+                        SerializationErrorKind::InvalidProjection,
+                        "serializer default field name could not be encoded",
+                    )
+                })?;
                 output.push(b':');
-                write_native_json(value, output)?;
+                if !write_native_json(
+                    value,
+                    output,
+                    profile,
+                    max_integer_digits,
+                    &format!("{path}.{name}"),
+                )? {
+                    return Ok(false);
+                }
             }
             output.push(b'}');
         }
-        _ => return None,
+        _ => return Ok(false),
     }
-    Some(())
+    Ok(true)
 }

@@ -1,3 +1,4 @@
+use pydantic_sifr_core::JsonIntegerProfile;
 use pydantic_sifr_core::{
     CollectionConstraints, ExtraPolicy, ModelField, ModelSchema, PreparedSchema, Schema, SchemaTag,
     SerializationPlan,
@@ -30,7 +31,7 @@ fn serializer_plan_preserves_model_projection_order() {
     let prepared = PreparedSchema::new(&schema)
         .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
     let expected_identity: ShapeIdentity = prepared.structural_identity();
-    let plan = SerializationPlan::from_prepared(prepared)
+    let plan = SerializationPlan::from_prepared(prepared, JsonIntegerProfile::Exact)
         .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
     assert_eq!(plan.structural_identity(), expected_identity);
 
@@ -70,7 +71,8 @@ fn serializer_plan_retains_control_and_collection_children() {
     let plan = PreparedSchema::new(&schema)
         .map_err(|error| error.to_string())
         .and_then(|prepared| {
-            SerializationPlan::from_prepared(prepared).map_err(|error| error.to_string())
+            SerializationPlan::from_prepared(prepared, JsonIntegerProfile::Exact)
+                .map_err(|error| error.to_string())
         })
         .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
 
