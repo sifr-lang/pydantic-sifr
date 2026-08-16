@@ -5,6 +5,7 @@ pub mod errors;
 pub mod input;
 pub mod plan;
 pub mod schema;
+pub mod serialization;
 pub mod validation;
 
 pub use arena::{Arena, ArenaError, ArenaId};
@@ -18,6 +19,10 @@ pub use schema::{
     CompilerProgramEnvelope, ContractVersions, MAX_PROGRAM_BYTES, ProgramHeader, SchemaKind,
     SchemaVerificationError, VerifiedSchemaProgram, verify_program,
 };
+pub use serialization::{
+    SerializationPlan, SerializationPlanError, SerializerFieldPlan, SerializerNode,
+    SerializerNodeId,
+};
 pub use validation::{
     AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, ChainSchema, ClockSnapshot,
     CollectionConstraints, ComplexConstraints, DateTimeValue, DateValue, DecimalConstraints,
@@ -26,7 +31,7 @@ pub use validation::{
     InputProfile, IntegerConstraints, IntegerTarget, JsonOrStructuralSchema, LaxOrStrictSchema,
     LiteralSchema, LiteralValue, LocationItem, ModelField, ModelSchema, ModelValue,
     PatternCompileError, PatternSchema, PatternValue, PreparedSchema, RelativeTimeConstraint,
-    Schema, SchemaErrorOverride, StringConstraints, StringPattern, TaggedUnionChoice,
+    Schema, SchemaErrorOverride, SchemaTag, StringConstraints, StringPattern, TaggedUnionChoice,
     TaggedUnionSchema, TemporalKind, TemporalSchema, TimeValue, UnionChoice, UnionMode,
     UnionSchema, UnionValue, UrlConstraints, ValidatedArena, ValidatedIterator, ValidatedValue,
     ValidationError, ValidationLimits, ValidationOptions, ValueId, validate,

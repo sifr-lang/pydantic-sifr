@@ -30,7 +30,7 @@ pub use schema::{
     RelativeTimeConstraint, Schema, StringConstraints, StringPattern, TemporalKind, TemporalSchema,
     UrlConstraints,
 };
-pub use schema_view::SchemaRef;
+pub use schema_view::{SchemaRef, SchemaTag};
 pub use sum_schema::{
     DiscriminatorPath, EnumSchema, EnumVariant, LiteralSchema, LiteralValue, SchemaErrorOverride,
     TaggedUnionChoice, TaggedUnionSchema, UnionChoice, UnionMode, UnionSchema,
