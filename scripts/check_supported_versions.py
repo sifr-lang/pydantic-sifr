@@ -33,6 +33,8 @@ def sifr_revision(manifest: Path) -> str:
 
 def certified_combination() -> dict[str, str]:
     document = load_toml(LEDGER)
+    if document.get("schema") != 1:
+        raise SystemExit("supported version ledger schema must be 1")
     rows = document.get("combination")
     if not isinstance(rows, list) or len(rows) != 1 or not isinstance(rows[0], dict):
         raise SystemExit("supported version ledger must contain exactly one combination")
@@ -100,7 +102,7 @@ def main() -> None:
 
     row = certified_combination()
     check_manifests(row)
-    if args.sifr_bin is not None:
+    if not args.manifest_only and args.sifr_bin is not None:
         check_compiler(row, args.sifr_bin)
     print(
         "supported version certification passed: "
