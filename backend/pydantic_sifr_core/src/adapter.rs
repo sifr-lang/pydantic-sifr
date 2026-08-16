@@ -3,10 +3,11 @@ use core::{fmt, marker::PhantomData};
 use sifr_runtime::interop::structural::{StructuralConstruct, StructuralProject, StructuralType};
 
 use crate::{
-    JsonIntegerProfile, JsonLimits, JsonSchemaError, JsonSchemaMode, NativeValue, PreparedSchema,
-    Schema, SerializationError, SerializationOptions, SerializationPlan, SerializationPlanError,
-    ValidationError, ValidationOptions, generate_json_schema, serialize_json, serialize_structural,
-    validate_json_and_construct, validate_native_and_construct, validate_strings_and_construct,
+    JsonIntegerProfile, JsonLimits, JsonSchemaError, JsonSchemaOptions, NativeValue,
+    PreparedSchema, Schema, SerializationError, SerializationOptions, SerializationPlan,
+    SerializationPlanError, ValidationError, ValidationOptions, generate_json_schema,
+    serialize_json, serialize_structural, validate_json_and_construct,
+    validate_native_and_construct, validate_strings_and_construct,
     validate_structural_and_construct,
 };
 
@@ -89,8 +90,11 @@ impl<'schema, T: StructuralType> TypeAdapter<'schema, T> {
         &self.serializer
     }
 
-    pub fn json_schema(&self, mode: JsonSchemaMode) -> Result<serde_json::Value, JsonSchemaError> {
-        generate_json_schema(self.schema, mode, self.serializer.integer_profile())
+    pub fn json_schema(
+        &self,
+        options: JsonSchemaOptions,
+    ) -> Result<serde_json::Value, JsonSchemaError> {
+        generate_json_schema(self.schema, options, self.serializer.integer_profile())
     }
 }
 

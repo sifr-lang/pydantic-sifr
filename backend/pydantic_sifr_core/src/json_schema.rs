@@ -14,6 +14,19 @@ pub enum JsonSchemaMode {
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct JsonSchemaOptions {
+    pub mode: JsonSchemaMode,
+    pub by_alias: bool,
+}
+
+impl JsonSchemaOptions {
+    #[must_use]
+    pub const fn new(mode: JsonSchemaMode, by_alias: bool) -> Self {
+        Self { mode, by_alias }
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum JsonSchemaErrorKind {
     DepthLimit,
     UnsupportedSchema,
@@ -66,15 +79,15 @@ impl std::error::Error for JsonSchemaError {}
 
 pub fn generate_json_schema(
     schema: &Schema,
-    mode: JsonSchemaMode,
+    options: JsonSchemaOptions,
     integer_profile: JsonIntegerProfile,
 ) -> Result<Value, JsonSchemaError> {
-    generate(schema, mode, integer_profile, 0)
+    generate(schema, options, integer_profile, 0)
 }
 
 fn generate(
     schema: &Schema,
-    mode: JsonSchemaMode,
+    options: JsonSchemaOptions,
     integer_profile: JsonIntegerProfile,
     depth: usize,
 ) -> Result<Value, JsonSchemaError> {
@@ -84,7 +97,8 @@ fn generate(
             "JSON Schema generation exceeded the static schema depth limit",
         ));
     }
-    let child = |schema| generate(schema, mode, integer_profile, depth + 1);
+    let mode = options.mode;
+    let child = |schema| generate(schema, options, integer_profile, depth + 1);
     match schema {
         Schema::None => Ok(json!({"type": "null"})),
         Schema::Bool => Ok(json!({"type": "boolean"})),
@@ -148,7 +162,7 @@ fn generate(
         Schema::Bytes(_) => Err(unsupported(
             "byte JSON Schema representation is not implemented",
         )),
-        Schema::Temporal(schema) => Ok(json!({
+        Schema::Temporal(schema) if mode == JsonSchemaMode::Validation => Ok(json!({
             "type": "string",
             "format": match schema.kind {
                 TemporalKind::Date => "date",
@@ -157,14 +171,32 @@ fn generate(
                 TemporalKind::Duration => "duration",
             }
         })),
-        Schema::Uuid { .. } => Ok(json!({"type": "string", "format": "uuid"})),
+        Schema::Temporal(_) => Err(unsupported(
+            "temporal serialization JSON Schema needs a matching output policy",
+        )),
+        Schema::Uuid { version } if mode == JsonSchemaMode::Validation => {
+            let mut output = typed("string");
+            output.insert("format".to_owned(), Value::String("uuid".to_owned()));
+            if let Some(version) = version {
+                output.insert("x-sifr-uuid-version".to_owned(), json!(version));
+            }
+            Ok(Value::Object(output))
+        }
+        Schema::Uuid { .. } => Err(unsupported(
+            "UUID serialization JSON Schema needs a matching output policy",
+        )),
         Schema::Url(constraints) => {
             let mut output = typed("string");
             output.insert("format".to_owned(), Value::String("uri".to_owned()));
             insert_optional_usize(&mut output, "maxLength", constraints.max_length);
             Ok(Value::Object(output))
         }
-        Schema::Pattern(_) => Ok(json!({"type": "string", "format": "regex"})),
+        Schema::Pattern(_) if mode == JsonSchemaMode::Validation => {
+            Ok(json!({"type": "string", "format": "regex"}))
+        }
+        Schema::Pattern(_) => Err(unsupported(
+            "pattern serialization JSON Schema needs a matching output policy",
+        )),
         Schema::Literal(schema) => literal_schema(schema.values(), mode, integer_profile),
         Schema::Enum(schema) => literal_schema(
             &schema
@@ -190,9 +222,25 @@ fn generate(
                 .map(|choice| child(&choice.schema))
                 .collect::<Result<Vec<_>, _>>()?
         })),
-        Schema::Definitions(_) | Schema::DefinitionRef { .. } => Err(unsupported(
-            "definition and recursive JSON Schema generation is not implemented",
+        Schema::Definitions(definitions) if depth == 0 => {
+            let mut generated_definitions = Map::new();
+            for definition in definitions.definitions() {
+                generated_definitions
+                    .insert(definition.name.to_owned(), child(&definition.schema)?);
+            }
+            let root = child(definitions.root())?;
+            let Value::Object(mut output) = root else {
+                return Err(unsupported("definition root is not a JSON Schema object"));
+            };
+            output.insert("$defs".to_owned(), Value::Object(generated_definitions));
+            Ok(Value::Object(output))
+        }
+        Schema::Definitions(_) => Err(unsupported(
+            "nested definition scopes do not have an exact JSON Schema reference base",
         )),
+        Schema::DefinitionRef { name, .. } => Ok(json!({
+            "$ref": format!("#/$defs/{}", escape_json_pointer(name))
+        })),
         Schema::Model(model) => {
             let mut properties = Map::new();
             let mut required = Vec::new();
@@ -200,15 +248,21 @@ fn generate(
                 if mode == JsonSchemaMode::Validation && !field.input {
                     continue;
                 }
-                properties.insert(field.name.to_owned(), child(&field.schema)?);
+                let name = model_field_name(model, field, options)?;
+                if properties.contains_key(name) {
+                    return Err(unsupported(
+                        "model aliases produce duplicate JSON Schema property names",
+                    ));
+                }
+                properties.insert(name.to_owned(), child(&field.schema)?);
                 if mode == JsonSchemaMode::Serialization || field.default.is_none() {
-                    required.push(Value::String(field.name.to_owned()));
+                    required.push(Value::String(name.to_owned()));
                 }
             }
-            let additional = match &model.extra {
-                ExtraPolicy::Forbid => Value::Bool(false),
-                ExtraPolicy::Ignore => Value::Bool(true),
-                ExtraPolicy::Allow { value_schema, .. } => child(value_schema)?,
+            let additional = match (mode, &model.extra) {
+                (JsonSchemaMode::Serialization, _) | (_, ExtraPolicy::Forbid) => Value::Bool(false),
+                (_, ExtraPolicy::Ignore) => Value::Bool(true),
+                (_, ExtraPolicy::Allow { value_schema, .. }) => child(value_schema)?,
             };
             let mut output = typed("object");
             output.insert("title".to_owned(), Value::String(model.name.to_owned()));
@@ -240,10 +294,18 @@ fn generate(
             "maxItems": items.len()
         })),
         Schema::Mapping {
-            value, constraints, ..
+            key,
+            value,
+            constraints,
         } => {
+            if !matches!(key.as_ref(), Schema::String(_)) {
+                return Err(unsupported(
+                    "non-string JSON object keys need an exact property-name representation",
+                ));
+            }
             let mut output = typed("object");
             output.insert("additionalProperties".to_owned(), child(value)?);
+            output.insert("propertyNames".to_owned(), child(key)?);
             insert_optional_usize(&mut output, "minProperties", constraints.min_length);
             insert_optional_usize(&mut output, "maxProperties", constraints.max_length);
             Ok(Value::Object(output))
@@ -279,6 +341,49 @@ fn typed(name: &str) -> Map<String, Value> {
     let mut output = Map::new();
     output.insert("type".to_owned(), Value::String(name.to_owned()));
     output
+}
+
+fn model_field_name<'field>(
+    model: &crate::ModelSchema,
+    field: &'field crate::ModelField,
+    options: JsonSchemaOptions,
+) -> Result<&'field str, JsonSchemaError> {
+    if options.mode == JsonSchemaMode::Serialization {
+        if options.by_alias {
+            let name = field
+                .metadata
+                .get("pydantic.serialization_alias")
+                .map_or(field.name, String::as_str);
+            if name.is_empty() {
+                return Err(unsupported("serialization alias must not be empty"));
+            }
+            return Ok(name);
+        }
+        return Ok(field.name);
+    }
+    match field.validation_aliases.as_slice() {
+        [] => Ok(field.name),
+        [path]
+            if !model.populate_by_name
+                && matches!(path.segments.as_slice(), [crate::AliasSegment::Field(_)]) =>
+        {
+            let [crate::AliasSegment::Field(alias)] = path.segments.as_slice() else {
+                return Err(unsupported("validation alias path is not a field"));
+            };
+            if alias.is_empty() {
+                Err(unsupported("validation alias must not be empty"))
+            } else {
+                Ok(alias)
+            }
+        }
+        _ => Err(unsupported(
+            "validation aliases need one field alias with populate_by_name disabled",
+        )),
+    }
+}
+
+fn escape_json_pointer(value: &str) -> String {
+    value.replace('~', "~0").replace('/', "~1")
 }
 
 fn literal_schema(

@@ -1,9 +1,12 @@
 use pydantic_sifr_core::{
-    BytesConstraints, CollectionConstraints, EnumSchema, EnumVariant, IntegerConstraints,
-    IntegerTarget, JsonIntegerProfile, JsonSchemaErrorKind, JsonSchemaMode, LiteralSchema,
-    LiteralValue, Schema, StringConstraints, TypeAdapter, generate_json_schema,
+    AliasPath, AliasSegment, BytesConstraints, CollectionConstraints, DefinitionSchema,
+    DefinitionsSchema, EnumSchema, EnumVariant, ExtraPolicy, IntegerConstraints, IntegerTarget,
+    JsonIntegerProfile, JsonSchemaErrorKind, JsonSchemaMode, JsonSchemaOptions, LiteralSchema,
+    LiteralValue, ModelField, ModelSchema, Schema, StringConstraints, TemporalKind, TemporalSchema,
+    TypeAdapter, generate_json_schema,
 };
 use serde_json::json;
+use sifr_runtime::interop::structural::primitive;
 
 #[test]
 fn adapter_generates_schema_from_its_prepared_core_schema() {
@@ -21,7 +24,7 @@ fn adapter_generates_schema_from_its_prepared_core_schema() {
         .unwrap_or_else(|error| panic!("adapter setup failed: {error}"));
 
     let generated = adapter
-        .json_schema(JsonSchemaMode::Validation)
+        .json_schema(JsonSchemaOptions::new(JsonSchemaMode::Validation, false))
         .unwrap_or_else(|error| panic!("JSON Schema generation failed: {error}"));
 
     assert_eq!(
@@ -58,13 +61,13 @@ fn mode_specific_controls_select_the_declared_core_schema_branch() {
 
     let validation = generate_json_schema(
         &schema,
-        JsonSchemaMode::Validation,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
         JsonIntegerProfile::Exact,
     )
     .unwrap_or_else(|error| panic!("validation schema failed: {error}"));
     let serialization = generate_json_schema(
         &schema,
-        JsonSchemaMode::Serialization,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
         JsonIntegerProfile::Exact,
     )
     .unwrap_or_else(|error| panic!("serialization schema failed: {error}"));
@@ -77,7 +80,7 @@ fn mode_specific_controls_select_the_declared_core_schema_branch() {
 fn unsupported_schema_fails_instead_of_emitting_a_permissive_fallback() {
     let Err(error) = generate_json_schema(
         &Schema::Fraction(Default::default()),
-        JsonSchemaMode::Validation,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
         JsonIntegerProfile::Exact,
     ) else {
         panic!("specialized numeric schema must fail closed until implemented");
@@ -100,7 +103,7 @@ fn fixed_integer_bounds_are_intersected_with_declared_constraints() {
                 ..IntegerConstraints::default()
             },
         },
-        JsonSchemaMode::Validation,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
         JsonIntegerProfile::Exact,
     )
     .unwrap_or_else(|error| panic!("integer schema failed: {error}"));
@@ -117,7 +120,7 @@ fn bytes_and_decimal_fail_closed_until_their_representations_are_exact() {
     ] {
         let Err(error) = generate_json_schema(
             &schema,
-            JsonSchemaMode::Validation,
+            JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
             JsonIntegerProfile::Exact,
         ) else {
             panic!("schema without an exact representation must fail closed");
@@ -136,7 +139,7 @@ fn non_positive_multiple_of_is_rejected_as_invalid_json_schema() {
                 ..IntegerConstraints::default()
             },
         },
-        JsonSchemaMode::Validation,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
         JsonIntegerProfile::Exact,
     ) else {
         panic!("zero multipleOf must fail JSON Schema generation");
@@ -152,7 +155,7 @@ fn integer_profiles_have_distinct_static_schema_representations() {
     };
     let web = generate_json_schema(
         &schema,
-        JsonSchemaMode::Serialization,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
         JsonIntegerProfile::Web,
     )
     .unwrap_or_else(|error| panic!("web schema failed: {error}"));
@@ -163,7 +166,7 @@ fn integer_profiles_have_distinct_static_schema_representations() {
 
     let strings = generate_json_schema(
         &schema,
-        JsonSchemaMode::Serialization,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
         JsonIntegerProfile::StringInts,
     )
     .unwrap_or_else(|error| panic!("string integer schema failed: {error}"));
@@ -181,7 +184,7 @@ fn validation_mode_keeps_numeric_input_for_string_integer_output() {
             target: IntegerTarget::I64,
             constraints: IntegerConstraints::default(),
         },
-        JsonSchemaMode::Validation,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
         JsonIntegerProfile::StringInts,
     )
     .unwrap_or_else(|error| panic!("validation schema failed: {error}"));
@@ -197,7 +200,7 @@ fn unsafe_web_range_fails_with_the_compiler_owned_diagnostic_code() {
             target: IntegerTarget::I64,
             constraints: IntegerConstraints::default(),
         },
-        JsonSchemaMode::Serialization,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
         JsonIntegerProfile::Web,
     ) else {
         panic!("wide json.web integer must fail closed");
@@ -219,7 +222,7 @@ fn safe_constraints_authorize_exact_integer_under_web_profile() {
                 ..IntegerConstraints::default()
             },
         },
-        JsonSchemaMode::Serialization,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
         JsonIntegerProfile::Web,
     )
     .unwrap_or_else(|error| panic!("bounded web schema failed: {error}"));
@@ -237,7 +240,7 @@ fn integer_literals_follow_the_selected_serialization_profile() {
     );
     let generated = generate_json_schema(
         &schema,
-        JsonSchemaMode::Serialization,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
         JsonIntegerProfile::StringInts,
     )
     .unwrap_or_else(|error| panic!("literal schema failed: {error}"));
@@ -258,7 +261,7 @@ fn unsafe_web_integer_literals_fail_closed() {
     );
     let Err(error) = generate_json_schema(
         &schema,
-        JsonSchemaMode::Serialization,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
         JsonIntegerProfile::Web,
     ) else {
         panic!("unsafe web literal must fail closed");
@@ -290,11 +293,174 @@ fn integer_enum_variants_share_literal_profile_handling() {
     );
     let generated = generate_json_schema(
         &schema,
-        JsonSchemaMode::Serialization,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
         JsonIntegerProfile::StringInts,
     )
     .unwrap_or_else(|error| panic!("enum schema failed: {error}"));
 
     assert_eq!(generated["enum"], json!(["1", "2"]));
     assert_eq!(generated["x-sifr-integer-profile"], "string_ints");
+}
+
+#[test]
+fn recursive_definitions_use_deterministic_defs_and_refs() {
+    let identity = primitive("tests.Node");
+    let node = Schema::Model(
+        ModelSchema::new(
+            "tests.Node",
+            identity,
+            vec![ModelField::required(
+                "next",
+                Schema::Nullable(Box::new(Schema::model_reference(
+                    "Node",
+                    identity,
+                    "tests.Node",
+                ))),
+            )],
+            ExtraPolicy::Forbid,
+            false,
+            true,
+        )
+        .unwrap_or_else(|error| panic!("model schema setup failed: {error}")),
+    );
+    let schema = Schema::Definitions(
+        DefinitionsSchema::new(
+            Schema::model_reference("Node", identity, "tests.Node"),
+            vec![DefinitionSchema {
+                name: "Node",
+                schema: node,
+            }],
+        )
+        .unwrap_or_else(|error| panic!("definition schema setup failed: {error}")),
+    );
+
+    let generated = generate_json_schema(
+        &schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("recursive schema failed: {error}"));
+
+    assert_eq!(generated["$ref"], "#/$defs/Node");
+    assert_eq!(
+        generated["$defs"]["Node"]["properties"]["next"]["anyOf"][0]["$ref"],
+        "#/$defs/Node"
+    );
+}
+
+#[test]
+fn validation_and_serialization_aliases_are_explicit_options() {
+    let mut field = ModelField::required("identifier", Schema::String(Default::default()));
+    field.validation_aliases = vec![AliasPath::field("id")];
+    field.metadata.insert(
+        "pydantic.serialization_alias".to_owned(),
+        "public_id".to_owned(),
+    );
+    let schema = Schema::Model(
+        ModelSchema::new(
+            "tests.Aliased",
+            primitive("tests.Aliased"),
+            vec![field],
+            ExtraPolicy::Forbid,
+            false,
+            true,
+        )
+        .unwrap_or_else(|error| panic!("model schema setup failed: {error}")),
+    );
+
+    let validation = generate_json_schema(
+        &schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("validation schema failed: {error}"));
+    assert_eq!(validation["required"], json!(["id"]));
+    assert!(validation["properties"].get("identifier").is_none());
+
+    let plain = generate_json_schema(
+        &schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("plain serialization schema failed: {error}"));
+    assert!(plain["properties"].get("identifier").is_some());
+
+    let aliased = generate_json_schema(
+        &schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, true),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("aliased serialization schema failed: {error}"));
+    assert_eq!(aliased["required"], json!(["public_id"]));
+    assert!(aliased["properties"].get("public_id").is_some());
+}
+
+#[test]
+fn unrepresentable_validation_alias_shapes_fail_closed() {
+    let mut field = ModelField::required("value", Schema::Bool);
+    field.validation_aliases = vec![AliasPath {
+        segments: vec![AliasSegment::Field("payload"), AliasSegment::Field("value")],
+    }];
+    let schema = Schema::Model(
+        ModelSchema::new(
+            "tests.NestedAlias",
+            primitive("tests.NestedAlias"),
+            vec![field],
+            ExtraPolicy::Ignore,
+            false,
+            true,
+        )
+        .unwrap_or_else(|error| panic!("model schema setup failed: {error}")),
+    );
+    let Err(error) = generate_json_schema(
+        &schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
+        JsonIntegerProfile::Exact,
+    ) else {
+        panic!("nested validation alias must fail closed");
+    };
+    assert_eq!(error.kind(), JsonSchemaErrorKind::UnsupportedSchema);
+}
+
+#[test]
+fn mapping_key_constraints_become_property_name_constraints() {
+    let schema = Schema::Mapping {
+        key: Box::new(Schema::String(StringConstraints {
+            min_length: Some(2),
+            max_length: Some(4),
+            ..StringConstraints::default()
+        })),
+        value: Box::new(Schema::Bool),
+        constraints: CollectionConstraints {
+            min_length: Some(1),
+            max_length: Some(3),
+        },
+    };
+    let generated = generate_json_schema(
+        &schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, false),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("mapping schema failed: {error}"));
+
+    assert_eq!(generated["propertyNames"]["minLength"], 2);
+    assert_eq!(generated["propertyNames"]["maxLength"], 4);
+    assert_eq!(generated["minProperties"], 1);
+    assert_eq!(generated["maxProperties"], 3);
+}
+
+#[test]
+fn unsupported_serialization_representations_fail_closed_by_mode() {
+    let schema = Schema::Temporal(TemporalSchema {
+        kind: TemporalKind::DateTime,
+        relative: None,
+    });
+    let Err(error) = generate_json_schema(
+        &schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
+        JsonIntegerProfile::Exact,
+    ) else {
+        panic!("temporal serialization schema must fail closed");
+    };
+    assert_eq!(error.kind(), JsonSchemaErrorKind::UnsupportedSchema);
 }
