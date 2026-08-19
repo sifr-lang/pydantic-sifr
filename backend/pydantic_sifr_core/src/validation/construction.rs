@@ -8,8 +8,8 @@ use crate::{
 };
 
 use super::{
-    ErrorDetail, InputProfile, LocationItem, PreparedSchema, ValidationError, ValidationOptions,
-    validate_ref,
+    ErrorDetail, InputProfile, LocationItem, PreparedSchema, ValidationCallbacks, ValidationError,
+    ValidationOptions, validate_ref, validate_ref_with_callbacks,
 };
 
 pub fn validate_and_construct<T>(
@@ -21,6 +21,22 @@ where
     T: StructuralConstruct,
 {
     let mut arena = validate_ref(schema.schema(), input, options)?;
+    arena
+        .prepare_structural(schema.structural_identity())
+        .map_err(construction_error)?;
+    structural_construct(arena).map_err(construction_error)
+}
+
+pub fn validate_and_construct_with_callbacks<T>(
+    schema: &PreparedSchema<'_>,
+    input: &InputArena,
+    options: ValidationOptions,
+    callbacks: &dyn ValidationCallbacks,
+) -> Result<T, ValidationError>
+where
+    T: StructuralConstruct,
+{
+    let mut arena = validate_ref_with_callbacks(schema.schema(), input, options, callbacks)?;
     arena
         .prepare_structural(schema.structural_identity())
         .map_err(construction_error)?;
@@ -39,6 +55,21 @@ where
     options.profile = InputProfile::Json;
     let input = parse_json(input, json_limits).map_err(json_input_error)?;
     validate_and_construct(schema, &input, options)
+}
+
+pub fn validate_json_and_construct_with_callbacks<T>(
+    schema: &PreparedSchema<'_>,
+    input: &[u8],
+    json_limits: JsonLimits,
+    mut options: ValidationOptions,
+    callbacks: &dyn ValidationCallbacks,
+) -> Result<T, ValidationError>
+where
+    T: StructuralConstruct,
+{
+    options.profile = InputProfile::Json;
+    let input = parse_json(input, json_limits).map_err(json_input_error)?;
+    validate_and_construct_with_callbacks(schema, &input, options, callbacks)
 }
 
 pub fn validate_native_and_construct<T>(
@@ -70,6 +101,22 @@ where
     validate_and_construct(schema, &input, options)
 }
 
+pub fn validate_structural_and_construct_with_callbacks<T, Input>(
+    schema: &PreparedSchema<'_>,
+    input: &Input,
+    input_limits: JsonLimits,
+    mut options: ValidationOptions,
+    callbacks: &dyn ValidationCallbacks,
+) -> Result<T, ValidationError>
+where
+    T: StructuralConstruct,
+    Input: StructuralProject,
+{
+    options.profile = InputProfile::Native;
+    let input = project_structural_input(input, input_limits).map_err(native_input_error)?;
+    validate_and_construct_with_callbacks(schema, &input, options, callbacks)
+}
+
 pub fn validate_strings_and_construct<T>(
     schema: &PreparedSchema<'_>,
     input: &NativeValue,
@@ -96,6 +143,21 @@ where
     options.profile = InputProfile::Strings;
     let input = parse_json(input, json_limits).map_err(json_input_error)?;
     validate_and_construct(schema, &input, options)
+}
+
+pub fn validate_json_strings_and_construct_with_callbacks<T>(
+    schema: &PreparedSchema<'_>,
+    input: &[u8],
+    json_limits: JsonLimits,
+    mut options: ValidationOptions,
+    callbacks: &dyn ValidationCallbacks,
+) -> Result<T, ValidationError>
+where
+    T: StructuralConstruct,
+{
+    options.profile = InputProfile::Strings;
+    let input = parse_json(input, json_limits).map_err(json_input_error)?;
+    validate_and_construct_with_callbacks(schema, &input, options, callbacks)
 }
 
 fn construction_error(

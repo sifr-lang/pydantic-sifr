@@ -1,0 +1,176 @@
+from .schema_types import SchemaFieldPayload, SchemaModelPayload, SchemaNodePayload
+
+
+@const_eval
+def rebase_nodes(
+    nodes: list[SchemaNodePayload], offset: int
+) -> list[SchemaNodePayload]:
+    output: list[SchemaNodePayload] = []
+    for node in nodes:
+        children: list[int] = []
+        for child in node.children:
+            children.append(child + offset)
+        model: SchemaModelPayload | None = None
+        node_model: SchemaModelPayload | None = node.model
+        if node_model is not None:
+            current_model: SchemaModelPayload = node_model
+            fields: list[SchemaFieldPayload] = []
+            for field in current_model.fields:
+                fields.append(
+                    SchemaFieldPayload(
+                        field.name,
+                        field.node + offset,
+                        field.required,
+                        field.default_kind,
+                        field.default,
+                        field.validation_aliases,
+                        field.serialization_alias,
+                        field.strict,
+                        field.exclude,
+                    )
+                )
+            model = SchemaModelPayload(
+                current_model.name,
+                current_model.identity,
+                fields,
+                current_model.extra,
+                current_model.populate_by_name,
+                current_model.location_by_alias,
+                current_model.strict,
+            )
+        output.append(
+            SchemaNodePayload(
+                node.kind,
+                children,
+                node.definition,
+                node.reference,
+                node.error_code,
+                node.error_message,
+                model,
+                node.integer_target,
+                node.integer_constraints,
+                node.float_constraints,
+                node.string_constraints,
+                node.bytes_constraints,
+                node.collection_constraints,
+                node.metadata,
+                node.variants,
+                node.validator_slot,
+                node.validator_target,
+            )
+        )
+    return output
+
+
+@const_eval
+def namespace_validator_nodes(
+    nodes: list[SchemaNodePayload], slot: int, target: str
+) -> list[SchemaNodePayload]:
+    output: list[SchemaNodePayload] = []
+    prefix: str = "validator:" + str(slot) + ":" + target + ":"
+    for node in nodes:
+        namespaced_definition: str | None = None
+        candidate_definition: str | None = node.definition
+        if candidate_definition is not None:
+            current_definition: str = candidate_definition
+            namespaced_definition = prefix + current_definition
+        namespaced_reference: str | None = None
+        candidate_reference: str | None = node.reference
+        if candidate_reference is not None:
+            current_reference: str = candidate_reference
+            namespaced_reference = prefix + current_reference
+        output.append(
+            SchemaNodePayload(
+                node.kind,
+                node.children,
+                namespaced_definition,
+                namespaced_reference,
+                node.error_code,
+                node.error_message,
+                node.model,
+                node.integer_target,
+                node.integer_constraints,
+                node.float_constraints,
+                node.string_constraints,
+                node.bytes_constraints,
+                node.collection_constraints,
+                node.metadata,
+                node.variants,
+                node.validator_slot,
+                node.validator_target,
+            )
+        )
+    return output
+
+
+@const_eval
+def expected_arity(kind: str) -> int:
+    if kind == "list" or kind == "set" or kind == "nullable":
+        return 1
+    if kind == "dict":
+        return 2
+    if kind == "lax-or-strict" or kind == "json-or-structural":
+        return 2
+    if (
+        kind == "function-before"
+        or kind == "function-after"
+        or kind == "function-plain"
+    ):
+        return 2
+    if (
+        kind == "model"
+        or kind == "tuple"
+        or kind == "union"
+        or kind == "literal"
+        or kind == "tagged-union"
+        or kind == "chain"
+    ):
+        return -1
+    return 0
+
+
+@const_eval
+def verify_nodes(nodes: list[SchemaNodePayload], root: int) -> str | None:
+    count: int = len(nodes)
+    if count == 0:
+        return "schema program has no nodes"
+    if count > 4096:
+        return "schema program exceeds the static node limit"
+    if root < 0 or root >= count:
+        return "schema root is out of range"
+    for node in nodes:
+        arity: int = expected_arity(node.kind)
+        if arity >= 0 and len(node.children) != arity:
+            return "schema node has invalid child arity"
+        if node.kind == "chain" and len(node.children) == 0:
+            return "typed chain has no steps"
+        for child in node.children:
+            if child < 0 or child >= count:
+                return "schema child index is out of range"
+        if node.reference is not None and node.kind != "definition-ref":
+            return "non-reference schema node has a reference"
+        if node.kind == "definition-ref" and node.reference is None:
+            return "definition reference has no identity"
+        if node.kind == "model" and node.model is None:
+            return "model schema node has no model payload"
+        if node.error_code is None and node.error_message is not None:
+            return "schema node has an error message without a code"
+        if node.error_code is not None and node.error_message is None:
+            return "schema node has an error code without a message"
+    for left in nodes:
+        if left.definition is not None:
+            matches: int = 0
+            for right in nodes:
+                if right.definition == left.definition:
+                    matches += 1
+            if matches != 1:
+                return "schema program has duplicate definition identities"
+    for reference in nodes:
+        if reference.reference is not None:
+            found: bool = False
+            for target in nodes:
+                if target.definition == reference.reference:
+                    found = True
+            if not found:
+                return "schema program has a dangling definition reference"
+    return None

@@ -2,6 +2,7 @@
 .upstream/
 .venv/
 .sifr_cache/
+.sifr-compiler/
 __pycache__/
 *.pyc
 target/

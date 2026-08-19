@@ -1,5 +1,5 @@
 from .errors import SchemaIssue
-from sifr.meta import CallableIdentity, ClassDeclaration
+from sifr.meta import CallableIdentity, ClassDeclaration, SourceOrigin
 
 from .descriptors import PydanticDescriptor
 
@@ -31,6 +31,30 @@ class SchemaShapeVariant:
     metadata: list[SchemaShapeMetadata]
 
 
+class SchemaShapeParameter:
+    name: str
+    type: SchemaShapeNode
+    convention: str
+    keyword_only: bool
+    metadata: list[SchemaShapeMetadata]
+
+
+class SchemaShapeMethod:
+    target: CallableIdentity | None
+    descriptor: PydanticDescriptor | None
+    origin: SourceOrigin | None
+    declaration_order: int | None
+    name: str
+    kind: str
+    receiver: str | None
+    is_async: bool
+    params: list[SchemaShapeParameter]
+    result: SchemaShapeNode
+    output: SchemaShapeNode
+    fallible: bool
+    metadata: list[SchemaShapeMetadata]
+
+
 class SchemaVariantPayload:
     name: str
     value: int | None
@@ -47,6 +71,7 @@ class SchemaShapeNode:
     members: list[SchemaShapeNode]
     type_arguments: list[SchemaShapeNode]
     fields: list[SchemaShapeField]
+    methods: list[SchemaShapeMethod]
     metadata: list[SchemaShapeMetadata]
     variants: list[SchemaShapeVariant]
     inner: SchemaShapeNode | None
@@ -142,6 +167,15 @@ class SchemaNodePayload:
     collection_constraints: SchemaCollectionConstraintsPayload | None
     metadata: list[SchemaMetadataPayload]
     variants: list[SchemaVariantPayload]
+    validator_slot: int | None = None
+    validator_target: str | None = None
+
+
+class SchemaValidatorPayload:
+    slot: int
+    kind: str
+    mode: str
+    targets: list[str]
 
 
 class SchemaProgramPayload:
@@ -153,6 +187,8 @@ class SchemaProgramPayload:
     canonical_shape_identity: str
     root: int
     nodes: list[SchemaNodePayload]
+    sifr_method_slots: list[CallableIdentity] = []
+    validators: list[SchemaValidatorPayload] = []
 
 
 class SchemaOutcome:

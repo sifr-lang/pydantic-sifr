@@ -46,3 +46,5 @@ class PydanticDescriptor:
     error_package: str | None = None
     error_code: str | None = None
     error_message: str | None = None
+    validator_fields: list[str] | None = None
+    validator_mode: str | None = None

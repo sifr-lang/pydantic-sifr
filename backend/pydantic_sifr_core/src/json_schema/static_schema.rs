@@ -258,6 +258,12 @@ fn generate_node<'schema>(
         }
         SchemaTag::Url | SchemaTag::MultiHostUrl => Ok(json!({"type": "string", "format": "uri"})),
         SchemaTag::Pattern => Ok(json!({"type": "string", "format": "regex"})),
+        SchemaTag::FunctionBefore | SchemaTag::FunctionAfter | SchemaTag::FunctionPlain => {
+            child(match options.mode {
+                JsonSchemaMode::Validation => 0,
+                JsonSchemaMode::Serialization => 1,
+            })
+        }
         SchemaTag::Decimal => Err(unsupported(
             "static schema kind has no exact JSON Schema representation",
         )),
@@ -668,5 +674,58 @@ mod tests {
             assert!(super::reserved_extra_key(key));
         }
         assert!(!super::reserved_extra_key("x-package-note"));
+    }
+
+    #[test]
+    fn validator_nodes_select_input_for_validation_and_output_for_serialization() {
+        for kind in ["function-before", "function-after", "function-plain"] {
+            let function = record(vec![
+                ("kind", StaticProgramValue::String(kind)),
+                (
+                    "children",
+                    list(vec![
+                        StaticProgramValue::Integer("1"),
+                        StaticProgramValue::Integer("2"),
+                    ]),
+                ),
+                ("definition", StaticProgramValue::None),
+                ("reference", StaticProgramValue::None),
+                ("metadata", list(Vec::new())),
+            ]);
+            let boolean = record(vec![
+                ("kind", StaticProgramValue::String("bool")),
+                ("children", list(Vec::new())),
+                ("definition", StaticProgramValue::None),
+                ("reference", StaticProgramValue::None),
+                ("metadata", list(Vec::new())),
+            ]);
+            let string = record(vec![
+                ("kind", StaticProgramValue::String("str")),
+                ("children", list(Vec::new())),
+                ("definition", StaticProgramValue::None),
+                ("reference", StaticProgramValue::None),
+                ("string_constraints", StaticProgramValue::None),
+                ("metadata", list(Vec::new())),
+            ]);
+            let schema =
+                SchemaRef::from_static_program(schema_program(vec![function, boolean, string]))
+                    .unwrap_or_else(|error| panic!("static validator schema failed: {error}"));
+
+            let validation = generate(
+                schema,
+                JsonSchemaOptions::new(JsonSchemaMode::Validation, true),
+                JsonIntegerProfile::Exact,
+            )
+            .unwrap_or_else(|error| panic!("validator input schema failed: {error}"));
+            let serialization = generate(
+                schema,
+                JsonSchemaOptions::new(JsonSchemaMode::Serialization, true),
+                JsonIntegerProfile::Exact,
+            )
+            .unwrap_or_else(|error| panic!("validator output schema failed: {error}"));
+
+            assert_eq!(validation["type"], "boolean");
+            assert_eq!(serialization["type"], "string");
+        }
     }
 }

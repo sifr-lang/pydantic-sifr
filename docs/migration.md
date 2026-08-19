@@ -99,6 +99,47 @@ class User(BaseModel):
 This method does not create a second validator. Static specialization and the
 native core still own the schema and validation operation.
 
+## Convert validators
+
+Use `field_validator` for field callbacks. Use `model_validator` for model
+callbacks. A field validator must name each target. Wildcard targets and wrap
+mode are not available.
+
+```sifr
+from pydantic_sifr import BaseModel, field_validator, model_validator
+
+
+class RawUser:
+    name: bool
+
+
+class User(BaseModel):
+    name: str
+
+    @field_validator("name", mode="before")
+    @classmethod
+    def normalize_name(cls, own value: bool) -> str:
+        return str(value)
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_input(cls, own value: RawUser) -> RawUser:
+        return value
+
+    @model_validator(mode="after")
+    def check_user(own self) -> Self:
+        return self
+```
+
+A field before handler can use an input type that differs from the field type.
+A model before handler must use one concrete structural input type. An after
+model handler consumes the constructed model. Its returned `Self` becomes the
+input to the next after handler.
+
+Use the validator-aware validation functions when a handler needs typed
+context or when a model declares validators. Callback failures join the normal
+validation error. They keep the field or model location and package context.
+
 ## Handle errors
 
 Pydantic raises `ValidationError`. Sifr returns a typed error through
@@ -141,8 +182,9 @@ locations.
 
 ## APIs that are not available
 
-The package does not publish validator decorators, serializer decorators, or
-computed fields in this milestone.
+The package does not publish serializer decorators or computed fields in this
+milestone. Validator wrap mode and wildcard field targets are also not
+available.
 
 Do not retain a Python model path beside the Sifr model. Choose one schema
 owner and one validation path for each migrated boundary.
@@ -152,9 +194,12 @@ owner and one validation path for each migrated boundary.
 1. Derive each selected model from `pydantic_sifr.BaseModel`.
 2. Convert field rules to `Field` calls.
 3. Convert model configuration to `ConfigDict`.
-4. Replace exception-based calls with `Result` return types.
-5. Select one input function for each input boundary.
-6. Compare each required API with the compatibility matrix.
-7. Remove the Python model path after the Sifr boundary passes its tests.
+4. Convert selected validators to checked field or model handlers.
+5. Replace exception-based calls with `Result` return types.
+6. Select one input function for each input boundary.
+7. Compare each required API with the compatibility matrix.
+8. Remove the Python model path after the Sifr boundary passes its tests.
 
-The complete declaration example is in `demos/milestone_m8_fields_configuration`.
+The complete field and configuration example is in
+`demos/milestone_m8_fields_configuration`. The validator example is in
+`demos/milestone_m9_validators`.

@@ -2,8 +2,8 @@ use core::fmt;
 use std::cmp::Ordering;
 
 use sifr_runtime::interop::structural::{
-    StructuralEdge, StructuralEdgeKind, StructuralEnter, StructuralKind, StructuralProject,
-    StructuralScalarRef, StructuralVisitor, VisitControl,
+    SlotSink, StructuralContractError, StructuralEdge, StructuralEdgeKind, StructuralEnter,
+    StructuralKind, StructuralProject, StructuralScalarRef, StructuralVisitor, VisitControl,
 };
 
 use crate::{Arena, ArenaError};
@@ -86,22 +86,31 @@ pub fn project_structural_input<T: StructuralProject>(
     Ok(InputArena::from_parts(root, builder.values))
 }
 
-struct StructuralInputBuilder<'value> {
+struct StructuralInputBuilder {
     values: Arena<InputValue>,
     limits: JsonLimits,
     string_bytes: usize,
-    frames: Vec<StructuralFrame<'value>>,
+    frames: Vec<StructuralFrame>,
     root: Option<InputId>,
 }
 
-struct StructuralFrame<'value> {
+struct StructuralFrame {
     kind: StructuralKind,
     child_count: usize,
-    pending_edge: Option<StructuralEdgeKind<'value>>,
-    children: Vec<(StructuralEdgeKind<'value>, InputId)>,
+    pending_edge: Option<OwnedStructuralEdge>,
+    children: Vec<(OwnedStructuralEdge, InputId)>,
 }
 
-impl<'value> StructuralVisitor<'value> for StructuralInputBuilder<'value> {
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum OwnedStructuralEdge {
+    RecordField(String),
+    Index(usize),
+    MappingKey(usize),
+    MappingValue(usize),
+    ActiveMember { name: String, index: usize },
+}
+
+impl<'value> StructuralVisitor<'value> for StructuralInputBuilder {
     type Error = NativeInputError;
 
     fn enter(&mut self, event: StructuralEnter<'value>) -> Result<VisitControl, Self::Error> {
@@ -122,7 +131,11 @@ impl<'value> StructuralVisitor<'value> for StructuralInputBuilder<'value> {
         let frame = self.frames.last_mut().ok_or(NativeInputError::Projection(
             "structural edge has no parent aggregate",
         ))?;
-        if frame.pending_edge.replace(edge.kind()).is_some() {
+        if frame
+            .pending_edge
+            .replace(owned_edge(edge.kind())?)
+            .is_some()
+        {
             return Err(NativeInputError::Projection(
                 "structural edge has no projected child",
             ));
@@ -185,7 +198,7 @@ impl<'value> StructuralVisitor<'value> for StructuralInputBuilder<'value> {
     }
 }
 
-impl<'value> StructuralInputBuilder<'value> {
+impl StructuralInputBuilder {
     fn check_enter(
         &self,
         kind: StructuralKind,
@@ -256,43 +269,34 @@ impl<'value> StructuralInputBuilder<'value> {
         }
     }
 
-    fn finish_optional(&mut self, frame: StructuralFrame<'value>) -> Result<(), NativeInputError> {
+    fn finish_optional(&mut self, frame: StructuralFrame) -> Result<(), NativeInputError> {
         match frame.children.as_slice() {
             [] => {
                 let id = self.push(InputValue::Null)?;
                 self.attach(id)
             }
-            [
-                (
-                    StructuralEdgeKind::ActiveMember {
-                        name: "some",
-                        index: 0,
-                    },
-                    id,
-                ),
-            ] => self.attach(*id),
+            [(OwnedStructuralEdge::ActiveMember { name, index: 0 }, id)] if name == "some" => {
+                self.attach(*id)
+            }
             _ => Err(NativeInputError::Projection(
                 "structural optional member is invalid",
             )),
         }
     }
 
-    fn aggregate_value(
-        &mut self,
-        frame: StructuralFrame<'value>,
-    ) -> Result<InputValue, NativeInputError> {
+    fn aggregate_value(&mut self, frame: StructuralFrame) -> Result<InputValue, NativeInputError> {
         match frame.kind {
             StructuralKind::Record => {
                 self.check_collection(frame.children.len())?;
                 let mut entries = Vec::with_capacity(frame.children.len());
                 for (edge, id) in frame.children {
-                    let StructuralEdgeKind::RecordField(name) = edge else {
+                    let OwnedStructuralEdge::RecordField(name) = edge else {
                         return Err(NativeInputError::Projection(
                             "structural record edge is invalid",
                         ));
                     };
                     self.add_string_bytes(name.len())?;
-                    entries.push((name.to_owned(), id));
+                    entries.push((name, id));
                 }
                 Ok(InputValue::Object {
                     kind: ObjectKind::Object,
@@ -306,7 +310,7 @@ impl<'value> StructuralInputBuilder<'value> {
                 self.check_collection(frame.children.len())?;
                 let mut items = Vec::with_capacity(frame.children.len());
                 for (index, (edge, id)) in frame.children.into_iter().enumerate() {
-                    if edge != StructuralEdgeKind::Index(index) {
+                    if edge != OwnedStructuralEdge::Index(index) {
                         return Err(NativeInputError::Projection(
                             "structural sequence edge is invalid",
                         ));
@@ -339,8 +343,8 @@ impl<'value> StructuralInputBuilder<'value> {
                 self.check_collection(pair_count)?;
                 let mut entries = Vec::with_capacity(pair_count);
                 for (index, pair) in frame.children.chunks_exact(2).enumerate() {
-                    if pair[0].0 != StructuralEdgeKind::MappingKey(index)
-                        || pair[1].0 != StructuralEdgeKind::MappingValue(index)
+                    if pair[0].0 != OwnedStructuralEdge::MappingKey(index)
+                        || pair[1].0 != OwnedStructuralEdge::MappingValue(index)
                     {
                         return Err(NativeInputError::Projection(
                             "structural mapping edge is invalid",
@@ -377,6 +381,84 @@ impl<'value> StructuralInputBuilder<'value> {
             return Err(NativeInputError::Limit("total string bytes"));
         }
         Ok(())
+    }
+}
+
+fn owned_edge(edge: StructuralEdgeKind<'_>) -> Result<OwnedStructuralEdge, NativeInputError> {
+    Ok(match edge {
+        StructuralEdgeKind::RecordField(name) => OwnedStructuralEdge::RecordField(name.to_owned()),
+        StructuralEdgeKind::Index(index) => OwnedStructuralEdge::Index(index),
+        StructuralEdgeKind::MappingKey(index) => OwnedStructuralEdge::MappingKey(index),
+        StructuralEdgeKind::MappingValue(index) => OwnedStructuralEdge::MappingValue(index),
+        StructuralEdgeKind::ActiveMember { name, index } => OwnedStructuralEdge::ActiveMember {
+            name: name.to_owned(),
+            index,
+        },
+        _ => {
+            return Err(NativeInputError::Projection(
+                "structural edge kind is not supported",
+            ));
+        }
+    })
+}
+
+pub struct CallbackOutputSink {
+    builder: StructuralInputBuilder,
+}
+
+impl CallbackOutputSink {
+    pub fn new(limits: JsonLimits) -> Result<Self, NativeInputError> {
+        validate_native_limits(limits)?;
+        Ok(Self {
+            builder: StructuralInputBuilder {
+                values: Arena::new(),
+                limits,
+                string_bytes: 0,
+                frames: Vec::new(),
+                root: None,
+            },
+        })
+    }
+
+    pub fn finish(self) -> Result<InputArena, NativeInputError> {
+        if !self.builder.frames.is_empty() {
+            return Err(NativeInputError::Projection(
+                "validator output did not close every aggregate",
+            ));
+        }
+        let root = self.builder.root.ok_or(NativeInputError::Projection(
+            "validator output produced no root value",
+        ))?;
+        Ok(InputArena::from_parts(root, self.builder.values))
+    }
+}
+
+impl SlotSink for CallbackOutputSink {
+    fn enter(
+        &mut self,
+        event: StructuralEnter<'_>,
+    ) -> Result<VisitControl, StructuralContractError> {
+        self.builder
+            .enter(event)
+            .map_err(|_| StructuralContractError::InvalidNode)
+    }
+
+    fn edge(&mut self, edge: StructuralEdge<'_>) -> Result<(), StructuralContractError> {
+        self.builder
+            .edge(edge)
+            .map_err(|_| StructuralContractError::InvalidNode)
+    }
+
+    fn scalar(&mut self, value: StructuralScalarRef<'_>) -> Result<(), StructuralContractError> {
+        self.builder
+            .scalar(value)
+            .map_err(|_| StructuralContractError::InvalidNode)
+    }
+
+    fn exit(&mut self, kind: StructuralKind) -> Result<(), StructuralContractError> {
+        self.builder
+            .exit(kind)
+            .map_err(|_| StructuralContractError::InvalidNode)
     }
 }
 

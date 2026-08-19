@@ -57,6 +57,10 @@ must be package-qualified. A custom declaration must register one exact
 message and context set. An override cannot change a built-in declaration.
 Typed `Field` arguments carry these override values into the sealed schema.
 
+Validator callback failures use the same structured error type. A failure
+keeps its checked message in the public context map. Field callbacks add the
+field location. Model callbacks add the model root location.
+
 Malformed schemas return stable package diagnostics during specialization.
 Malformed JSON returns typed runtime errors with stable codes and source
 locations. Separate property and fuzz targets exercise JSON and prepared
@@ -139,7 +143,7 @@ declared, non-input mapping field. Its key type is `str`, and its value schema
 must match the extra value schema.
 
 The backend pins the Sifr structural runtime to exact commit
-`6152fc50984395a640c42f31e9e270cd3a9e09c8`. The package contains this Rust
+`0ab08c47605b694e396a4c30c621fd1ae79b07e1`. The package contains this Rust
 source and its lockfile. The backend is not a separate crates.io product
 because the Sifr runtime crates are not crates.io packages. This rule avoids a
 duplicate private copy of the compiler-owned structural contract.
@@ -155,6 +159,12 @@ Each call borrows one compiler-sealed static schema program. The Rust bridge
 prepares a schema view over those static values. It does not parse or clone a
 schema graph. Successful validation prepares structural construction over the
 validated arena and moves the result into the target class.
+
+Validator declarations become ordered callable identities in the sealed
+program. Function-before, function-after, and function-plain nodes contain the
+exact method-slot number. The bridge checks the slot-table identity before it
+accepts input. It then invokes only the generated slot table. Typed callback
+context stays borrowed for the validation call.
 
 Applications can add thin class methods for familiar call syntax. Such a
 method calls one of the exported functional entry points. It does not declare
