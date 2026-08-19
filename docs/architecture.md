@@ -143,17 +143,19 @@ declared, non-input mapping field. Its key type is `str`, and its value schema
 must match the extra value schema.
 
 The backend pins the Sifr structural runtime to exact commit
-`c1b41a6078cff5bb678bd94df5bbf4e8c7e0ec6c`. The package contains this Rust
+`0e16cc73b2d1ba20a59db7f168193eb01a618ab5`. The package contains this Rust
 source and its lockfile. The backend is not a separate crates.io product
 because the Sifr runtime crates are not crates.io packages. This rule avoids a
 duplicate private copy of the compiler-owned structural contract.
 
 ## Model API boundary
 
-The Sifr package exports `model_validate`, `model_validate_json`, and
-`model_validate_strings`. Each function returns the requested ordinary Sifr
-class or a typed error. The JSON and strings functions accept bytes. The native
-function accepts a separate structural input type.
+An adapted model type has `model_validate`, `model_validate_json`,
+`model_validate_strings`, and `model_json_schema` methods. A model value has
+`model_dump` and `model_dump_json` methods. Each operation returns an ordinary
+Sifr value or a typed error. JSON validation accepts bytes. The native method
+accepts structural input. The strings method accepts a bare string or a
+structural value whose mapping keys and scalar leaves are strings.
 
 Each call borrows one compiler-sealed static schema program. The Rust bridge
 prepares a schema view over those static values. It does not parse or clone a
@@ -166,12 +168,12 @@ exact method-slot number. The bridge checks the slot-table identity before it
 accepts input. It then invokes only the generated slot table. Typed callback
 context stays borrowed for the validation call.
 
-Applications can add thin class methods for familiar call syntax. Such a
-method calls one of the exported functional entry points. It does not declare
-another Rust bridge or own another schema. The PS6 demo validates one payload
-through both forms and compares every constructed field. A source contract
-test also requires the facade method to call the exported function and keeps
-the production bridge set limited to the three functional entry points.
+The compiler checks each attached method against its concrete owner type. The
+methods call the same package functions and Rust bridge as the functional
+operations. They do not own another schema or execution path. `TypeAdapter[T]`
+is a transparent type alias, so its methods use the same static program as
+`T`. `RootModel[T]` stores one declared `root` field. Its validation input,
+serialization output, and JSON Schema use the field schema as the public root.
 
 `ValidationError.message` contains one stable JSON object. The object contains
 ordered details, typed locations, expected values, and the truncation fact.

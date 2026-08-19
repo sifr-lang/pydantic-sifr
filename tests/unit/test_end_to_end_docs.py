@@ -11,6 +11,7 @@ DEMOS = (
     "milestone_m8_fields_configuration",
     "milestone_m9_validators",
     "milestone_m10_serializers",
+    "milestone_m11_model_operations",
 )
 
 

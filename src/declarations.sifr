@@ -374,9 +374,14 @@ def adapt_model(
     metadata: list[PlannedMetadata[PydanticDescriptor]] = []
     issues: list[PlannedIssue[PydanticDescriptor]] = []
     handlers: list[PlannedHandler[PydanticDescriptor]] = []
-    has_serializers: bool = False
+    is_root_model: bool = (
+        declaration.declaration.identity == "pydantic_sifr.declarations.RootModel"
+        or declaration.data_parent == "pydantic_sifr.declarations.RootModel"
+    )
     for item in declaration.declaration.items:
         if item.kind == "field":
+            if item.identity == "pydantic_sifr.declarations.RootModel.root":
+                is_root_model = True
             declared_type: str | None = item.declared_type
             if declared_type is not None:
                 default_kind: str = item.default_kind
@@ -423,6 +428,15 @@ def adapt_model(
                         None,
                     )
                 )
+    if is_root_model:
+        metadata.append(
+            PlannedMetadata(
+                "class",
+                declaration.declaration.identity,
+                "pydantic.root_model",
+                PydanticDescriptor("root-model", "required"),
+            )
+        )
     for use in declaration.descriptors:
         if use.target_kind == "class":
             descriptor: PydanticDescriptor = use.value
@@ -446,12 +460,6 @@ def adapt_model(
         elif use.target_kind == "method":
             descriptor: PydanticDescriptor = use.value
             if (
-                descriptor.kind == "field-serializer"
-                or descriptor.kind == "model-serializer"
-                or descriptor.kind == "computed-field"
-            ):
-                has_serializers = True
-            if (
                 descriptor.kind == "field-validator"
                 or descriptor.kind == "model-validator"
                 or descriptor.kind == "field-serializer"
@@ -468,7 +476,7 @@ def adapt_model(
                         PlannedHandler(target, handler_descriptor, use.origin)
                     )
     attached_api_symbol: str = "PydanticPlainModelApi"
-    if has_serializers:
+    if len(handlers) > 0:
         attached_api_symbol = "PydanticModelApi"
     return DeclarationPlan(
         fields,

@@ -1,7 +1,4 @@
 from pydantic_sifr import AliasPath, BaseModel, ConfigDict, Field, ValidationError
-from pydantic_sifr import model_validate as validate_model
-from pydantic_sifr import model_validate_json as validate_model_json
-from pydantic_sifr import model_validate_strings as validate_model_strings
 
 
 class Address(BaseModel):
@@ -10,38 +7,6 @@ class Address(BaseModel):
     postal_code: int64 = Field(
         validation_alias=AliasPath(["address_data", 0, "postal"])
     )
-
-
-class User(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    id: int64 = Field(alias="user_id", gt=0)
-    name: str = Field(min_length=1, max_length=100)
-    address: Address
-    active: bool = True
-
-    @classmethod
-    def model_validate_json(
-        cls, payload: bytes
-    ) -> Result[User, ValidationError | RustPanicError]:
-        try:
-            value: User = validate_model_json(payload)
-            return value
-        except ValidationError as error:
-            raise error
-        except RustPanicError as error:
-            raise error
-
-    @classmethod
-    def model_validate_strings(
-        cls, payload: bytes
-    ) -> Result[User, ValidationError | RustPanicError]:
-        try:
-            value: User = validate_model_strings(payload)
-            return value
-        except ValidationError as error:
-            raise error
-        except RustPanicError as error:
-            raise error
 
 
 class PostalInput:
@@ -59,37 +24,34 @@ class UserInput:
     address: AddressInput
 
 
+class User(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: int64 = Field(alias="user_id", gt=0)
+    name: str = Field(min_length=1, max_length=100)
+    address: Address
+    active: bool = True
+
+
 def main() -> Result[None, ValidationError | RustPanicError]:
     try:
         payload: bytes = b'{"user_id":7,"name":"Ada","address":{"city":"NY","address_data":[{"postal":10001}]}}'
         user: User = User.model_validate_json(payload)
-        functional_user: User = validate_model_json(payload)
         expected_id: int64 = 7
         expected_postal: int64 = 10001
         assert user.id == expected_id
         assert user.active
         assert user.address.postal_code == expected_postal
-        assert functional_user.id == user.id
-        assert functional_user.name == user.name
-        assert functional_user.active == user.active
-        assert functional_user.address.city == user.address.city
-        assert functional_user.address.postal_code == user.address.postal_code
-        strings: User = User.model_validate_strings(
-            b'{"user_id":"8","name":"Lin","address":{"city":"SF","address_data":[{"postal":"94105"}]}}'
+        strings_input: UserInput = UserInput(
+            "8",
+            "Lin",
+            AddressInput("SF", [PostalInput("94105")]),
         )
-        functional_strings: User = validate_model_strings(
-            b'{"user_id":"8","name":"Lin","address":{"city":"SF","address_data":[{"postal":"94105"}]}}'
-        )
+        strings: User = User.model_validate_strings(strings_input)
         expected_strings_id: int64 = 8
         expected_strings_postal: int64 = 94105
         assert strings.id == expected_strings_id
         assert strings.address.postal_code == expected_strings_postal
-        assert functional_strings.id == strings.id
-        assert functional_strings.name == strings.name
-        assert functional_strings.active == strings.active
-        assert functional_strings.address.city == strings.address.city
-        assert functional_strings.address.postal_code == strings.address.postal_code
-        structural: User = validate_model(
+        structural: User = User.model_validate(
             UserInput(
                 "9",
                 "Mira",

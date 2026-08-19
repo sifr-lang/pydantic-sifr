@@ -143,6 +143,7 @@ impl SerializerNode {
 pub struct SerializationPlan {
     structural_identity: ShapeIdentity,
     integer_profile: JsonIntegerProfile,
+    root_model: bool,
     root: SerializerNodeId,
     nodes: Vec<SerializerNode>,
     field_policies: Vec<FieldPolicy>,
@@ -154,6 +155,13 @@ impl SerializationPlan {
         schema: PreparedSchema<'_>,
         integer_profile: JsonIntegerProfile,
     ) -> Result<Self, SerializationPlanError> {
+        let root_schema = schema.schema();
+        let root_model = root_schema.tag().map_err(validation_error)? == SchemaTag::Model
+            && root_schema
+                .model()
+                .map_err(validation_error)?
+                .root_model()
+                .map_err(validation_error)?;
         let mut builder = PlanBuilder {
             nodes: Vec::new(),
             field_policies: Vec::new(),
@@ -171,6 +179,7 @@ impl SerializationPlan {
         Ok(Self {
             structural_identity: schema.structural_identity(),
             integer_profile,
+            root_model,
             root,
             nodes: builder.nodes,
             field_policies: builder.field_policies,
@@ -186,6 +195,11 @@ impl SerializationPlan {
     #[must_use]
     pub const fn integer_profile(&self) -> JsonIntegerProfile {
         self.integer_profile
+    }
+
+    #[must_use]
+    pub const fn root_model(&self) -> bool {
+        self.root_model
     }
 
     #[must_use]

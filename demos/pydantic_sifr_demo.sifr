@@ -1,10 +1,6 @@
 from pydantic_sifr import BaseModel, ConfigDict, Field, JsonSchemaError
 from pydantic_sifr import SerializationError
 from pydantic_sifr import ValidationError
-from pydantic_sifr import model_dump_json
-from pydantic_sifr import model_json_schema
-from pydantic_sifr import model_validate_json
-from pydantic_sifr import model_validate_strings
 
 
 class User(BaseModel):
@@ -15,20 +11,25 @@ class User(BaseModel):
     nickname: str | None = Field(default=None, min_length=2)
 
 
+class UserStrings:
+    user_id: str
+    name: str
+
+
 def main() -> Result[
     None,
     ValidationError | SerializationError | JsonSchemaError | RustPanicError,
 ]:
     try:
-        user: User = model_validate_json(b'{"user_id":7,"name":"Ada"}')
+        user: User = User.model_validate_json(b'{"user_id":7,"name":"Ada"}')
         expected_id: int64 = 7
         assert user.id == expected_id
         assert user.name == "Ada"
         assert user.active
         assert user.nickname is None
-        dumped: bytes = model_dump_json(user)
+        dumped: bytes = user.model_dump_json()
         assert dumped == b'{"id":7,"name":"Ada","active":true,"nickname":null}'
-        json_schema: bytes = model_json_schema(user)
+        json_schema: bytes = User.model_json_schema()
         assert len(json_schema) > 0
         try:
             schema_text: str = json_schema.decode()
@@ -43,12 +44,11 @@ def main() -> Result[
 
         strings_error_seen: bool = False
         try:
-            invalid_strings: User = model_validate_strings(b"{")
+            invalid_strings: User = User.model_validate_strings(UserStrings("0", ""))
             assert invalid_strings.id != expected_id
         except ValidationError as error:
-            strings_error_seen = (
-                error.message.startswith('{"errors":[{"code":"json_invalid"')
-                and '"expected":"valid bounded JSON","location":[]' in error.message
+            strings_error_seen = error.message.startswith(
+                '{"errors":[{"code":"greater_than"'
             )
         except RustPanicError as error:
             raise error
@@ -56,7 +56,9 @@ def main() -> Result[
 
         error_seen: bool = False
         try:
-            invalid: User = model_validate_json(b'{"user_id":0,"name":"","extra":true}')
+            invalid: User = User.model_validate_json(
+                b'{"user_id":0,"name":"","extra":true}'
+            )
             assert invalid.id != expected_id
         except ValidationError as error:
             error_seen = error.message.startswith('{"errors":[{"code":"greater_than"')

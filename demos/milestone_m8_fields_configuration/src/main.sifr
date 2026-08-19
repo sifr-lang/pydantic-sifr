@@ -4,7 +4,6 @@ from pydantic_sifr import AliasChoices, AliasPath, BaseModel, ConfigDict
 from pydantic_sifr import Constraints, Field, RootModel
 from pydantic_sifr import MultiHostUrl, Pattern, SerializationError, SpecialValueError
 from pydantic_sifr import Url, ValidationError, JsonSchemaError
-from pydantic_sifr import model_dump_json, model_json_schema, model_validate_json
 
 
 def make_tags() -> list[str]:
@@ -51,6 +50,10 @@ class GenericEnvelope[T](BaseModel):
     value: T
 
 
+class ConcreteEnvelope(GenericEnvelope[int64]):
+    pass
+
+
 class CompatibilityModel(BaseModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
     path_value: int64 = Field(
@@ -73,7 +76,7 @@ class CompatibilityModel(BaseModel):
     )
     nested: User
     recursive: Node
-    boxed: GenericEnvelope[int64]
+    boxed: ConcreteEnvelope
     url: Url
     multi_host_url: MultiHostUrl
     compiled_pattern: Pattern
@@ -137,20 +140,20 @@ def main() -> Result[
     assert user.active
     assert user.tags == []
     try:
-        simple: Simple = model_validate_json(b'{"value":1}')
+        simple: Simple = Simple.model_validate_json(b'{"value":1}')
         expected_simple: int64 = 1
         assert simple.value == expected_simple
-        validated: User = model_validate_json(b'{"user_id":8,"name":"Lin"}')
+        validated: User = User.model_validate_json(b'{"user_id":8,"name":"Lin"}')
         expected_validated: int64 = 8
         assert validated.id == expected_validated
         assert validated.active
         assert validated.tags == []
-        populated: User = model_validate_json(b'{"id":9,"name":"ByName"}')
+        populated: User = User.model_validate_json(b'{"id":9,"name":"ByName"}')
         expected_populated: int64 = 9
         assert populated.id == expected_populated
         strict_error_seen: bool = False
         try:
-            invalid_strict: User = model_validate_json(
+            invalid_strict: User = User.model_validate_json(
                 b'{"user_id":"8","name":"Strict"}'
             )
             assert invalid_strict.id != expected_validated
@@ -161,7 +164,7 @@ def main() -> Result[
         assert strict_error_seen
         extra_error_seen: bool = False
         try:
-            invalid_extra: User = model_validate_json(
+            invalid_extra: User = User.model_validate_json(
                 b'{"user_id":8,"name":"Extra","unknown":true}'
             )
             assert invalid_extra.id != expected_validated
@@ -170,7 +173,7 @@ def main() -> Result[
         except RustPanicError as error:
             raise error
         assert extra_error_seen
-        compatible: CompatibilityModel = model_validate_json(
+        compatible: CompatibilityModel = CompatibilityModel.model_validate_json(
             b'{"payload":[{"value":4}],"score":1.5,"code":"valid","annotated_code":"merged","data":"x","values":[1,2],"level":2,"flag":true,"status":1,"choice":"text","pet":{"kind":"cat","lives":9},"nested":{"user_id":3,"name":"Nested"},"recursive":{"value":1,"next":{"value":2}},"boxed":{"value":5},"url":"https://EXAMPLE.com/a/../b","multi_host_url":"postgres://user:pass@one.example:5432,TWO.example:5433/db","compiled_pattern":"^abc$"}'
         )
         expected_path: int64 = 4
@@ -189,35 +192,43 @@ def main() -> Result[
         assert pattern_flags == expected_flags
         rooted: RootModel[int64] = RootModel(identifier)
         assert rooted.root == identifier
-        first_alias: AliasChoiceModel = model_validate_json(b'{"first":1,"second":2}')
+        first_alias: AliasChoiceModel = AliasChoiceModel.model_validate_json(
+            b'{"first":1,"second":2}'
+        )
         expected_first_alias: int64 = 1
         assert first_alias.value == expected_first_alias
-        fallback_alias: AliasChoiceModel = model_validate_json(b'{"second":2}')
+        fallback_alias: AliasChoiceModel = AliasChoiceModel.model_validate_json(
+            b'{"second":2}'
+        )
         expected_fallback_alias: int64 = 2
         assert fallback_alias.value == expected_fallback_alias
-        merged_field: MergeOrderModel = model_validate_json(b'{"value":"abc"}')
+        merged_field: MergeOrderModel = MergeOrderModel.model_validate_json(
+            b'{"value":"abc"}'
+        )
         assert merged_field.value == "abc"
         merge_error_seen: bool = False
         try:
-            invalid_merge: MergeOrderModel = model_validate_json(b'{"value":"ab"}')
+            invalid_merge: MergeOrderModel = MergeOrderModel.model_validate_json(
+                b'{"value":"ab"}'
+            )
             assert invalid_merge.value != "ab"
         except ValidationError:
             merge_error_seen = True
         except RustPanicError as error:
             raise error
         assert merge_error_seen
-        separate_alias: SeparateAliasModel = model_validate_json(
+        separate_alias: SeparateAliasModel = SeparateAliasModel.model_validate_json(
             b'{"input":{"value":3}}'
         )
         expected_separate_alias: int64 = 3
         assert separate_alias.value == expected_separate_alias
         excluded: ExcludedModel = ExcludedModel("shown")
-        dumped: bytes = model_dump_json(excluded)
+        dumped: bytes = excluded.model_dump_json()
         dumped_text: str = dumped.decode()
         assert '"hidden"' not in dumped_text
         schema_values: list[int64] = [identifier]
         schema_model: SchemaModel = SchemaModel(1.5, "valid", b"x", schema_values)
-        schema_bytes: bytes = model_json_schema(schema_model)
+        schema_bytes: bytes = SchemaModel.model_json_schema()
         schema_text: str = schema_bytes.decode()
         assert '"exclusiveMinimum":0.0' in schema_text
         assert '"multipleOf":0.5' in schema_text
@@ -228,7 +239,9 @@ def main() -> Result[
         assert '"x-note":"selected"' in schema_text
         assert '"minItems":1' in schema_text
         assert '"maxItems":3' in schema_text
-        generated: GeneratedAliasModel = model_validate_json(b'{"api_count":6}')
+        generated: GeneratedAliasModel = GeneratedAliasModel.model_validate_json(
+            b'{"api_count":6}'
+        )
         expected_generated: int64 = 6
         assert generated.count == expected_generated
     except ValidationError as error:

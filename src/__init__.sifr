@@ -17,7 +17,6 @@ from .model import model_dump
 from .model import model_dump_json
 from .model import model_dump_json_with_serializers
 from .model import model_dump_with_serializers
-from .model import model_json_schema
 from .model import model_validate
 from .model import model_validate_json
 from .model import model_validate_json_with_validators
@@ -29,3 +28,6 @@ from .special_values import MultiHostUrl
 from .special_values import Pattern
 from .special_values import SpecialValueError
 from .special_values import Url
+
+
+type TypeAdapter[T] = T

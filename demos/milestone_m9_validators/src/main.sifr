@@ -3,9 +3,6 @@ from pydantic_sifr import (
     JsonSchemaError,
     ValidationError,
     field_validator,
-    model_json_schema,
-    model_validate_json_with_validators,
-    model_validate_with_validators,
     model_validator,
 )
 from sifr.meta import NoContext
@@ -125,29 +122,29 @@ def main() -> Result[None, ValidationError | JsonSchemaError | RustPanicError]:
         three: int64 = 3
         forty_two: int64 = 42
         context: NoContext = NoContext()
-        from_json: User = model_validate_json_with_validators(
+        from_json: User = User.model_validate_json_with_context(
             b'{"name":true,"score":1,"code":"input"}', context
         )
         assert from_json.name == "true"
         assert from_json.score == one
         assert from_json.code == forty_two
-        schema: bytes = model_json_schema(from_json)
+        schema: bytes = User.model_json_schema()
         assert len(schema) > 0
 
         raw: RawUser = RawUser(False, two, "structural")
-        structural: User = model_validate_with_validators(raw, context)
+        structural: User = User.model_validate_with_context(raw, context)
         assert structural.name == "false"
         assert structural.score == two
         assert structural.code == forty_two
 
         validation_context: ValidationContext = ValidationContext(False)
-        contextual: ContextValue = model_validate_json_with_validators(
+        contextual: ContextValue = ContextValue.model_validate_json_with_context(
             b'{"value":"context"}', validation_context
         )
         assert contextual.value == "context"
         assert validation_context.seen
 
-        pair: Pair = model_validate_json_with_validators(
+        pair: Pair = Pair.model_validate_json_with_context(
             b'{"left":"a","right":"b"}', context
         )
         assert pair.left == "a!"
@@ -155,7 +152,7 @@ def main() -> Result[None, ValidationError | JsonSchemaError | RustPanicError]:
 
         error_seen: bool = False
         try:
-            invalid: User = model_validate_json_with_validators(
+            invalid: User = User.model_validate_json_with_context(
                 b'{"name":true,"score":1,"code":"reject"}', context
             )
             assert invalid.name == ""
@@ -170,7 +167,7 @@ def main() -> Result[None, ValidationError | JsonSchemaError | RustPanicError]:
 
         field_error_seen: bool = False
         try:
-            invalid_field: FieldFailure = model_validate_json_with_validators(
+            invalid_field: FieldFailure = FieldFailure.model_validate_json_with_context(
                 b'{"value":""}', context
             )
             assert invalid_field.value == "unreachable"

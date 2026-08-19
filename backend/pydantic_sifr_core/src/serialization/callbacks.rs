@@ -8,7 +8,7 @@ use crate::{
 use super::{
     SerializationError, SerializationErrorKind, SerializationOptions, SerializationPlan,
     SerializerCallbackKind, SerializerCallbackPlan, SerializerWhenUsed,
-    output::{apply_options, native_json_bytes, native_value, verify_shape},
+    output::{apply_options, native_json_bytes, native_value, root_model_value, verify_shape},
 };
 
 pub trait SerializationCallbacks {
@@ -133,6 +133,9 @@ fn serialize_with_callbacks<T: StructuralProject>(
             )?;
             output = native_value(&callback_output, callback_output.root())?;
         }
+    }
+    if plan.root_model() && matches!(output, NativeValue::Object(_)) {
+        output = root_model_value(output)?;
     }
     apply_options(plan, &output, options, &mut Vec::new()).ok_or_else(|| {
         SerializationError::new(

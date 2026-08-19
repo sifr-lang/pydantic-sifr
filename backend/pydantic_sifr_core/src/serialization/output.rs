@@ -81,13 +81,32 @@ pub fn serialize_structural<T: StructuralProject>(
         };
         SerializationError::new(kind, error.to_string())
     })?;
-    let value = native_value(&input, input.root())?;
+    let mut value = native_value(&input, input.root())?;
+    if plan.root_model() {
+        value = root_model_value(value)?;
+    }
     apply_options(plan, &value, options, &mut Vec::new()).ok_or_else(|| {
         SerializationError::new(
             SerializationErrorKind::InvalidProjection,
             "serialization selection removed the root value",
         )
     })
+}
+
+pub(super) fn root_model_value(value: NativeValue) -> Result<NativeValue, SerializationError> {
+    let NativeValue::Object(mut entries) = value else {
+        return Err(SerializationError::new(
+            SerializationErrorKind::InvalidProjection,
+            "root model projection must be a structural record",
+        ));
+    };
+    if entries.len() != 1 || entries[0].0 != "root" {
+        return Err(SerializationError::new(
+            SerializationErrorKind::InvalidProjection,
+            "root model projection must contain exactly one root field",
+        ));
+    }
+    Ok(entries.swap_remove(0).1)
 }
 
 pub(super) fn verify_shape<T: StructuralProject>(

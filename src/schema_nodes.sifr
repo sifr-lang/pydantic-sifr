@@ -37,6 +37,7 @@ def rebase_nodes(
                 current_model.populate_by_name,
                 current_model.location_by_alias,
                 current_model.strict,
+                current_model.root_model,
             )
         output.append(
             SchemaNodePayload(

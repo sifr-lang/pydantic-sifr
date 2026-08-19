@@ -305,6 +305,17 @@ fn generate(
             "$ref": format!("#/$defs/{}", escape_json_pointer(name))
         })),
         Schema::Model(model) => {
+            if model.root_model {
+                let [field] = model.fields.as_slice() else {
+                    return Err(unsupported(
+                        "a root model must contain exactly one root field",
+                    ));
+                };
+                if field.name != "root" {
+                    return Err(unsupported("a root model field must be named root"));
+                }
+                return child(&field.schema);
+            }
             let mut properties = Map::new();
             let mut required = Vec::new();
             for field in &model.fields {

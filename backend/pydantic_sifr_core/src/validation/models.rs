@@ -15,6 +15,9 @@ pub(crate) fn validate_model(
     input_id: InputId,
     depth: usize,
 ) -> Result<ValueId, ValidationError> {
+    if schema.root_model()? {
+        return validate_root_model(state, schema, input_id, depth);
+    }
     let (kind, entries) = match state.input().get(input_id) {
         Some(InputValue::Object { kind, entries }) => (*kind, entries.clone()),
         Some(_) => {
@@ -188,6 +191,73 @@ pub(crate) fn validate_model(
         ordered_fields,
         extras,
         validated_field_count,
+    )))
+}
+
+fn validate_root_model(
+    state: &mut ValidationState<'_>,
+    schema: ModelRef<'_>,
+    input_id: InputId,
+    depth: usize,
+) -> Result<ValueId, ValidationError> {
+    let fields = schema.fields()?;
+    let [field] = fields.as_slice() else {
+        return Err(type_error(
+            "schema_invalid",
+            "A root model must contain exactly one field",
+            "one root field",
+        ));
+    };
+    let field_name = field.name()?;
+    if field_name != "root" || !field.input() || !field.is_required()? {
+        return Err(type_error(
+            "schema_invalid",
+            "A root model must contain one required root field",
+            "required root field",
+        ));
+    }
+    let value_id = if state.serialization_input() {
+        let Some(InputValue::Object { entries, .. }) = state.input().get(input_id) else {
+            return Err(type_error(
+                "model_type",
+                "Serialized root model must be a structural record",
+                "root model record",
+            ));
+        };
+        entries
+            .iter()
+            .find(|(name, _)| name == field_name)
+            .map(|(_, value)| *value)
+            .ok_or_else(|| {
+                type_error(
+                    "model_type",
+                    "Serialized root model is missing its root field",
+                    "root model record",
+                )
+            })?
+    } else {
+        input_id
+    };
+    let field_schema = field.schema()?;
+    let value = if state.options().strict_override.is_none() {
+        match field.strict()? {
+            Some(strict) => {
+                let mut options = state.options();
+                options.strict_override = Some(strict);
+                state
+                    .validate_branch_with_options(field_schema, value_id, depth + 1, options)
+                    .and_then(|arena| state.import(arena))?
+            }
+            None => state.validate_node(field_schema, value_id, depth + 1)?,
+        }
+    } else {
+        state.validate_node(field_schema, value_id, depth + 1)?
+    };
+    state.push(ValidatedValue::Model(ModelValue::new(
+        schema.name()?,
+        vec![(field_name, value)],
+        Vec::new(),
+        1,
     )))
 }
 

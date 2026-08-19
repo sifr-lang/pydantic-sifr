@@ -22,7 +22,8 @@ pub use construction::{
     validate_json_and_construct_with_callbacks, validate_json_strings_and_construct,
     validate_json_strings_and_construct_with_callbacks, validate_native_and_construct,
     validate_strings_and_construct, validate_structural_and_construct,
-    validate_structural_and_construct_with_callbacks,
+    validate_structural_and_construct_with_callbacks, validate_structural_strings_and_construct,
+    validate_structural_strings_and_construct_with_callbacks,
 };
 pub use definitions::{DefinitionSchema, DefinitionsSchema};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
@@ -155,6 +156,7 @@ pub(crate) fn validate_ref_with_callbacks<'input>(
             active_references: Vec::new(),
             enforce_strings_input: true,
             skip_callbacks: false,
+            serialization_input: false,
         },
         Some(callbacks),
     )
@@ -203,6 +205,7 @@ pub(crate) fn validate_ref_for_serialization(
             active_references: Vec::new(),
             enforce_strings_input: true,
             skip_callbacks: true,
+            serialization_input: true,
         },
         None,
     )
@@ -228,6 +231,7 @@ pub(crate) fn validate_at_depth_with_context(
             active_references,
             enforce_strings_input: true,
             skip_callbacks: false,
+            serialization_input: false,
         },
         None,
     )
@@ -238,6 +242,7 @@ struct ValidationContext {
     active_references: Vec<(InputId, &'static str)>,
     enforce_strings_input: bool,
     skip_callbacks: bool,
+    serialization_input: bool,
 }
 
 fn validate_at_depth_with_context_mode<'input>(
@@ -262,6 +267,7 @@ fn validate_at_depth_with_context_mode<'input>(
         active_references: context.active_references,
         callbacks,
         skip_callbacks: context.skip_callbacks,
+        serialization_input: context.serialization_input,
     };
     let root = state.validate_node(schema, root, start_depth)?;
     Ok(ValidatedArena::new(root, state.values))
@@ -297,6 +303,7 @@ pub(crate) struct ValidationState<'a> {
     active_references: Vec<(InputId, &'static str)>,
     callbacks: Option<&'a dyn ValidationCallbacks>,
     skip_callbacks: bool,
+    serialization_input: bool,
 }
 
 impl ValidationState<'_> {
@@ -430,6 +437,10 @@ impl ValidationState<'_> {
         self.options
     }
 
+    pub(crate) const fn serialization_input(&self) -> bool {
+        self.serialization_input
+    }
+
     pub(crate) fn value(&self, id: ValueId) -> Option<&ValidatedValue> {
         self.values.get(id)
     }
@@ -485,6 +496,7 @@ impl ValidationState<'_> {
             active_references: self.active_references.clone(),
             callbacks: self.callbacks,
             skip_callbacks: self.skip_callbacks,
+            serialization_input: self.serialization_input,
         };
         let root = state.validate_node(schema, root, start_depth)?;
         Ok(ValidatedArena::new(root, state.values))
@@ -509,6 +521,7 @@ impl ValidationState<'_> {
                 active_references: Vec::new(),
                 enforce_strings_input: true,
                 skip_callbacks: self.skip_callbacks,
+                serialization_input: self.serialization_input,
             },
             self.callbacks,
         )
@@ -532,6 +545,7 @@ impl ValidationState<'_> {
                 active_references: Vec::new(),
                 enforce_strings_input: false,
                 skip_callbacks: self.skip_callbacks,
+                serialization_input: self.serialization_input,
             },
             self.callbacks,
         )

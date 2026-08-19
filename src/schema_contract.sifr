@@ -51,6 +51,14 @@ def schema_failure(problem: str, own origin: SourceOrigin) -> SchemaOutcome:
 
 
 @const_eval
+def is_root_model(node: SchemaShapeNode) -> bool:
+    for metadata in node.metadata:
+        if metadata.key == "pydantic.root_model":
+            return True
+    return False
+
+
+@const_eval
 def validator_node(
     kind: str,
     children: list[int],
@@ -588,6 +596,15 @@ def build_node_mode(
                     field_rules_value.exclude,
                 )
             )
+        root_model: bool = is_root_model(node)
+        has_root_field: bool = False
+        for model_field in model_fields:
+            if model_field.name == "root":
+                has_root_field = True
+        if root_model and (len(model_fields) != 1 or not has_root_field):
+            return NodeBuildResult(
+                [], 0, "a root model must declare exactly one root field"
+            )
         model_payload: SchemaModelPayload = SchemaModelPayload(
             node.identity,
             node.identity,
@@ -596,6 +613,7 @@ def build_node_mode(
             model_rules_value.populate_by_name,
             model_rules_value.location_by_alias,
             model_rules_value.strict,
+            root_model,
         )
         model_definition: str | None = node.identity
         model_value: SchemaModelPayload | None = model_payload
@@ -654,7 +672,9 @@ def build_node_mode(
         return NodeBuildResult([enumeration], 0, None)
     if node.kind == "newtype":
         return NodeBuildResult([], 0, "newtype schemas are not supported")
-    return NodeBuildResult([], 0, "structural shape cannot form a schema program")
+    return NodeBuildResult(
+        [], 0, "structural shape cannot form a schema program: " + node.kind
+    )
 
 
 @const_eval
