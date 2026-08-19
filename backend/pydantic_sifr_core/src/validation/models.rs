@@ -75,7 +75,27 @@ pub(crate) fn validate_model(
             match select_field(state, schema, field, input_id, &entries)? {
                 Some((value_id, entry_index, location)) => {
                     consumed.insert(entry_index);
-                    match state.validate_node(field.schema()?, value_id, depth + 1) {
+                    let field_schema = field.schema()?;
+                    let validated = if state.options().strict_override.is_none() {
+                        match field.strict()? {
+                            Some(strict) => {
+                                let mut options = state.options();
+                                options.strict_override = Some(strict);
+                                state
+                                    .validate_branch_with_options(
+                                        field_schema,
+                                        value_id,
+                                        depth + 1,
+                                        options,
+                                    )
+                                    .and_then(|arena| state.import(arena))
+                            }
+                            None => state.validate_node(field_schema, value_id, depth + 1),
+                        }
+                    } else {
+                        state.validate_node(field_schema, value_id, depth + 1)
+                    };
+                    match validated {
                         Ok(value) => {
                             field_values.insert(field_name, value);
                             validated_field_count += 1;
@@ -87,6 +107,7 @@ pub(crate) fn validate_model(
                         ),
                     }
                 }
+                None if field.uses_construction_default()? => {}
                 None => match validate_default(state, field, depth) {
                     Ok(Some(value)) => {
                         field_values.insert(field_name, value);
@@ -149,23 +170,19 @@ pub(crate) fn validate_model(
         let mapping = state.push(ValidatedValue::Mapping(entries))?;
         field_values.insert(destination, mapping);
     }
-    let ordered_fields = field_specs
-        .iter()
-        .map(|field| {
-            let name = field.name()?;
-            field_values
-                .get(name)
-                .copied()
-                .map(|value| (name, value))
-                .ok_or_else(|| {
-                    type_error(
-                        "schema_invalid",
-                        "A non-input model field has no value source",
-                        "default or extra destination field",
-                    )
-                })
-        })
-        .collect::<Result<Vec<_>, ValidationError>>()?;
+    let mut ordered_fields = Vec::with_capacity(field_specs.len());
+    for field in &field_specs {
+        let name = field.name()?;
+        if let Some(value) = field_values.get(name).copied() {
+            ordered_fields.push((name, value));
+        } else if !field.uses_construction_default()? {
+            return Err(type_error(
+                "schema_invalid",
+                "A non-input model field has no value source",
+                "default or extra destination field",
+            ));
+        }
+    }
     state.push(ValidatedValue::Model(ModelValue::new(
         schema.name()?,
         ordered_fields,
@@ -308,6 +325,9 @@ fn validate_default(
     })?;
     let mut options = state.options();
     options.profile = InputProfile::Native;
+    if options.strict_override.is_none() {
+        options.strict_override = field.strict()?;
+    }
     let output = state.validate_input(field.schema()?, &input, input.root(), options, depth + 1)?;
     state.import(output).map(Some)
 }

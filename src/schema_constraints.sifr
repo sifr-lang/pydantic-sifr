@@ -1,0 +1,143 @@
+from .descriptors import PydanticDescriptor
+from .schema_types import SchemaShapeMetadata
+
+
+@const_eval
+def primitive_kind(name: str) -> str:
+    if name == "int" or name == "bigint":
+        return "int"
+    if name == "float":
+        return "float"
+    if name == "bool":
+        return "bool"
+    if name == "str":
+        return "str"
+    if name == "bytes":
+        return "bytes"
+    if name == "None":
+        return "none"
+    if name == "decimal" or name == "bigdecimal":
+        return "decimal"
+    return ""
+
+
+@const_eval
+def copy_metadata(
+    metadata: list[SchemaShapeMetadata],
+) -> list[SchemaShapeMetadata]:
+    output: list[SchemaShapeMetadata] = []
+    for item in metadata:
+        output.append(item)
+    return output
+
+
+@const_eval
+def has_integer_constraints(metadata: list[SchemaShapeMetadata]) -> bool:
+    for item in metadata:
+        if item.key == "pydantic.field":
+            value: PydanticDescriptor = item.value
+            if (
+                value.gt is not None
+                or value.ge is not None
+                or value.lt is not None
+                or value.le is not None
+                or value.multiple_of is not None
+            ):
+                return True
+    return False
+
+
+@const_eval
+def has_string_constraints(metadata: list[SchemaShapeMetadata]) -> bool:
+    for item in metadata:
+        if item.key == "pydantic.field":
+            value: PydanticDescriptor = item.value
+            if (
+                value.min_length is not None
+                or value.max_length is not None
+                or value.pattern is not None
+                or value.strip_whitespace is not None
+                or value.to_lower is not None
+                or value.to_upper is not None
+                or value.ascii_only is not None
+            ):
+                return True
+    return False
+
+
+@const_eval
+def has_length_constraints(metadata: list[SchemaShapeMetadata]) -> bool:
+    for item in metadata:
+        if item.key == "pydantic.field":
+            value: PydanticDescriptor = item.value
+            if value.min_length is not None or value.max_length is not None:
+                return True
+    return False
+
+
+@const_eval
+def has_text_constraints(metadata: list[SchemaShapeMetadata]) -> bool:
+    for item in metadata:
+        if item.key == "pydantic.field":
+            value: PydanticDescriptor = item.value
+            if (
+                value.pattern is not None
+                or value.strip_whitespace is not None
+                or value.to_lower is not None
+                or value.to_upper is not None
+                or value.ascii_only is not None
+            ):
+                return True
+    return False
+
+
+@const_eval
+def constraint_issue(kind: str, metadata: list[SchemaShapeMetadata]) -> str | None:
+    if kind == "int" or kind == "float":
+        if has_string_constraints(copy_metadata(metadata)):
+            return "string constraints require a string or collection field"
+        return None
+    if kind == "str":
+        if has_integer_constraints(copy_metadata(metadata)):
+            return "numeric constraints require an integer or float field"
+        return None
+    if (
+        kind == "bytes"
+        or kind == "list"
+        or kind == "set"
+        or kind == "dictionary"
+        or kind == "tuple"
+    ):
+        if has_integer_constraints(copy_metadata(metadata)):
+            return "numeric constraints require an integer or float field"
+        if has_text_constraints(copy_metadata(metadata)):
+            return "text constraints require a string field"
+        return None
+    if has_integer_constraints(copy_metadata(metadata)) or has_string_constraints(
+        copy_metadata(metadata)
+    ):
+        return "field constraints are not supported for this structural type"
+    return None
+
+
+@const_eval
+def is_literal_key(key: str) -> bool:
+    return key == "pydantic.literal"
+
+
+@const_eval
+def sum_kind(base: str, metadata: list[SchemaShapeMetadata]) -> str:
+    for item in metadata:
+        if item.key == "pydantic.field":
+            value: PydanticDescriptor = item.value
+            if value.literal_values is not None and (
+                base == "int" or base == "str" or base == "bool"
+            ):
+                return "literal"
+            if (
+                base == "union"
+                and value.discriminator is not None
+                and value.discriminator_tags is not None
+            ):
+                return "tagged-union"
+    return base + ""

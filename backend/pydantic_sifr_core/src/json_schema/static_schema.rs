@@ -86,7 +86,7 @@ fn generate_node<'schema>(
             definitions,
         )
     };
-    match schema.tag().map_err(schema_error)? {
+    let output = match schema.tag().map_err(schema_error)? {
         SchemaTag::None => Ok(json!({"type": "null"})),
         SchemaTag::Bool => Ok(json!({"type": "boolean"})),
         SchemaTag::Integer => {
@@ -110,7 +110,22 @@ fn generate_node<'schema>(
                 &constraints.multiple_of,
             )
         }
-        SchemaTag::Float => Ok(Value::Object(typed("number"))),
+        SchemaTag::Float => {
+            let constraints = schema.float().map_err(schema_error)?;
+            if constraints.multiple_of.is_some_and(|value| value <= 0.0) {
+                return Err(JsonSchemaError::new(
+                    JsonSchemaErrorKind::InvalidNumber,
+                    "float multipleOf must be greater than zero",
+                ));
+            }
+            let mut output = typed("number");
+            insert_float_constraint(&mut output, "exclusiveMinimum", constraints.greater_than);
+            insert_float_constraint(&mut output, "minimum", constraints.greater_or_equal);
+            insert_float_constraint(&mut output, "exclusiveMaximum", constraints.less_than);
+            insert_float_constraint(&mut output, "maximum", constraints.less_or_equal);
+            insert_float_constraint(&mut output, "multipleOf", constraints.multiple_of);
+            Ok(Value::Object(output))
+        }
         SchemaTag::String => {
             let constraints = schema.string().map_err(schema_error)?;
             let mut output = typed("string");
@@ -119,6 +134,12 @@ fn generate_node<'schema>(
             }
             if let Some(value) = constraints.max_length {
                 output.insert("maxLength".to_owned(), json!(value));
+            }
+            if let Some(pattern) = constraints.pattern {
+                output.insert(
+                    "pattern".to_owned(),
+                    Value::String(pattern.source().to_owned()),
+                );
             }
             Ok(Value::Object(output))
         }
@@ -171,6 +192,13 @@ fn generate_node<'schema>(
         SchemaTag::List | SchemaTag::Set => {
             let mut output = typed("array");
             output.insert("items".to_owned(), child(0)?);
+            let constraints = schema.collection().map_err(schema_error)?;
+            if let Some(value) = constraints.min_length {
+                output.insert("minItems".to_owned(), json!(value));
+            }
+            if let Some(value) = constraints.max_length {
+                output.insert("maxItems".to_owned(), json!(value));
+            }
             if schema.tag().map_err(schema_error)? == SchemaTag::Set {
                 output.insert("uniqueItems".to_owned(), Value::Bool(true));
             }
@@ -205,19 +233,104 @@ fn generate_node<'schema>(
                     "non-string JSON object keys need an exact property-name representation",
                 ));
             }
-            Ok(json!({
-                "type": "object",
-                "propertyNames": child(0)?,
-                "additionalProperties": child(1)?
-            }))
+            let constraints = schema.collection().map_err(schema_error)?;
+            let mut output = typed("object");
+            output.insert("propertyNames".to_owned(), child(0)?);
+            output.insert("additionalProperties".to_owned(), child(1)?);
+            if let Some(value) = constraints.min_length {
+                output.insert("minProperties".to_owned(), json!(value));
+            }
+            if let Some(value) = constraints.max_length {
+                output.insert("maxProperties".to_owned(), json!(value));
+            }
+            Ok(Value::Object(output))
         }
-        SchemaTag::Decimal | SchemaTag::Bytes => Err(unsupported(
+        SchemaTag::Bytes => {
+            let constraints = schema.bytes().map_err(schema_error)?;
+            let mut output = typed("string");
+            if let Some(value) = constraints.min_length {
+                output.insert("minLength".to_owned(), json!(value));
+            }
+            if let Some(value) = constraints.max_length {
+                output.insert("maxLength".to_owned(), json!(value));
+            }
+            Ok(Value::Object(output))
+        }
+        SchemaTag::Url | SchemaTag::MultiHostUrl => Ok(json!({"type": "string", "format": "uri"})),
+        SchemaTag::Pattern => Ok(json!({"type": "string", "format": "regex"})),
+        SchemaTag::Decimal => Err(unsupported(
             "static schema kind has no exact JSON Schema representation",
         )),
         _ => Err(unsupported(
             "static schema kind is not supported by JSON Schema generation",
         )),
+    }?;
+    apply_metadata(schema, output)
+}
+
+fn insert_float_constraint(output: &mut Map<String, Value>, key: &str, value: Option<f64>) {
+    if let Some(value) = value {
+        output.insert(key.to_owned(), json!(value));
     }
+}
+
+fn apply_metadata(schema: SchemaRef<'_>, mut output: Value) -> Result<Value, JsonSchemaError> {
+    if !matches!(schema, SchemaRef::Static(_)) {
+        return Ok(output);
+    }
+    let Some(object) = output.as_object_mut() else {
+        return Ok(output);
+    };
+    let mut examples = Vec::new();
+    for item in schema.static_metadata().map_err(schema_error)? {
+        match item.key {
+            "pydantic.title" => {
+                object.insert("title".to_owned(), Value::String(item.value.to_owned()));
+            }
+            "pydantic.description" => {
+                object.insert(
+                    "description".to_owned(),
+                    Value::String(item.value.to_owned()),
+                );
+            }
+            "pydantic.example" => examples.push(Value::String(item.value.to_owned())),
+            key if key.starts_with("pydantic.json_schema_extra.") => {
+                let name = key.trim_start_matches("pydantic.json_schema_extra.");
+                if name.is_empty() || reserved_extra_key(name) {
+                    return Err(unsupported(
+                        "json_schema_extra cannot replace structural JSON Schema keys",
+                    ));
+                }
+                let value = match item.value {
+                    "true" => Value::Bool(true),
+                    "false" => Value::Bool(false),
+                    value => Value::String(value.to_owned()),
+                };
+                object.insert(name.to_owned(), value);
+            }
+            _ => {}
+        }
+    }
+    if !examples.is_empty() {
+        object.insert("examples".to_owned(), Value::Array(examples));
+    }
+    Ok(output)
+}
+
+fn reserved_extra_key(key: &str) -> bool {
+    matches!(
+        key,
+        "$schema"
+            | "$defs"
+            | "$ref"
+            | "type"
+            | "properties"
+            | "required"
+            | "additionalProperties"
+            | "anyOf"
+            | "oneOf"
+            | "allOf"
+    )
 }
 
 fn children<'schema>(
@@ -257,6 +370,11 @@ fn model_schema<'schema>(
         if options.mode == JsonSchemaMode::Validation && !field.input() {
             continue;
         }
+        if options.mode == JsonSchemaMode::Serialization
+            && field.excluded().map_err(schema_error)?
+        {
+            continue;
+        }
         let name = field_name(model, field, options)?;
         if properties.contains_key(&name) {
             return Err(unsupported(
@@ -275,7 +393,7 @@ fn model_schema<'schema>(
             )?,
         );
         if options.mode == JsonSchemaMode::Serialization
-            || field.default().map_err(schema_error)?.is_none()
+            || field.is_required().map_err(schema_error)?
         {
             required.push(Value::String(name));
         }
@@ -358,9 +476,15 @@ mod tests {
             ("name", StaticProgramValue::String("next")),
             ("node", StaticProgramValue::Integer(node)),
             ("required", StaticProgramValue::Bool(required)),
+            (
+                "default_kind",
+                StaticProgramValue::String(if required { "required" } else { "const" }),
+            ),
             ("default", StaticProgramValue::None),
-            ("validation_alias", list(Vec::new())),
+            ("validation_aliases", list(Vec::new())),
             ("serialization_alias", StaticProgramValue::None),
+            ("strict", StaticProgramValue::None),
+            ("exclude", StaticProgramValue::Bool(false)),
         ])
     }
 
@@ -382,8 +506,10 @@ mod tests {
                     ("extra", StaticProgramValue::String("forbid")),
                     ("populate_by_name", StaticProgramValue::Bool(false)),
                     ("location_by_alias", StaticProgramValue::Bool(true)),
+                    ("strict", StaticProgramValue::Bool(false)),
                 ]),
             ),
+            ("metadata", list(Vec::new())),
         ])
     }
 
@@ -402,12 +528,14 @@ mod tests {
             ("definition", StaticProgramValue::None),
             ("reference", StaticProgramValue::None),
             ("string_constraints", StaticProgramValue::None),
+            ("metadata", list(Vec::new())),
         ]);
         let unreachable_reference = record(vec![
             ("kind", StaticProgramValue::String("definition-ref")),
             ("children", list(Vec::new())),
             ("definition", StaticProgramValue::None),
             ("reference", StaticProgramValue::String("Orphan")),
+            ("metadata", list(Vec::new())),
         ]);
         let schema = SchemaRef::from_static_program(schema_program(vec![
             model_node("User", "1", true),
@@ -433,12 +561,14 @@ mod tests {
             ("children", list(vec![StaticProgramValue::Integer("2")])),
             ("definition", StaticProgramValue::None),
             ("reference", StaticProgramValue::None),
+            ("metadata", list(Vec::new())),
         ]);
         let reference = record(vec![
             ("kind", StaticProgramValue::String("definition-ref")),
             ("children", list(Vec::new())),
             ("definition", StaticProgramValue::None),
             ("reference", StaticProgramValue::String("Node")),
+            ("metadata", list(Vec::new())),
         ]);
         let schema = SchemaRef::from_static_program(schema_program(vec![
             model_node("Node", "1", true),
@@ -469,6 +599,7 @@ mod tests {
             ("children", list(vec![StaticProgramValue::Integer("2")])),
             ("definition", StaticProgramValue::None),
             ("reference", StaticProgramValue::None),
+            ("metadata", list(Vec::new())),
         ]);
         let scalar = record(vec![
             ("kind", StaticProgramValue::String("str")),
@@ -476,6 +607,7 @@ mod tests {
             ("definition", StaticProgramValue::None),
             ("reference", StaticProgramValue::None),
             ("string_constraints", StaticProgramValue::None),
+            ("metadata", list(Vec::new())),
         ]);
         let schema = SchemaRef::from_static_program(schema_program(vec![
             model_node("OptionalModel", "1", false),

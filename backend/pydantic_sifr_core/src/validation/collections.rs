@@ -19,10 +19,7 @@ pub(crate) fn validate_collection(
 ) -> Result<ValueId, ValidationError> {
     match schema.tag()? {
         super::schema_view::SchemaTag::List => {
-            let constraints = match schema {
-                SchemaRef::Owned(Schema::List { constraints, .. }) => constraints.clone(),
-                _ => CollectionConstraints::default(),
-            };
+            let constraints = schema.collection()?;
             let children = sequence_input(
                 state.input(),
                 input_id,
@@ -36,10 +33,7 @@ pub(crate) fn validate_collection(
         }
         super::schema_view::SchemaTag::Tuple => validate_tuple(state, schema, input_id, depth),
         super::schema_view::SchemaTag::Mapping => {
-            let constraints = match schema {
-                SchemaRef::Owned(Schema::Mapping { constraints, .. }) => constraints.clone(),
-                _ => CollectionConstraints::default(),
-            };
+            let constraints = schema.collection()?;
             validate_mapping(
                 state,
                 schema.child(0)?,
@@ -51,11 +45,7 @@ pub(crate) fn validate_collection(
         }
         super::schema_view::SchemaTag::Set | super::schema_view::SchemaTag::FrozenSet => {
             let frozen = schema.tag()? == super::schema_view::SchemaTag::FrozenSet;
-            let constraints = match schema {
-                SchemaRef::Owned(Schema::Set { constraints, .. })
-                | SchemaRef::Owned(Schema::FrozenSet { constraints, .. }) => constraints.clone(),
-                _ => CollectionConstraints::default(),
-            };
+            let constraints = schema.collection()?;
             validate_set(
                 state,
                 schema.child(0)?,
@@ -167,6 +157,7 @@ fn validate_tuple(
         state.options(),
     )?;
     let schema_count = schema.child_count()?;
+    validate_length(children.len(), &schema.collection()?, "tuple")?;
     if children.len() != schema_count {
         return Err(ValidationError::one(
             ErrorDetail::new("tuple_length", "Tuple length does not match the schema")
@@ -594,6 +585,10 @@ fn canonical_key(
         }
         ValidatedValue::Url(value) => {
             key.push(14);
+            append_bytes(&mut key, value.as_bytes());
+        }
+        ValidatedValue::MultiHostUrl(value) => {
+            key.push(20);
             append_bytes(&mut key, value.as_bytes());
         }
         ValidatedValue::Pattern(value) => {

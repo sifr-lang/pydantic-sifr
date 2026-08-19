@@ -220,6 +220,9 @@ impl PlanBuilder {
                 .fields()
                 .map_err(validation_error)?
             {
+                if field.excluded().map_err(validation_error)? {
+                    continue;
+                }
                 let name = field.name().map_err(validation_error)?;
                 path.push(PlanPathSegment::Field(name));
                 let child =

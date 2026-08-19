@@ -23,15 +23,19 @@ class CanonicalDemoTest(unittest.TestCase):
     def test_demo_uses_the_public_api_and_checks_success_and_failure(self) -> None:
         source = DEMO.read_text(encoding="utf-8")
         for marker in (
+            "from pydantic_sifr import BaseModel, ConfigDict, Field, JsonSchemaError",
             "from pydantic_sifr import ValidationError",
             "from pydantic_sifr import model_validate_json",
-            "from pydantic_sifr import verify_schema",
+            "class User(BaseModel):",
+            'model_config = ConfigDict(extra="forbid")',
+            'Field(alias="user_id", gt=0)',
             "assert user.active",
             "except ValidationError as error:",
             "assert error_seen",
         ):
             self.assertIn(marker, source)
-        self.assertNotIn("BaseModel", source)
+        self.assertNotIn("@const_specialize", source)
+        self.assertNotIn("@metadata", source)
 
 
 if __name__ == "__main__":

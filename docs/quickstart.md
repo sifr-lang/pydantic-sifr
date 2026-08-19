@@ -1,27 +1,23 @@
 # Quick start
 
-`pydantic_sifr` validates ordinary Sifr classes. It returns typed `Result`
-values and does not create Python objects.
+`pydantic_sifr` validates adapted Sifr classes. It returns typed `Result` values.
+It does not create Python objects.
 
 ## Declare and validate a model
 
-Import the public validator and schema verifier. Attach the verifier to the
-class that defines the validation target.
+Derive the model from `BaseModel`. Use `Field` for field rules. Use
+`ConfigDict` for model configuration.
 
 ```sifr
-from pydantic_sifr import JsonSchemaError
+from pydantic_sifr import BaseModel, ConfigDict, Field, JsonSchemaError
 from pydantic_sifr import SerializationError
 from pydantic_sifr import ValidationError
 from pydantic_sifr import model_dump_json
 from pydantic_sifr import model_json_schema
 from pydantic_sifr import model_validate_json
-from pydantic_sifr import verify_schema
-
-
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-@metadata("field", "id", "pydantic.gt", "0")
-class User:
-    id: int64
+class User(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: int64 = Field(gt=0)
     name: str
 
 
@@ -56,7 +52,7 @@ Both functions use the same static program as validation.
 
 ## Run the end-to-end demos
 
-Set `SIFR_BIN` to the certified compiler binary. Then run either dependent app:
+Set `SIFR_BIN` to the certified compiler binary. Then run the dependent apps.
 
 ```bash
 cd demos/milestone_ps_6_demo
@@ -70,10 +66,16 @@ cd demos/milestone_ps_7_demo
 "$SIFR_BIN" run --locked
 ```
 
-The PS6 demo covers model inputs, constraints, aliases, defaults, structural
-input, and public errors. The PS7 demo covers literals, enums, ordinary and
-tagged unions, recursion, and branch errors. Both demos are mandatory in the
-companion create-PR and merge gates.
+```bash
+cd demos/milestone_m8_fields_configuration
+"$SIFR_BIN" fetch --locked
+"$SIFR_BIN" run --locked
+```
+
+The PS6 demo covers inputs, constraints, aliases, defaults, and errors. The PS7
+demo covers sums and recursion. The M8 demo covers the declaration facade.
+
+All three demos are mandatory in the package gates.
 
 ## Select an input profile
 

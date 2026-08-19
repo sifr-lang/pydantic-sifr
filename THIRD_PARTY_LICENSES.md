@@ -11,7 +11,7 @@ The production backend uses base64 0.22.1. The crate is available under the
 MIT or Apache-2.0 licenses.
 
 The production backend uses the Sifr structural runtime and identity crates
-from commit `4f5492531e81385dd28efe25adfdd57dd678d2a9`. Sifr is available under
+from commit `6152fc50984395a640c42f31e9e270cd3a9e09c8`. Sifr is available under
 the MIT license. The exact commit pin prevents a mutable tag from changing the
 dependency.
 

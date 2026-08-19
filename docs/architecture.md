@@ -138,7 +138,7 @@ declared, non-input mapping field. Its key type is `str`, and its value schema
 must match the extra value schema.
 
 The backend pins the Sifr structural runtime to exact commit
-`4f5492531e81385dd28efe25adfdd57dd678d2a9`. The package contains this Rust
+`6152fc50984395a640c42f31e9e270cd3a9e09c8`. The package contains this Rust
 source and its lockfile. The backend is not a separate crates.io product
 because the Sifr runtime crates are not crates.io packages. This rule avoids a
 duplicate private copy of the compiler-owned structural contract.

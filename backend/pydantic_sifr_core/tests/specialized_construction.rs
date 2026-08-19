@@ -5,9 +5,9 @@ use pydantic_sifr_core::{
 };
 use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::{
-    ConstructToken, NodeId, ShapeIdentity, StructuralConstruct, StructuralContractError,
-    StructuralEdgeKind, StructuralKind, StructuralScalar, StructuralSource, StructuralType,
-    primitive,
+    ConstructToken, NodeId, NominalField, ShapeIdentity, StructuralConstruct,
+    StructuralContractError, StructuralEdgeKind, StructuralKind, StructuralScalar,
+    StructuralSource, StructuralType, metadata, nominal_record, primitive,
 };
 
 #[derive(Debug, PartialEq)]
@@ -159,7 +159,25 @@ struct PatternParts(String, u8);
 
 impl StructuralType for PatternParts {
     fn shape_identity() -> ShapeIdentity {
-        primitive("pydantic_sifr.Pattern")
+        nominal_record(
+            "pydantic_sifr.special_values.Pattern",
+            &[],
+            &[
+                NominalField {
+                    name: "source",
+                    identity: primitive("str"),
+                    required: true,
+                    default_identity: None,
+                },
+                NominalField {
+                    name: "flags",
+                    identity: primitive("uint8"),
+                    required: true,
+                    default_identity: None,
+                },
+            ],
+            metadata(&[]),
+        )
     }
 }
 
@@ -169,12 +187,76 @@ impl StructuralConstruct for PatternParts {
         node: NodeId,
         token: ConstructToken,
     ) -> Result<Self, StructuralContractError> {
-        let nodes = tuple_nodes(source, node, 2)?;
+        let nodes = record_nodes(
+            source,
+            node,
+            "pydantic_sifr.special_values.Pattern",
+            &["source", "flags"],
+        )?;
         Ok(Self(
             String::structural_construct_at(source, nodes[0], token)?,
             u8::structural_construct_at(source, nodes[1], token)?,
         ))
     }
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct UrlParts(String);
+
+impl StructuralType for UrlParts {
+    fn shape_identity() -> ShapeIdentity {
+        nominal_record(
+            "pydantic_sifr.special_values.Url",
+            &[],
+            &[NominalField {
+                name: "value",
+                identity: primitive("str"),
+                required: true,
+                default_identity: None,
+            }],
+            metadata(&[]),
+        )
+    }
+}
+
+impl StructuralConstruct for UrlParts {
+    fn structural_construct_at<S: StructuralSource>(
+        source: &mut S,
+        node: NodeId,
+        token: ConstructToken,
+    ) -> Result<Self, StructuralContractError> {
+        let nodes = record_nodes(source, node, "pydantic_sifr.special_values.Url", &["value"])?;
+        Ok(Self(String::structural_construct_at(
+            source, nodes[0], token,
+        )?))
+    }
+}
+
+fn record_nodes<S: StructuralSource>(
+    source: &S,
+    node: NodeId,
+    identity: &'static str,
+    fields: &[&'static str],
+) -> Result<Vec<NodeId>, StructuralContractError> {
+    let description = source.node(node)?;
+    if description.kind() != StructuralKind::Record
+        || description.nominal_identity() != Some(identity)
+        || description.edges().len() != fields.len()
+    {
+        return Err(StructuralContractError::ArityMismatch);
+    }
+    description
+        .edges()
+        .iter()
+        .zip(fields)
+        .map(|(edge, field)| {
+            if edge.kind() == StructuralEdgeKind::RecordField(field) {
+                Ok(edge.node())
+            } else {
+                Err(StructuralContractError::MemberMismatch)
+            }
+        })
+        .collect()
 }
 
 fn tuple_nodes<S: StructuralSource>(
@@ -343,14 +425,14 @@ fn specialized_scalar_components_construct_without_crate_specific_payloads() {
     .unwrap_or_else(|error| panic!("UUID construction failed: {error}"));
     assert_eq!(uuid.0.len(), 16);
 
-    let url = validate_json_and_construct::<String>(
+    let url = validate_json_and_construct::<UrlParts>(
         &prepared(&Schema::Url(UrlConstraints::default())),
         br#""https://EXAMPLE.com/a/../b""#,
         JsonLimits::default(),
         ValidationOptions::default(),
     )
     .unwrap_or_else(|error| panic!("URL construction failed: {error}"));
-    assert_eq!(url, "https://example.com/b");
+    assert_eq!(url, UrlParts("https://example.com/b".to_owned()));
 
     let pattern = validate_native_and_construct::<PatternParts>(
         &prepared(&Schema::Pattern(PatternSchema {

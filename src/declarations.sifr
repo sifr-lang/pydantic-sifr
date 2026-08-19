@@ -1,0 +1,545 @@
+from sifr.meta import (
+    CallableIdentity,
+    ClassDeclarationItem,
+    DeclarationInput,
+    DeclarationPlan,
+    PlannedField,
+    PlannedIssue,
+    PlannedMetadata,
+    SourceOrigin,
+    StaticValue,
+)
+
+from .descriptors import AliasSelection, PydanticDescriptor
+
+
+@const_eval
+def AliasPath(segments: list[str | int]) -> AliasSelection:
+    path: list[str | int] = []
+    for segment in segments:
+        path.append(segment)
+    return AliasSelection([path])
+
+
+@const_eval
+def AliasChoices(choices: list[str | AliasSelection]) -> AliasSelection:
+    paths: list[list[str | int]] = []
+    for choice in choices:
+        if isinstance(choice, str):
+            path: list[str | int] = []
+            path.append(choice)
+            paths.append(path)
+        else:
+            selection: AliasSelection = choice
+            for path in selection.paths:
+                paths.append(path)
+    return AliasSelection(paths)
+
+
+@const_eval
+def argument_origin(
+    item: ClassDeclarationItem,
+    name: str,
+    position: int,
+    own fallback: SourceOrigin,
+) -> SourceOrigin:
+    positional: int = 0
+    for argument in item.value_arguments:
+        argument_name: str | None = argument.name
+        if argument_name is not None:
+            if argument_name == name:
+                return argument.origin
+        else:
+            if positional == position:
+                return argument.origin
+            positional += 1
+    return fallback
+
+
+@const_eval
+def issue_arguments() -> PydanticDescriptor:
+    return PydanticDescriptor(
+        "issue",
+        "required",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+
+
+@const_eval
+def has_argument(item: ClassDeclarationItem, name: str, position: int) -> bool:
+    positional: int = 0
+    for argument in item.value_arguments:
+        argument_name: str | None = argument.name
+        if argument_name is not None:
+            if argument_name == name:
+                return True
+        else:
+            if positional == position:
+                return True
+            positional += 1
+    return False
+
+
+@const_eval
+def field_descriptor_issues(
+    item: ClassDeclarationItem,
+    own descriptor: PydanticDescriptor,
+    own fallback: SourceOrigin,
+) -> list[PlannedIssue[PydanticDescriptor]]:
+    output: list[PlannedIssue[PydanticDescriptor]] = []
+    reason: str | None = None
+    argument_name: str = ""
+    argument_position: int = 0
+    if has_argument(item, "default", 0) and has_argument(item, "default_factory", 1):
+        reason = "default_conflict"
+        argument_name = "default_factory"
+        argument_position = 1
+    if reason is None:
+        multiple_of: int | float | None = descriptor.multiple_of
+        if multiple_of is not None and multiple_of == 0:
+            reason = "invalid_multiple_of"
+            argument_name = "multiple_of"
+            argument_position = 9
+    min_length: int | None = descriptor.min_length
+    if reason is None and min_length is not None and min_length < 0:
+        reason = "invalid_min_length"
+        argument_name = "min_length"
+        argument_position = 10
+    max_length: int | None = descriptor.max_length
+    if reason is None and max_length is not None and max_length < 0:
+        reason = "invalid_max_length"
+        argument_name = "max_length"
+        argument_position = 11
+    if reason is None and min_length is not None and max_length is not None:
+        min_value: int = min_length
+        max_value: int = max_length
+        if min_value > max_value:
+            reason = "invalid_length_range"
+            argument_name = "max_length"
+            argument_position = 11
+    examples: list[str] | None = descriptor.examples
+    if reason is None and examples is not None and len(examples) > 16:
+        reason = "too_many_examples"
+        argument_name = "examples"
+        argument_position = 21
+    json_schema_extra: dict[str, str] | None = descriptor.json_schema_extra
+    if reason is None and json_schema_extra is not None and len(json_schema_extra) > 16:
+        reason = "too_many_json_schema_extra"
+        argument_name = "json_schema_extra"
+        argument_position = 22
+    literal_values: list[int | str | bool] | None = descriptor.literal_values
+    if reason is None and literal_values is not None and len(literal_values) == 0:
+        reason = "empty_literal_values"
+        argument_name = "literal_values"
+        argument_position = 24
+    discriminator: AliasSelection | None = descriptor.discriminator
+    discriminator_tags: list[str] | None = descriptor.discriminator_tags
+    if reason is None:
+        if discriminator is not None:
+            selected_discriminator: AliasSelection = discriminator
+            if len(selected_discriminator.paths) != 1:
+                reason = "invalid_discriminator_path"
+                argument_name = "discriminator"
+                argument_position = 13
+    if (
+        reason is None
+        and discriminator_tags is not None
+        and len(discriminator_tags) == 0
+    ):
+        reason = "empty_discriminator_tags"
+        argument_name = "discriminator_tags"
+        argument_position = 26
+    alias: str | None = descriptor.alias
+    if reason is None and alias is not None and len(alias) == 0:
+        reason = "invalid_alias"
+        argument_name = "alias"
+        argument_position = 2
+    serialization_alias: str | None = descriptor.serialization_alias
+    if (
+        reason is None
+        and serialization_alias is not None
+        and len(serialization_alias) == 0
+    ):
+        reason = "invalid_serialization_alias"
+        argument_name = "serialization_alias"
+        argument_position = 4
+    if reason is None and descriptor.to_lower == True and descriptor.to_upper == True:
+        reason = "conflicting_text_case"
+        argument_name = "to_upper"
+        argument_position = 17
+    if reason is not None:
+        reason_code: str = reason
+        output.append(
+            PlannedIssue(
+                "pydantic_sifr.declarations",
+                reason_code,
+                "fatal",
+                issue_arguments(),
+                argument_origin(item, argument_name, argument_position, fallback),
+                [],
+                [],
+            )
+        )
+    return output
+
+
+@const_eval
+def config_descriptor_issues(
+    item: ClassDeclarationItem,
+    own descriptor: PydanticDescriptor,
+    own fallback: SourceOrigin,
+) -> list[PlannedIssue[PydanticDescriptor]]:
+    output: list[PlannedIssue[PydanticDescriptor]] = []
+    reason: str | None = None
+    argument_name: str = ""
+    argument_position: int = 0
+    extra: str | None = descriptor.extra
+    if extra is not None:
+        configured_extra: str = extra
+        if configured_extra != "ignore" and configured_extra != "forbid":
+            reason = "invalid_extra"
+            if configured_extra == "allow":
+                reason = "extra_allow_requires_destination"
+            argument_name = "extra"
+    alias_case: str | None = descriptor.alias_case
+    if reason is None:
+        if alias_case is not None:
+            configured_case: str = alias_case
+            if configured_case != "snake":
+                reason = "invalid_alias_generator"
+                argument_name = "alias_case"
+                argument_position = 6
+    if reason is not None:
+        reason_code: str = reason
+        output.append(
+            PlannedIssue(
+                "pydantic_sifr.declarations",
+                reason_code,
+                "fatal",
+                issue_arguments(),
+                argument_origin(item, argument_name, argument_position, fallback),
+                [],
+                [],
+            )
+        )
+    return output
+
+
+@class_adapter_provider("pydantic_sifr.descriptors", "PydanticDescriptor")
+@const_eval
+@metadata("sifr.meta.issue_template", ("invalid_multiple_of", []))
+@metadata("sifr.meta.issue_template", ("default_conflict", []))
+@metadata("sifr.meta.issue_template", ("invalid_min_length", []))
+@metadata("sifr.meta.issue_template", ("invalid_max_length", []))
+@metadata("sifr.meta.issue_template", ("invalid_length_range", []))
+@metadata("sifr.meta.issue_template", ("invalid_alias", []))
+@metadata("sifr.meta.issue_template", ("invalid_serialization_alias", []))
+@metadata("sifr.meta.issue_template", ("conflicting_text_case", []))
+@metadata("sifr.meta.issue_template", ("invalid_extra", []))
+@metadata("sifr.meta.issue_template", ("extra_allow_requires_destination", []))
+@metadata("sifr.meta.issue_template", ("invalid_alias_generator", []))
+@metadata("sifr.meta.issue_template", ("too_many_examples", []))
+@metadata("sifr.meta.issue_template", ("too_many_json_schema_extra", []))
+@metadata("sifr.meta.issue_template", ("empty_literal_values", []))
+@metadata("sifr.meta.issue_template", ("invalid_discriminator_path", []))
+@metadata("sifr.meta.issue_template", ("empty_discriminator_tags", []))
+def adapt_model(
+    declaration: DeclarationInput[PydanticDescriptor],
+) -> DeclarationPlan[PydanticDescriptor]:
+    fields: list[PlannedField] = []
+    metadata: list[PlannedMetadata[PydanticDescriptor]] = []
+    issues: list[PlannedIssue[PydanticDescriptor]] = []
+    for item in declaration.declaration.items:
+        if item.kind == "field":
+            declared_type: str | None = item.declared_type
+            if declared_type is not None:
+                default_kind: str = item.default_kind
+                default_value: StaticValue | None = item.default_value
+                default_factory: CallableIdentity | None = None
+                for use in declaration.descriptors:
+                    if use.target_identity == item.identity and (
+                        use.target_kind == "type" or use.target_kind == "field"
+                    ):
+                        descriptor: PydanticDescriptor = use.value
+                        if descriptor.kind == "field":
+                            issue_descriptor: PydanticDescriptor = use.value
+                            for issue in field_descriptor_issues(
+                                item, issue_descriptor, use.origin
+                            ):
+                                issues.append(issue)
+                            if use.target_kind == "field":
+                                default_kind = "required"
+                                if descriptor.default_factory is not None:
+                                    default_kind = "factory"
+                                elif has_argument(item, "default", 0):
+                                    default_kind = "const"
+                                default_value = descriptor.default_value
+                                default_factory = descriptor.default_factory
+                            metadata_value: PydanticDescriptor = descriptor
+                            metadata.append(
+                                PlannedMetadata(
+                                    "field",
+                                    item.identity,
+                                    "pydantic.field",
+                                    metadata_value,
+                                )
+                            )
+                fields.append(
+                    PlannedField(
+                        item.identity,
+                        declared_type,
+                        default_kind,
+                        default_value,
+                        default_factory,
+                        None,
+                    )
+                )
+    for use in declaration.descriptors:
+        if use.target_kind == "class":
+            descriptor: PydanticDescriptor = use.value
+            if descriptor.kind == "config":
+                for item in declaration.declaration.items:
+                    if item.identity == use.target_identity:
+                        issue_descriptor: PydanticDescriptor = use.value
+                        for issue in config_descriptor_issues(
+                            item, issue_descriptor, use.origin
+                        ):
+                            issues.append(issue)
+                metadata_value: PydanticDescriptor = descriptor
+                metadata.append(
+                    PlannedMetadata(
+                        "class",
+                        declaration.declaration.identity,
+                        "pydantic.config",
+                        metadata_value,
+                    )
+                )
+    return DeclarationPlan(
+        fields,
+        metadata,
+        "pydantic_sifr.schema_contract",
+        "verify_schema",
+        issues,
+        [],
+        None,
+        None,
+    )
+
+
+@class_adapter_marker("pydantic_sifr.declarations", "adapt_model")
+class BaseModel:
+    pass
+
+
+class RootModel[T](BaseModel):
+    root: T
+
+
+@field_descriptor("pydantic_sifr.declarations", "adapt_model")
+def Field(
+    default: StaticValue | None = None,
+    default_factory: CallableIdentity | None = None,
+    alias: str | None = None,
+    validation_alias: AliasSelection | None = None,
+    serialization_alias: str | None = None,
+    gt: int | float | None = None,
+    ge: int | float | None = None,
+    lt: int | float | None = None,
+    le: int | float | None = None,
+    multiple_of: int | float | None = None,
+    min_length: int | None = None,
+    max_length: int | None = None,
+    pattern: str | None = None,
+    discriminator: AliasSelection | None = None,
+    strict: bool | None = None,
+    strip_whitespace: bool | None = None,
+    to_lower: bool | None = None,
+    to_upper: bool | None = None,
+    ascii_only: bool | None = None,
+    title: str | None = None,
+    description: str | None = None,
+    examples: list[str] | None = None,
+    json_schema_extra: dict[str, str] | None = None,
+    exclude: bool | None = None,
+    literal_values: list[int | str | bool] | None = None,
+    union_labels: list[str] | None = None,
+    discriminator_tags: list[str] | None = None,
+) -> PydanticDescriptor:
+    default_kind: str = "required"
+    if default_factory is not None:
+        default_kind = "factory"
+    elif default is not None:
+        default_kind = "const"
+    return PydanticDescriptor(
+        "field",
+        default_kind,
+        default,
+        default_factory,
+        alias,
+        validation_alias,
+        serialization_alias,
+        gt,
+        ge,
+        lt,
+        le,
+        multiple_of,
+        min_length,
+        max_length,
+        pattern,
+        discriminator,
+        strict,
+        strip_whitespace,
+        to_lower,
+        to_upper,
+        ascii_only,
+        title,
+        description,
+        examples,
+        json_schema_extra,
+        exclude,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        literal_values,
+        union_labels,
+        discriminator_tags,
+        None,
+    )
+
+
+@type_descriptor("pydantic_sifr.declarations", "adapt_model")
+def Constraints(
+    gt: int | float | None = None,
+    ge: int | float | None = None,
+    lt: int | float | None = None,
+    le: int | float | None = None,
+    multiple_of: int | float | None = None,
+    min_length: int | None = None,
+    max_length: int | None = None,
+    pattern: str | None = None,
+    strict: bool | None = None,
+) -> PydanticDescriptor:
+    return PydanticDescriptor(
+        "field",
+        "required",
+        None,
+        None,
+        None,
+        None,
+        None,
+        gt,
+        ge,
+        lt,
+        le,
+        multiple_of,
+        min_length,
+        max_length,
+        pattern,
+        None,
+        strict,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+
+
+@class_descriptor("pydantic_sifr.declarations", "adapt_model")
+def ConfigDict(
+    extra: str | None = None,
+    strict: bool | None = None,
+    populate_by_name: bool | None = None,
+    validate_by_alias: bool | None = None,
+    location_by_alias: bool | None = None,
+    alias_prefix: str | None = None,
+    alias_case: str | None = None,
+) -> PydanticDescriptor:
+    return PydanticDescriptor(
+        "config",
+        "required",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        strict,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        extra,
+        populate_by_name,
+        validate_by_alias,
+        location_by_alias,
+        alias_prefix,
+        alias_case,
+        None,
+        None,
+        None,
+        None,
+    )

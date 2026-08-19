@@ -1,7 +1,6 @@
 from enum import Enum
-from pydantic_sifr import ValidationError
+from pydantic_sifr import AliasPath, BaseModel, Field, ValidationError
 from pydantic_sifr import model_validate_json
-from pydantic_sifr import verify_schema
 
 # This demo is the public static-program integration receipt for PS7 sums.
 
@@ -11,47 +10,35 @@ class Status(Enum):
     PAUSED = 2
 
 
-class Cat:
+class Cat(BaseModel):
     kind: str
     lives: int64
 
 
-class Dog:
+class Dog(BaseModel):
     kind: str
     bark: bool
 
 
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-class RecursiveNode:
+class RecursiveNode(BaseModel):
     value: int64
     next: RecursiveNode | None
 
 
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-@metadata("field", "status", "pydantic.enum.str", "ready")
-@metadata("field", "status", "pydantic.enum.int", "9")
-@metadata("field", "level", "pydantic.literal.int", "1")
-@metadata("field", "level", "pydantic.literal.int", "2")
-@metadata("field", "value", "pydantic.union.label", "integer")
-@metadata("field", "value", "pydantic.union.label", "text")
-@metadata("field", "pet", "pydantic.union.label", "cat")
-@metadata("field", "pet", "pydantic.union.label", "dog")
-@metadata("field", "pet", "pydantic.discriminator.field", "kind")
-@metadata("field", "pet", "pydantic.discriminator.choice", "0")
-@metadata("field", "pet", "pydantic.discriminator.tag.str", "cat")
-@metadata("field", "pet", "pydantic.discriminator.choice", "1")
-@metadata("field", "pet", "pydantic.discriminator.tag.str", "dog")
-class Envelope:
+class Envelope(BaseModel):
     status: Status
-    level: int64
-    value: int64 | str
-    pet: Cat | Dog
+    level: int64 = Field(literal_values=[1, 2])
+    value: int64 | str = Field(union_labels=["integer", "text"])
+    pet: Cat | Dog = Field(
+        discriminator=AliasPath(["kind"]),
+        discriminator_tags=["cat", "dog"],
+    )
 
 
 def main() -> Result[None, ValidationError | RustPanicError]:
     try:
         ready: Envelope = model_validate_json(
-            b'{"status":"ready","level":2,"value":"hello","pet":{"kind":"cat","lives":9}}'
+            b'{"status":1,"level":2,"value":"hello","pet":{"kind":"cat","lives":9}}'
         )
         assert ready.status == Status.READY
         expected_level: int64 = 2
@@ -59,7 +46,7 @@ def main() -> Result[None, ValidationError | RustPanicError]:
         assert ready.value == "hello"
 
         paused: Envelope = model_validate_json(
-            b'{"status":9,"level":1,"value":7,"pet":{"kind":"dog","bark":true}}'
+            b'{"status":2,"level":1,"value":7,"pet":{"kind":"dog","bark":true}}'
         )
         assert paused.status == Status.PAUSED
 
@@ -73,7 +60,7 @@ def main() -> Result[None, ValidationError | RustPanicError]:
         branch_seen: bool = False
         try:
             invalid: Envelope = model_validate_json(
-                b'{"status":"ready","level":2,"value":[],"pet":{"kind":"cat","lives":9}}'
+                b'{"status":1,"level":2,"value":[],"pet":{"kind":"cat","lives":9}}'
             )
             assert False
         except ValidationError as error:

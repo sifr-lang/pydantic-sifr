@@ -1,59 +1,83 @@
 from .errors import SchemaIssue
+from sifr.meta import CallableIdentity, ClassDeclaration
+
+from .descriptors import PydanticDescriptor
 
 
-class ShapeMetadata:
+class SchemaShapeMetadata:
     key: str
     value_type: str
+    value: PydanticDescriptor
+
+
+class SchemaMetadataPayload:
+    key: str
     value: str
 
 
-class ShapeField:
+class SchemaShapeField:
     name: str
-    type: ShapeNode
+    type: SchemaShapeNode
     required: bool
+    default_kind: str
     default: bool | int | float | str | bytes | None
-    metadata: list[ShapeMetadata]
+    default_factory: CallableIdentity | None
+    metadata: list[SchemaShapeMetadata]
 
 
-class ShapeVariant:
+class SchemaShapeVariant:
     name: str
     value: int | None
-    metadata: list[ShapeMetadata]
+    metadata: list[SchemaShapeMetadata]
 
 
-class ShapeNode:
+class SchemaVariantPayload:
+    name: str
+    value: int | None
+    metadata: list[SchemaMetadataPayload]
+
+
+class SchemaShapeNode:
     kind: str
     name: str
     identity: str
-    element: ShapeNode | None
-    key: ShapeNode | None
-    value: ShapeNode | None
-    members: list[ShapeNode]
-    type_arguments: list[ShapeNode]
-    fields: list[ShapeField]
-    metadata: list[ShapeMetadata]
-    variants: list[ShapeVariant]
-    inner: ShapeNode | None
+    element: SchemaShapeNode | None
+    key: SchemaShapeNode | None
+    value: SchemaShapeNode | None
+    members: list[SchemaShapeNode]
+    type_arguments: list[SchemaShapeNode]
+    fields: list[SchemaShapeField]
+    metadata: list[SchemaShapeMetadata]
+    variants: list[SchemaShapeVariant]
+    inner: SchemaShapeNode | None
 
 
-class ShapeInput:
+class SchemaShapeInput:
     canonical_identity: str
-    root: ShapeNode
+    root: SchemaShapeNode
+    declaration: ClassDeclaration
 
 
 class SchemaAliasSegmentPayload:
     kind: str
     name: str | None
-    index: str | None
+    index: int | None
+
+
+class SchemaAliasPathPayload:
+    segments: list[SchemaAliasSegmentPayload]
 
 
 class SchemaFieldPayload:
     name: str
     node: int
     required: bool
+    default_kind: str
     default: bool | int | float | str | bytes | None
-    validation_alias: list[SchemaAliasSegmentPayload]
+    validation_aliases: list[SchemaAliasPathPayload]
     serialization_alias: str | None
+    strict: bool | None
+    exclude: bool
 
 
 class SchemaModelPayload:
@@ -63,23 +87,43 @@ class SchemaModelPayload:
     extra: str
     populate_by_name: bool
     location_by_alias: bool
+    strict: bool
 
 
 class SchemaIntegerConstraintsPayload:
-    greater_than: str | None
-    greater_or_equal: str | None
-    less_than: str | None
-    less_or_equal: str | None
-    multiple_of: str | None
+    greater_than: int | float | None
+    greater_or_equal: int | float | None
+    less_than: int | float | None
+    less_or_equal: int | float | None
+    multiple_of: int | float | None
 
 
 class SchemaStringConstraintsPayload:
-    min_length: str | None
-    max_length: str | None
+    min_length: int | None
+    max_length: int | None
     strip_whitespace: bool
     to_lower: bool
     to_upper: bool
     ascii_only: bool
+    pattern: str | None
+
+
+class SchemaFloatConstraintsPayload:
+    greater_than: int | float | None
+    greater_or_equal: int | float | None
+    less_than: int | float | None
+    less_or_equal: int | float | None
+    multiple_of: int | float | None
+
+
+class SchemaBytesConstraintsPayload:
+    min_length: int | None
+    max_length: int | None
+
+
+class SchemaCollectionConstraintsPayload:
+    min_length: int | None
+    max_length: int | None
 
 
 class SchemaNodePayload:
@@ -92,9 +136,12 @@ class SchemaNodePayload:
     model: SchemaModelPayload | None
     integer_target: str | None
     integer_constraints: SchemaIntegerConstraintsPayload | None
+    float_constraints: SchemaFloatConstraintsPayload | None
     string_constraints: SchemaStringConstraintsPayload | None
-    metadata: list[ShapeMetadata]
-    variants: list[ShapeVariant]
+    bytes_constraints: SchemaBytesConstraintsPayload | None
+    collection_constraints: SchemaCollectionConstraintsPayload | None
+    metadata: list[SchemaMetadataPayload]
+    variants: list[SchemaVariantPayload]
 
 
 class SchemaProgramPayload:
@@ -127,10 +174,14 @@ class NodeBuildResult:
 
 
 class FieldRules:
-    validation_alias: list[SchemaAliasSegmentPayload]
+    validation_aliases: list[SchemaAliasPathPayload]
     serialization_alias: str | None
     integer_constraints: SchemaIntegerConstraintsPayload
     string_constraints: SchemaStringConstraintsPayload
+    bytes_constraints: SchemaBytesConstraintsPayload
+    collection_constraints: SchemaCollectionConstraintsPayload
+    strict: bool | None
+    exclude: bool
     issue: str | None
 
 
@@ -138,4 +189,8 @@ class ModelRules:
     extra: str
     populate_by_name: bool
     location_by_alias: bool
+    strict: bool
+    validate_by_alias: bool
+    alias_prefix: str
+    alias_case: str
     issue: str | None

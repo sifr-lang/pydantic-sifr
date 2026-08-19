@@ -253,7 +253,8 @@ impl JsonWriter<'_, '_> {
                 self.add_string_bytes(name.len())?;
                 self.path.push(SelectionSegment::Field(name.to_owned()));
                 path_pushed = true;
-                emit &= selected(self.options, &self.path);
+                emit &= self.plan.field_policy(&self.path).is_some()
+                    && selected(self.options, &self.path);
                 let has_default = self.options.exclude_defaults
                     && self
                         .plan

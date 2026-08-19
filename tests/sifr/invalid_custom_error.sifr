@@ -1,8 +1,0 @@
-from pydantic_sifr.schema_contract import verify_schema
-
-
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-@metadata("field", "value", "pydantic.error.package", "example")
-@metadata("field", "value", "pydantic.error.code", "positive")
-class InvalidCustomError:
-    value: int

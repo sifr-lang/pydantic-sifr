@@ -35,6 +35,13 @@ class PublicApiTest(unittest.TestCase):
         self.assertEqual(
             package_root_exports(source),
             [
+                "AliasChoices",
+                "AliasPath",
+                "BaseModel",
+                "ConfigDict",
+                "Constraints",
+                "Field",
+                "RootModel",
                 "JsonSchemaError",
                 "SerializationError",
                 "ValidationError",
@@ -43,7 +50,11 @@ class PublicApiTest(unittest.TestCase):
                 "model_validate",
                 "model_validate_json",
                 "model_validate_strings",
-                "verify_schema",
+                "_verify_schema",
+                "MultiHostUrl",
+                "Pattern",
+                "SpecialValueError",
+                "Url",
             ],
         )
 

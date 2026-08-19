@@ -12,8 +12,10 @@ class MigrationDocsTest(unittest.TestCase):
     def test_guide_names_the_supported_migration_contract(self) -> None:
         guide = GUIDE.read_text(encoding="utf-8")
         required = {
-            '@const_specialize("pydantic_sifr.schema_contract", "verify_schema")',
-            "@metadata",
+            "BaseModel",
+            "ConfigDict",
+            "Field",
+            "AliasPath",
             "model_validate_json",
             "model_validate_strings",
             "Result",
@@ -23,14 +25,13 @@ class MigrationDocsTest(unittest.TestCase):
         }
         for marker in required:
             self.assertIn(marker, guide)
+        self.assertNotIn("@const_specialize", guide)
+        self.assertNotIn("@metadata", guide)
 
-    def test_guide_names_each_blocked_surface_owner(self) -> None:
+    def test_guide_names_the_remaining_blocked_surfaces(self) -> None:
         guide = GUIDE.read_text(encoding="utf-8")
-        for issue in (10, 14, 27):
-            self.assertIn(
-                f"https://github.com/sifr-lang/pydantic-sifr/issues/{issue}",
-                guide,
-            )
+        for surface in ("validator decorators", "serializer decorators", "computed fields"):
+            self.assertIn(surface, guide)
 
     def test_guide_does_not_introduce_a_versioned_or_legacy_api(self) -> None:
         guide = GUIDE.read_text(encoding="utf-8").lower()

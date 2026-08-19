@@ -1,0 +1,5 @@
+from pydantic_sifr import BaseModel, Field
+
+
+class InvalidConstraint(BaseModel):
+    value: int64 = Field(multiple_of=0)

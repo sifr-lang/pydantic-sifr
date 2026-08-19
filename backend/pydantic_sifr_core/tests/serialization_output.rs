@@ -106,6 +106,66 @@ fn structural_and_json_outputs_read_current_typed_values() {
 }
 
 #[test]
+fn schema_excluded_fields_are_absent_from_all_outputs() {
+    let name = ModelField::required("name", Schema::String(Default::default()));
+    let scores = ModelField::required(
+        "scores",
+        Schema::List {
+            item: Box::new(Schema::Integer {
+                target: IntegerTarget::I64,
+                constraints: IntegerConstraints::default(),
+            }),
+            constraints: Default::default(),
+        },
+    );
+    let mut note = ModelField::required(
+        "note",
+        Schema::Nullable(Box::new(Schema::String(Default::default()))),
+    );
+    note.metadata
+        .insert("pydantic.exclude".to_owned(), "true".to_owned());
+    let schema = Schema::Model(
+        ModelSchema::new(
+            "CurrentModel",
+            CurrentModel::shape_identity(),
+            vec![name, scores, note],
+            ExtraPolicy::Ignore,
+            false,
+            true,
+        )
+        .unwrap_or_else(|error| panic!("model schema failed: {error}")),
+    );
+    let prepared = PreparedSchema::new(&schema)
+        .unwrap_or_else(|error| panic!("schema preparation failed: {error}"));
+    let plan = SerializationPlan::from_prepared(prepared, JsonIntegerProfile::Exact)
+        .unwrap_or_else(|error| panic!("serializer plan failed: {error}"));
+    let value = CurrentModel {
+        name: "visible".to_owned(),
+        scores: vec![1, 2],
+        note: Some("hidden".to_owned()),
+    };
+
+    let json = serialize_json(&plan, &value, &SerializationOptions::default())
+        .unwrap_or_else(|error| panic!("JSON serialization failed: {error}"));
+    assert_eq!(json, br#"{"name":"visible","scores":[1,2]}"#);
+    let structural = serialize_structural(&plan, &value, &SerializationOptions::default())
+        .unwrap_or_else(|error| panic!("structural serialization failed: {error}"));
+    assert_eq!(
+        structural,
+        NativeValue::Object(vec![
+            ("name".to_owned(), NativeValue::String("visible".to_owned())),
+            (
+                "scores".to_owned(),
+                NativeValue::List(vec![
+                    NativeValue::Integer("1".to_owned()),
+                    NativeValue::Integer("2".to_owned()),
+                ]),
+            ),
+        ])
+    );
+}
+
+#[test]
 fn output_rejects_shape_mismatches_before_projection() {
     let schema = Schema::String(Default::default());
     let prepared = PreparedSchema::new(&schema)

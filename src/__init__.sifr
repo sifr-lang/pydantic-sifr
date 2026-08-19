@@ -1,3 +1,10 @@
+from .declarations import AliasChoices
+from .declarations import AliasPath
+from .declarations import BaseModel
+from .declarations import ConfigDict
+from .declarations import Constraints
+from .declarations import Field
+from .declarations import RootModel
 from .model import JsonSchemaError
 from .model import SerializationError
 from .model import ValidationError
@@ -6,4 +13,8 @@ from .model import model_json_schema
 from .model import model_validate
 from .model import model_validate_json
 from .model import model_validate_strings
-from .schema_contract import verify_schema
+from .schema_contract import verify_schema as _verify_schema
+from .special_values import MultiHostUrl
+from .special_values import Pattern
+from .special_values import SpecialValueError
+from .special_values import Url

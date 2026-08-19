@@ -79,6 +79,10 @@ functions use one compiler-sealed schema program. Validation constructs an
 ordinary Sifr class through one checked arena. Serialization and JSON Schema
 generation read the same sealed program.
 
+Models derive from `BaseModel`. Typed `Field`, `ConfigDict`, and `Constraints`
+descriptors define compile-time field and model rules. Users do not write raw
+schema metadata.
+
 Native structural input uses compiler-generated visitation. The adapter writes
 directly into the input arena and does not create a generic model tree. The
 adapter sorts unordered mappings and sets before validation, which keeps error
@@ -92,6 +96,9 @@ structural input, and a stable public validation error.
 [`demos/milestone_ps_7_demo`](demos/milestone_ps_7_demo) shows literals,
 payload-free enums, smart unions, field-discriminated tagged unions, recursive
 models, and labelled branch errors through the same public API.
+
+[`demos/milestone_m8_fields_configuration`](demos/milestone_m8_fields_configuration)
+shows the complete M8 declaration surface and mapped special values.
 
 Sum declarations use package-owned metadata. Literal keys are
 `pydantic.literal.none|bool|int|str|bytes`. Enum fields use the corresponding
@@ -133,7 +140,7 @@ Core suites in isolated pytest processes from that commit's root `uv.lock`.
 The historical standalone Pydantic Core checkout is not a conformance source.
 
 The gate uses Sifr implementation commit
-`4f5492531e81385dd28efe25adfdd57dd678d2a9`. CI builds that exact compiler
+`6152fc50984395a640c42f31e9e270cd3a9e09c8`. CI builds that exact compiler
 source. The runtime manifests and lockfiles pin the same commit.
 
 See [Certification](docs/certification.md) for the audited revisions, ledger

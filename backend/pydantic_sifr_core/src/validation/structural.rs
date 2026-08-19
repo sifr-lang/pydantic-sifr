@@ -11,6 +11,9 @@ use crate::{Arena, ArenaId};
 use super::{ModelValue, ValidatedArena, ValidatedValue, ValueId};
 
 const SIFR_FROZENSET_NOMINAL_IDENTITY: &str = "sifr.collections.frozenset";
+const PYDANTIC_URL_IDENTITY: &str = "pydantic_sifr.special_values.Url";
+const PYDANTIC_MULTI_HOST_URL_IDENTITY: &str = "pydantic_sifr.special_values.MultiHostUrl";
+const PYDANTIC_PATTERN_IDENTITY: &str = "pydantic_sifr.special_values.Pattern";
 
 impl ValidatedArena {
     pub(crate) fn prepare_structural(
@@ -90,6 +93,12 @@ fn expand_specialized_values(
         };
         let value = std::mem::replace(slot, ValidatedValue::None);
         let replacement = match value {
+            ValidatedValue::Url(value) => {
+                specialized_text_model(values, PYDANTIC_URL_IDENTITY, value)?
+            }
+            ValidatedValue::MultiHostUrl(value) => {
+                specialized_text_model(values, PYDANTIC_MULTI_HOST_URL_IDENTITY, value)?
+            }
             ValidatedValue::Fraction(value) => {
                 let (numerator, denominator) = value.into_raw();
                 let numerator = push(values, ValidatedValue::ExactInt(numerator))?;
@@ -124,10 +133,14 @@ fn expand_specialized_values(
             ]),
             ValidatedValue::Pattern(value) => {
                 let (source, flags) = value.into_parts();
-                ValidatedValue::Tuple(vec![
-                    push(values, ValidatedValue::String(source))?,
-                    unsigned(values, u128::from(flags), 8)?,
-                ])
+                let source = push(values, ValidatedValue::String(source))?;
+                let flags = unsigned(values, u128::from(flags), 8)?;
+                ValidatedValue::Model(ModelValue::new(
+                    PYDANTIC_PATTERN_IDENTITY,
+                    vec![("source", source), ("flags", flags)],
+                    Vec::new(),
+                    2,
+                ))
             }
             ValidatedValue::FrozenSet(items) => {
                 let values_field = push(values, ValidatedValue::Set(items))?;
@@ -146,6 +159,20 @@ fn expand_specialized_values(
         *slot = replacement;
     }
     Ok(())
+}
+
+fn specialized_text_model(
+    values: &mut Arena<ValidatedValue>,
+    identity: &'static str,
+    value: String,
+) -> Result<ValidatedValue, StructuralContractError> {
+    let value = push(values, ValidatedValue::String(value))?;
+    Ok(ValidatedValue::Model(ModelValue::new(
+        identity,
+        vec![("value", value)],
+        Vec::new(),
+        1,
+    )))
 }
 
 fn time_tuple(
@@ -246,9 +273,7 @@ fn structural_description(
         }
         ValidatedValue::FixedInt { .. } => (StructuralKind::SignedInteger, None),
         ValidatedValue::Float(_) => (StructuralKind::Float, None),
-        ValidatedValue::Decimal(_) | ValidatedValue::String(_) | ValidatedValue::Url(_) => {
-            (StructuralKind::String, None)
-        }
+        ValidatedValue::Decimal(_) | ValidatedValue::String(_) => (StructuralKind::String, None),
         ValidatedValue::Bytes(_) | ValidatedValue::Uuid(_) => (StructuralKind::Bytes, None),
         ValidatedValue::Sequence(_) => (StructuralKind::Sequence, None),
         ValidatedValue::Tuple(_) => (StructuralKind::Tuple, None),
@@ -259,7 +284,9 @@ fn structural_description(
         ValidatedValue::Enum(value) => (StructuralKind::Enum, Some(value.name)),
         ValidatedValue::Union(_) => (StructuralKind::Union, None),
         ValidatedValue::Model(model) => (StructuralKind::Record, Some(model.name)),
-        ValidatedValue::Fraction(_)
+        ValidatedValue::Url(_)
+        | ValidatedValue::MultiHostUrl(_)
+        | ValidatedValue::Fraction(_)
         | ValidatedValue::Complex(_)
         | ValidatedValue::Date(_)
         | ValidatedValue::Time(_)
@@ -360,9 +387,7 @@ fn take_structural_scalar(
         ValidatedValue::FixedInt { kind, value } => fixed_integer_scalar(kind, &value),
         ValidatedValue::Float(value) => Ok(StructuralScalar::Float(value)),
         ValidatedValue::Decimal(value) => Ok(StructuralScalar::String(value.to_string())),
-        ValidatedValue::String(value) | ValidatedValue::Url(value) => {
-            Ok(StructuralScalar::String(value))
-        }
+        ValidatedValue::String(value) => Ok(StructuralScalar::String(value)),
         ValidatedValue::Bytes(value) => Ok(StructuralScalar::Bytes(value)),
         ValidatedValue::Uuid(value) => Ok(StructuralScalar::Bytes(value.to_vec())),
         other => {

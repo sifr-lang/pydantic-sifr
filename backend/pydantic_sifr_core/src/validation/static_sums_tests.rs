@@ -72,6 +72,7 @@ fn mapping_node(key: &'static str, value: &'static str) -> StaticProgramValue {
                 StaticProgramValue::Integer(value),
             ]),
         ),
+        ("collection_constraints", StaticProgramValue::None),
     ])
 }
 
@@ -133,8 +134,12 @@ fn model_node(name: &'static str, field_node: &'static str) -> StaticProgramValu
     let field = record(vec![
         ("name", StaticProgramValue::String("x")),
         ("node", StaticProgramValue::Integer(field_node)),
-        ("validation_alias", list(Vec::new())),
+        ("required", StaticProgramValue::Bool(true)),
+        ("default_kind", StaticProgramValue::String("required")),
+        ("validation_aliases", list(Vec::new())),
         ("default", StaticProgramValue::None),
+        ("strict", StaticProgramValue::None),
+        ("exclude", StaticProgramValue::Bool(false)),
     ]);
     let model = record(vec![
         ("name", StaticProgramValue::String(name)),
@@ -142,6 +147,7 @@ fn model_node(name: &'static str, field_node: &'static str) -> StaticProgramValu
         ("extra", StaticProgramValue::String("ignore")),
         ("populate_by_name", StaticProgramValue::Bool(false)),
         ("location_by_alias", StaticProgramValue::Bool(true)),
+        ("strict", StaticProgramValue::Bool(false)),
     ]);
     record(vec![
         ("kind", StaticProgramValue::String("model")),
