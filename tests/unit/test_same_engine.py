@@ -10,7 +10,7 @@ DEMO = ROOT / "demos/milestone_ps_6_demo/src/main.sifr"
 
 
 class SameEngineTest(unittest.TestCase):
-    def test_production_model_api_has_only_functional_bridges(self) -> None:
+    def test_production_api_has_only_selected_bridges(self) -> None:
         sources = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted((ROOT / "src").rglob("*.sifr"))
@@ -24,12 +24,18 @@ class SameEngineTest(unittest.TestCase):
                 "bridge.model.validate_strings",
                 "bridge.model.dump_json",
                 "bridge.model.json_schema",
+                "bridge.special_values.url_text",
+                "bridge.special_values.multi_host_url_text",
+                "bridge.special_values.pattern_source",
+                "bridge.special_values.pattern_flags",
             ],
         )
 
     def test_each_class_facade_delegates_to_its_exported_function(self) -> None:
         source = DEMO.read_text(encoding="utf-8")
-        user_class = source[source.index("class User:") : source.index("class PostalInput:")]
+        user_class = source[
+            source.index("class User(BaseModel):") : source.index("class PostalInput:")
+        ]
         methods = re.findall(
             r"    @classmethod\n    def (model_validate_[a-z_]+)\(.*?"
             r"(?=\n    @classmethod|\n\nclass |\Z)",

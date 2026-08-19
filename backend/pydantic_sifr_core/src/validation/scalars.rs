@@ -9,9 +9,9 @@ use num_traits::{Signed, Zero};
 use crate::InputValue;
 
 use super::{
-    BytesConstraints, ComplexConstraints, DecimalConstraints, ErrorDetail, FloatConstraints,
-    FractionConstraints, InputProfile, IntegerConstraints, IntegerTarget, Schema, SchemaRef,
-    ValidatedValue, ValidationError, ValidationOptions, textual,
+    ComplexConstraints, DecimalConstraints, ErrorDetail, FloatConstraints, FractionConstraints,
+    InputProfile, IntegerConstraints, IntegerTarget, Schema, SchemaRef, ValidatedValue,
+    ValidationError, ValidationOptions, textual,
 };
 
 pub(crate) fn validate_scalar(
@@ -36,23 +36,13 @@ pub(crate) fn validate_scalar(
             Ok(constraints) => textual::validate_string(input, strict, &constraints),
             Err(error) => Err(error),
         },
-        super::schema_view::SchemaTag::Float => match schema {
-            SchemaRef::Owned(Schema::Float(constraints)) => {
-                validate_float(input, strict, profile, constraints)
-            }
-            SchemaRef::Static(_) => {
-                validate_float(input, strict, profile, &FloatConstraints::default())
-            }
-            _ => return None,
+        super::schema_view::SchemaTag::Float => match schema.float() {
+            Ok(constraints) => validate_float(input, strict, profile, &constraints),
+            Err(error) => Err(error),
         },
-        super::schema_view::SchemaTag::Bytes => match schema {
-            SchemaRef::Owned(Schema::Bytes(constraints)) => {
-                textual::validate_bytes(input, strict, profile, constraints)
-            }
-            SchemaRef::Static(_) => {
-                textual::validate_bytes(input, strict, profile, &BytesConstraints::default())
-            }
-            _ => return None,
+        super::schema_view::SchemaTag::Bytes => match schema.bytes() {
+            Ok(constraints) => textual::validate_bytes(input, strict, profile, &constraints),
+            Err(error) => Err(error),
         },
         super::schema_view::SchemaTag::Decimal => match schema {
             SchemaRef::Owned(Schema::Decimal(constraints)) => {

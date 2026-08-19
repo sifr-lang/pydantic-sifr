@@ -189,6 +189,7 @@ impl ChainInputBuilder<'_> {
                 InputValue::Uuid(uuid::Uuid::from_bytes(value).to_string())
             }
             ValidatedValue::Url(value) => InputValue::Url(value),
+            ValidatedValue::MultiHostUrl(value) => InputValue::Url(value),
             ValidatedValue::Pattern(value) => InputValue::Pattern {
                 source: value.source().to_owned(),
                 flags: value.flags(),
@@ -318,6 +319,7 @@ impl ChainInputBuilder<'_> {
             ValidatedValue::Duration(value) => duration_text(value),
             ValidatedValue::Uuid(value) => uuid::Uuid::from_bytes(*value).to_string(),
             ValidatedValue::Url(value) => value.clone(),
+            ValidatedValue::MultiHostUrl(value) => value.clone(),
             ValidatedValue::Pattern(value) => value.source().to_owned(),
             ValidatedValue::Enum(value) => {
                 return self.json_key_text(value.discriminant, depth + 1);

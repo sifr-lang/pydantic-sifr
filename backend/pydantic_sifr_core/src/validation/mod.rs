@@ -296,7 +296,14 @@ impl ValidationState<'_> {
             return definitions::validate_definitions(self, schema, input_id, depth);
         }
         if tag == schema_view::SchemaTag::Model {
-            return models::validate_model(self, schema.model()?, input_id, depth);
+            let model = schema.model()?;
+            if self.options.strict_override.is_none() && !self.options.strict && model.strict()? {
+                let mut options = self.options;
+                options.strict = true;
+                let branch = self.validate_branch_with_options(schema, input_id, depth, options)?;
+                return self.import(branch);
+            }
+            return models::validate_model(self, model, input_id, depth);
         }
         if matches!(
             tag,
@@ -323,7 +330,16 @@ impl ValidationState<'_> {
                 return collections::validate_collection(self, schema, input_id, depth);
             }
         } else {
-            return collections::validate_collection(self, schema, input_id, depth);
+            if let Some(result) = special::validate_static_special(
+                schema,
+                input,
+                self.options.effective_strict(),
+                self.options.profile,
+            ) {
+                result?
+            } else {
+                return collections::validate_collection(self, schema, input_id, depth);
+            }
         };
         value::push_value(&mut self.values, value).map_err(|_| {
             scalars::type_error(
@@ -379,10 +395,20 @@ impl ValidationState<'_> {
         root: InputId,
         start_depth: usize,
     ) -> Result<ValidatedArena, ValidationError> {
+        self.validate_branch_with_options(schema, root, start_depth, self.options)
+    }
+
+    pub(crate) fn validate_branch_with_options(
+        &self,
+        schema: SchemaRef<'_>,
+        root: InputId,
+        start_depth: usize,
+        options: ValidationOptions,
+    ) -> Result<ValidatedArena, ValidationError> {
         let mut state = ValidationState {
             input: self.input,
             values: Arena::new(),
-            options: self.options,
+            options,
             definition_scopes: Arc::clone(&self.definition_scopes),
             active_references: self.active_references.clone(),
         };

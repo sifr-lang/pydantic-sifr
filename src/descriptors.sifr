@@ -1,0 +1,48 @@
+from sifr.meta import CallableIdentity, StaticValue
+
+
+class AliasSelection:
+    paths: list[list[str | int]]
+
+
+class PydanticDescriptor:
+    kind: str
+    default_kind: str
+    default_value: StaticValue | None
+    default_factory: CallableIdentity | None
+    alias: str | None
+    validation_alias: AliasSelection | None
+    serialization_alias: str | None
+    gt: int | float | None
+    ge: int | float | None
+    lt: int | float | None
+    le: int | float | None
+    multiple_of: int | float | None
+    min_length: int | None
+    max_length: int | None
+    pattern: str | None
+    discriminator: AliasSelection | None
+    strict: bool | None
+    strip_whitespace: bool | None
+    to_lower: bool | None
+    to_upper: bool | None
+    ascii_only: bool | None
+    title: str | None
+    description: str | None
+    examples: list[str] | None
+    json_schema_extra: dict[str, str] | None
+    exclude: bool | None
+    extra: str | None
+    populate_by_name: bool | None
+    validate_by_alias: bool | None
+    location_by_alias: bool | None
+    alias_prefix: str | None
+    alias_case: str | None
+    literal_values: list[int | str | bool] | None
+    union_labels: list[str] | None
+    discriminator_tags: list[str] | None
+    problem: str | None
+    error_builtin: str | None = None
+    error_package: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None

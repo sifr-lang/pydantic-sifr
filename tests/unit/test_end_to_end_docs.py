@@ -5,7 +5,11 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEMOS = ("milestone_ps_6_demo", "milestone_ps_7_demo")
+DEMOS = (
+    "milestone_ps_6_demo",
+    "milestone_ps_7_demo",
+    "milestone_m8_fields_configuration",
+)
 
 
 class EndToEndDocsTest(unittest.TestCase):
@@ -33,10 +37,13 @@ class EndToEndDocsTest(unittest.TestCase):
             "model_validate",
             "model_validate_json",
             "model_validate_strings",
-            "verify_schema",
+            "BaseModel",
+            "ConfigDict",
+            "Field",
         ):
             self.assertIn(name, quickstart)
-        self.assertNotIn("BaseModel", quickstart)
+        self.assertNotIn("@const_specialize", quickstart)
+        self.assertNotIn("@metadata", quickstart)
         self.assertNotIn("import pydantic\n", quickstart)
 
 

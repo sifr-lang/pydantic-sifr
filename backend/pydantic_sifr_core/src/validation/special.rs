@@ -1,14 +1,14 @@
 use regex::RegexBuilder;
 use speedate::{Date, DateTime, DateTimeConfig, Duration, Time, TimestampUnit};
-use url::Url;
+use url::{Host, Position, Url};
 use uuid::Uuid;
 
 use crate::InputValue;
 
 use super::{
     ClockSnapshot, DateTimeValue, DateValue, DurationValue, ErrorDetail, InputProfile,
-    PatternSchema, PatternValue, RelativeTimeConstraint, Schema, TemporalKind, TemporalSchema,
-    TimeValue, UrlConstraints, ValidatedValue, ValidationError,
+    PatternSchema, PatternValue, RelativeTimeConstraint, Schema, SchemaRef, SchemaTag,
+    TemporalKind, TemporalSchema, TimeValue, UrlConstraints, ValidatedValue, ValidationError,
 };
 
 const FLAG_CASE_INSENSITIVE: u8 = 1;
@@ -25,9 +25,38 @@ pub(crate) fn validate_special(
     let result = match schema {
         Schema::Temporal(schema) => validate_temporal(schema, input, strict, profile, clock),
         Schema::Uuid { version } => validate_uuid(input, strict, profile, *version),
-        Schema::Url(constraints) => validate_url(input, strict, profile, constraints),
+        Schema::Url(constraints) => validate_url(input, strict, profile, constraints, false),
         Schema::Pattern(schema) => validate_pattern(input, strict, profile, schema),
         _ => return None,
+    };
+    Some(result)
+}
+
+pub(crate) fn validate_static_special(
+    schema: SchemaRef<'_>,
+    input: &InputValue,
+    strict: bool,
+    profile: InputProfile,
+) -> Option<Result<ValidatedValue, ValidationError>> {
+    let result = match schema.tag() {
+        Ok(SchemaTag::Url) => {
+            validate_url(input, strict, profile, &UrlConstraints::default(), false)
+        }
+        Ok(SchemaTag::MultiHostUrl) => {
+            validate_url(input, strict, profile, &UrlConstraints::default(), true)
+        }
+        Ok(SchemaTag::Pattern) => validate_pattern(
+            input,
+            strict,
+            profile,
+            &PatternSchema {
+                case_insensitive: false,
+                multi_line: false,
+                dot_matches_new_line: false,
+            },
+        ),
+        Ok(_) => return None,
+        Err(error) => return Some(Err(error)),
     };
     Some(result)
 }
@@ -202,6 +231,7 @@ fn validate_url(
     strict: bool,
     profile: InputProfile,
     constraints: &UrlConstraints,
+    multi_host: bool,
 ) -> Result<ValidatedValue, ValidationError> {
     let source = match input {
         InputValue::Url(value) => value.as_str(),
@@ -221,6 +251,9 @@ fn validate_url(
                 ),
         ));
     }
+    if multi_host {
+        return validate_multi_host_url(source, constraints).map(ValidatedValue::MultiHostUrl);
+    }
     let value = Url::parse(source).map_err(|error| {
         ValidationError::one(
             ErrorDetail::new("url_parsing", "Input must be a valid absolute URL")
@@ -228,6 +261,94 @@ fn validate_url(
                 .context("error", error.to_string()),
         )
     })?;
+    validate_url_scheme(&value, constraints)?;
+    Ok(ValidatedValue::Url(value.to_string()))
+}
+
+fn validate_multi_host_url(
+    source: &str,
+    constraints: &UrlConstraints,
+) -> Result<String, ValidationError> {
+    let Some((scheme, remainder)) = source.split_once("://") else {
+        return Err(type_error(
+            "url_parsing",
+            "Input must be a valid absolute multi-host URL",
+            "absolute multi-host url",
+        ));
+    };
+    let authority_end = remainder
+        .find(|character| ['/', '?', '#'].contains(&character))
+        .unwrap_or(remainder.len());
+    let authority = &remainder[..authority_end];
+    let suffix = &remainder[authority_end..];
+    let (userinfo, hosts) = authority
+        .rsplit_once('@')
+        .map_or((None, authority), |(userinfo, hosts)| {
+            (Some(userinfo), hosts)
+        });
+    if hosts.is_empty() || hosts.split(',').any(str::is_empty) {
+        return Err(type_error(
+            "url_parsing",
+            "Input must contain one or more valid hosts",
+            "non-empty multi-host authority",
+        ));
+    }
+    let mut normalized_scheme = None;
+    let mut normalized_userinfo = String::new();
+    let mut normalized_suffix = None;
+    let mut normalized_hosts = Vec::new();
+    for (index, host) in hosts.split(',').enumerate() {
+        let candidate = match userinfo {
+            Some(userinfo) => format!("{scheme}://{userinfo}@{host}{suffix}"),
+            None => format!("{scheme}://{host}{suffix}"),
+        };
+        let value = Url::parse(&candidate).map_err(|error| {
+            ValidationError::one(
+                ErrorDetail::new("url_parsing", "Input must contain valid absolute URL hosts")
+                    .expected("absolute multi-host url")
+                    .context("error", error.to_string()),
+            )
+        })?;
+        validate_url_scheme(&value, constraints)?;
+        let Some(parsed_host) = value.host() else {
+            return Err(type_error(
+                "url_parsing",
+                "Input must contain one or more valid hosts",
+                "non-empty multi-host authority",
+            ));
+        };
+        let mut normalized_host = match parsed_host {
+            Host::Domain(domain) => domain.to_ascii_lowercase(),
+            host => host.to_string(),
+        };
+        if let Some(port) = value.port() {
+            normalized_host.push(':');
+            normalized_host.push_str(&port.to_string());
+        }
+        normalized_hosts.push(normalized_host);
+        if index == 0 {
+            normalized_scheme = Some(value.scheme().to_owned());
+            if !value.username().is_empty() || value.password().is_some() {
+                normalized_userinfo.push_str(value.username());
+                if let Some(password) = value.password() {
+                    normalized_userinfo.push(':');
+                    normalized_userinfo.push_str(password);
+                }
+                normalized_userinfo.push('@');
+            }
+            normalized_suffix = Some(value[Position::BeforePath..].to_owned());
+        }
+    }
+    Ok(format!(
+        "{}://{}{}{}",
+        normalized_scheme.unwrap_or_else(|| scheme.to_owned()),
+        normalized_userinfo,
+        normalized_hosts.join(","),
+        normalized_suffix.unwrap_or_default(),
+    ))
+}
+
+fn validate_url_scheme(value: &Url, constraints: &UrlConstraints) -> Result<(), ValidationError> {
     if value.cannot_be_a_base() && value.scheme() != "mailto" {
         return Err(type_error(
             "url_scheme",
@@ -247,7 +368,7 @@ fn validate_url(
                 .context("scheme", value.scheme()),
         ));
     }
-    Ok(ValidatedValue::Url(value.to_string()))
+    Ok(())
 }
 
 fn validate_pattern(
@@ -348,4 +469,34 @@ fn type_error(
     expected: &'static str,
 ) -> ValidationError {
     super::scalars::type_error(code, message, expected)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{UrlConstraints, validate_multi_host_url};
+
+    #[test]
+    fn multi_host_urls_normalize_each_host_and_preserve_shared_credentials() {
+        let value = validate_multi_host_url(
+            "postgres://user:pass@one.example:5432,TWO.example:5433/db",
+            &UrlConstraints::default(),
+        )
+        .unwrap_or_else(|error| panic!("multi-host URL validation failed: {error}"));
+        assert_eq!(
+            value,
+            "postgres://user:pass@one.example:5432,two.example:5433/db"
+        );
+    }
+
+    #[test]
+    fn multi_host_urls_reject_empty_host_entries() {
+        let result = validate_multi_host_url(
+            "postgres://one.example,,two.example/db",
+            &UrlConstraints::default(),
+        );
+        let Err(error) = result else {
+            panic!("an empty host entry must fail");
+        };
+        assert_eq!(error.details()[0].code, "url_parsing");
+    }
 }

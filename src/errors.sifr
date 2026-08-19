@@ -1,3 +1,6 @@
+from sifr.meta import ConstIssueLabel, SourceOrigin
+
+
 class SchemaIssueArgs:
     problem: str
 
@@ -7,4 +10,6 @@ class SchemaIssue:
     reason_code: str
     severity: str
     arguments: SchemaIssueArgs
+    primary_origin: SourceOrigin
+    labels: list[ConstIssueLabel]
     notes: list[str]

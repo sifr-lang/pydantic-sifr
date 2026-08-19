@@ -1,373 +1,295 @@
 from .errors import SchemaIssue, SchemaIssueArgs
+from .descriptors import AliasSelection, PydanticDescriptor
+from sifr.meta import SourceOrigin
+from .schema_errors import error_override
+from .schema_metadata import runtime_metadata
+from .schema_constraints import constraint_issue, copy_metadata
+from .schema_constraints import (
+    descriptor_values,
+    has_integer_constraints,
+    has_string_constraints,
+    has_text_constraints,
+)
+from .schema_constraints import primitive_kind, sum_kind
 from .schema_types import ErrorOverrideResult
 from .schema_types import FieldRules
 from .schema_types import ModelRules
 from .schema_types import NodeBuildResult
 from .schema_types import SchemaAliasSegmentPayload
+from .schema_types import SchemaAliasPathPayload
+from .schema_types import SchemaBytesConstraintsPayload
+from .schema_types import SchemaCollectionConstraintsPayload
 from .schema_types import SchemaFieldPayload
+from .schema_types import SchemaFloatConstraintsPayload
 from .schema_types import SchemaIntegerConstraintsPayload
 from .schema_types import SchemaModelPayload
 from .schema_types import SchemaNodePayload
 from .schema_types import SchemaOutcome
 from .schema_types import SchemaProgramPayload
 from .schema_types import SchemaStringConstraintsPayload
-from .schema_types import ShapeInput, ShapeMetadata, ShapeNode
+from .schema_types import SchemaVariantPayload
+from .schema_types import SchemaShapeInput, SchemaShapeMetadata, SchemaShapeNode
 
 
 @const_eval
-def copy_metadata(metadata: list[ShapeMetadata]) -> list[ShapeMetadata]:
-    output: list[ShapeMetadata] = []
-    for item in metadata:
-        output.append(item)
-    return output
-
-
-@const_eval
-def has_integer_constraints(metadata: list[ShapeMetadata]) -> bool:
-    for item in metadata:
-        if (
-            item.key == "pydantic.gt"
-            or item.key == "pydantic.ge"
-            or item.key == "pydantic.lt"
-            or item.key == "pydantic.le"
-            or item.key == "pydantic.multiple_of"
-        ):
-            return True
-    return False
-
-
-@const_eval
-def has_string_constraints(metadata: list[ShapeMetadata]) -> bool:
-    for item in metadata:
-        if (
-            item.key == "pydantic.min_length"
-            or item.key == "pydantic.max_length"
-            or item.key == "pydantic.strip_whitespace"
-            or item.key == "pydantic.to_lower"
-            or item.key == "pydantic.to_upper"
-            or item.key == "pydantic.ascii_only"
-        ):
-            return True
-    return False
-
-
-@const_eval
-def constraint_issue(kind: str, metadata: list[ShapeMetadata]) -> str | None:
-    if kind == "int":
-        if has_string_constraints(copy_metadata(metadata)):
-            return "string constraints require a string field"
-        return None
-    if kind == "str":
-        if has_integer_constraints(copy_metadata(metadata)):
-            return "integer constraints require an integer field"
-        return None
-    if has_integer_constraints(copy_metadata(metadata)) or has_string_constraints(
-        copy_metadata(metadata)
-    ):
-        return "field constraints are not supported for this structural type"
-    return None
-
-
-@const_eval
-def is_literal_key(key: str) -> bool:
-    return (
-        key == "pydantic.literal.none"
-        or key == "pydantic.literal.bool"
-        or key == "pydantic.literal.int"
-        or key == "pydantic.literal.str"
-        or key == "pydantic.literal.bytes"
-    )
-
-
-@const_eval
-def sum_kind(base: str, metadata: list[ShapeMetadata]) -> str:
-    for item in metadata:
-        if is_literal_key(item.key):
-            return "literal"
-        if base == "union" and (
-            item.key == "pydantic.discriminator.field"
-            or item.key == "pydantic.discriminator.index"
-        ):
-            return "tagged-union"
-    return base + ""
-
-
-@const_eval
-def schema_failure(problem: str) -> SchemaOutcome:
+def schema_failure(problem: str, own origin: SourceOrigin) -> SchemaOutcome:
     issue: SchemaIssue = SchemaIssue(
         "pydantic_sifr.schema_contract",
         "schema_invalid",
         "fatal",
         SchemaIssueArgs(problem),
+        origin,
+        [],
         [],
     )
     return SchemaOutcome("failed", None, [issue])
 
 
 @const_eval
-def primitive_kind(name: str) -> str:
-    if name == "int" or name == "bigint":
-        return "int"
-    if name == "float":
-        return "float"
-    if name == "bool":
-        return "bool"
-    if name == "str":
-        return "str"
-    if name == "bytes":
-        return "bytes"
-    if name == "None":
-        return "none"
-    if name == "decimal" or name == "bigdecimal":
-        return "decimal"
-    return ""
+def alias_path(value: list[str | int]) -> SchemaAliasPathPayload:
+    segments: list[SchemaAliasSegmentPayload] = []
+    for segment in value:
+        if isinstance(segment, str):
+            segments.append(SchemaAliasSegmentPayload("field", segment, None))
+        else:
+            index: int = segment
+            segments.append(SchemaAliasSegmentPayload("index", None, index))
+    return SchemaAliasPathPayload(segments)
 
 
 @const_eval
-def built_in_message(code: str) -> str:
-    if code == "json_invalid":
-        return "Invalid JSON: {error}"
-    if code == "schema_invalid":
-        return "Invalid schema: {error}"
-    if code == "input_limit_exceeded":
-        return "Input limit exceeded: {limit}"
-    if code == "internal_program_load":
-        return "Schema program could not be loaded"
-    return ""
+def alias_paths(
+    value: AliasSelection | None,
+) -> list[SchemaAliasPathPayload]:
+    output: list[SchemaAliasPathPayload] = []
+    if value is not None:
+        for path in value.paths:
+            output.append(alias_path(path))
+    return output
 
 
 @const_eval
-def error_override(metadata: list[ShapeMetadata]) -> ErrorOverrideResult:
-    built_in: str = ""
-    package: str = ""
-    code: str = ""
-    message: str = ""
-    has_built_in: bool = False
-    has_package: bool = False
-    has_code: bool = False
-    has_message: bool = False
-    for item in metadata:
-        raw: str = item.value
-        relevant: bool = (
-            item.key == "pydantic.error.builtin"
-            or item.key == "pydantic.error.package"
-            or item.key == "pydantic.error.code"
-            or item.key == "pydantic.error.message"
-        )
-        text: str = ""
-        if relevant:
-            text = raw
-        if item.key == "pydantic.error.builtin":
-            if has_built_in:
-                return ErrorOverrideResult(None, None, "duplicate built-in error code")
-            built_in = text
-            has_built_in = True
-        elif item.key == "pydantic.error.package":
-            if has_package:
-                return ErrorOverrideResult(None, None, "duplicate custom error package")
-            package = text
-            has_package = True
-        elif item.key == "pydantic.error.code":
-            if has_code:
-                return ErrorOverrideResult(None, None, "duplicate custom error code")
-            code = text
-            has_code = True
-        elif item.key == "pydantic.error.message":
-            if has_message:
-                return ErrorOverrideResult(None, None, "duplicate error message")
-            message = text
-            has_message = True
-    if has_built_in:
-        if has_package or has_code:
-            return ErrorOverrideResult(
-                None, None, "error override mixes built-in and custom codes"
-            )
-        expected: str = built_in_message(built_in)
-        if expected == "":
-            return ErrorOverrideResult(None, None, "unknown built-in error code")
-        if not has_message:
-            return ErrorOverrideResult(
-                None, None, "built-in error message cannot change"
-            )
-        if message != expected:
-            return ErrorOverrideResult(
-                None, None, "built-in error message cannot change"
-            )
-        return ErrorOverrideResult(built_in, message, None)
-    if has_package or has_code or has_message:
-        if not has_package or not has_code or not has_message:
-            return ErrorOverrideResult(
-                None, None, "custom error declaration is incomplete"
-            )
-        if len(package) == 0 or len(code) == 0 or len(message) == 0:
-            return ErrorOverrideResult(
-                None, None, "custom error declaration contains an empty value"
-            )
-        return ErrorOverrideResult(package + "." + code, message, None)
-    return ErrorOverrideResult(None, None, None)
+def runtime_variants(node: SchemaShapeNode) -> list[SchemaVariantPayload]:
+    output: list[SchemaVariantPayload] = []
+    for variant in node.variants:
+        output.append(SchemaVariantPayload(variant.name, variant.value, []))
+    return output
 
 
 @const_eval
-def field_rules(metadata: list[ShapeMetadata]) -> FieldRules:
-    aliases: list[SchemaAliasSegmentPayload] = []
+def field_rules(metadata: list[SchemaShapeMetadata]) -> FieldRules:
+    validation_aliases: list[SchemaAliasPathPayload] = []
     serialization_alias: str | None = None
-    greater_than: str | None = None
-    greater_or_equal: str | None = None
-    less_than: str | None = None
-    less_or_equal: str | None = None
-    multiple_of: str | None = None
-    min_length: str | None = None
-    max_length: str | None = None
+    greater_than: int | float | None = None
+    greater_or_equal: int | float | None = None
+    less_than: int | float | None = None
+    less_or_equal: int | float | None = None
+    multiple_of: int | float | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str | None = None
     strip_whitespace: bool = False
     to_lower: bool = False
     to_upper: bool = False
     ascii_only: bool = False
-    for item in metadata:
-        raw: str = item.value
-        if item.key == "pydantic.alias.field":
-            aliases.append(SchemaAliasSegmentPayload("field", raw, None))
-        elif item.key == "pydantic.alias.index":
-            aliases.append(SchemaAliasSegmentPayload("index", None, raw))
-        elif item.key == "pydantic.serialization_alias":
-            if serialization_alias is not None or len(raw) == 0:
-                return FieldRules(
-                    [],
-                    None,
-                    SchemaIntegerConstraintsPayload(None, None, None, None, None),
-                    SchemaStringConstraintsPayload(
-                        None, None, False, False, False, False
-                    ),
-                    "serialization alias must be one nonempty value",
-                )
-            serialization_alias = raw
-        elif item.key == "pydantic.gt":
-            greater_than = raw
-        elif item.key == "pydantic.ge":
-            greater_or_equal = raw
-        elif item.key == "pydantic.lt":
-            less_than = raw
-        elif item.key == "pydantic.le":
-            less_or_equal = raw
-        elif item.key == "pydantic.multiple_of":
-            if raw == "0" or raw == "-0":
-                return FieldRules(
-                    [],
-                    None,
-                    SchemaIntegerConstraintsPayload(None, None, None, None, None),
-                    SchemaStringConstraintsPayload(
-                        None, None, False, False, False, False
-                    ),
-                    "multiple_of must be a nonzero integer",
-                )
-            multiple_of = raw
-        elif item.key == "pydantic.min_length":
-            min_length = raw
-        elif item.key == "pydantic.max_length":
-            max_length = raw
-        elif item.key == "pydantic.strip_whitespace":
-            if raw != "true" and raw != "false":
-                return FieldRules(
-                    [],
-                    None,
-                    SchemaIntegerConstraintsPayload(None, None, None, None, None),
-                    SchemaStringConstraintsPayload(
-                        None, None, False, False, False, False
-                    ),
-                    "strip_whitespace must be a boolean",
-                )
-            strip_whitespace = raw == "true"
-        elif item.key == "pydantic.to_lower":
-            if raw != "true" and raw != "false":
-                return FieldRules(
-                    [],
-                    None,
-                    SchemaIntegerConstraintsPayload(None, None, None, None, None),
-                    SchemaStringConstraintsPayload(
-                        None, None, False, False, False, False
-                    ),
-                    "to_lower must be a boolean",
-                )
-            to_lower = raw == "true"
-        elif item.key == "pydantic.to_upper":
-            if raw != "true" and raw != "false":
-                return FieldRules(
-                    [],
-                    None,
-                    SchemaIntegerConstraintsPayload(None, None, None, None, None),
-                    SchemaStringConstraintsPayload(
-                        None, None, False, False, False, False
-                    ),
-                    "to_upper must be a boolean",
-                )
-            to_upper = raw == "true"
-        elif item.key == "pydantic.ascii_only":
-            if raw != "true" and raw != "false":
-                return FieldRules(
-                    [],
-                    None,
-                    SchemaIntegerConstraintsPayload(None, None, None, None, None),
-                    SchemaStringConstraintsPayload(
-                        None, None, False, False, False, False
-                    ),
-                    "ascii_only must be a boolean",
-                )
-            ascii_only = raw == "true"
+    strict: bool | None = None
+    exclude: bool = False
+    for value in descriptor_values(metadata):
+        if value.kind == "field":
+            selected_aliases: list[SchemaAliasPathPayload] = alias_paths(
+                value.validation_alias
+            )
+            direct_alias: str | None = value.alias
+            if len(selected_aliases) == 0:
+                if direct_alias is not None:
+                    direct_path: list[str | int] = []
+                    direct_path.append(direct_alias)
+                    selected_aliases.append(alias_path(direct_path))
+            if len(selected_aliases) > 0:
+                validation_aliases = selected_aliases
+            selected_serialization_alias: str | None = value.serialization_alias
+            if selected_serialization_alias is None:
+                selected_serialization_alias = value.alias
+            if selected_serialization_alias is not None:
+                serialization_alias = selected_serialization_alias
+            if value.gt is not None:
+                greater_than = value.gt
+            if value.ge is not None:
+                greater_or_equal = value.ge
+            if value.lt is not None:
+                less_than = value.lt
+            if value.le is not None:
+                less_or_equal = value.le
+            if value.multiple_of is not None:
+                multiple_of = value.multiple_of
+            if value.min_length is not None:
+                min_length = value.min_length
+            if value.max_length is not None:
+                max_length = value.max_length
+            if value.pattern is not None:
+                pattern = value.pattern
+            strip_value: bool | None = value.strip_whitespace
+            if strip_value is not None:
+                strip_whitespace = strip_value
+            lower_value: bool | None = value.to_lower
+            if lower_value is not None:
+                to_lower = lower_value
+            upper_value: bool | None = value.to_upper
+            if upper_value is not None:
+                to_upper = upper_value
+            ascii_value: bool | None = value.ascii_only
+            if ascii_value is not None:
+                ascii_only = ascii_value
+            strict_value: bool | None = value.strict
+            if strict_value is not None:
+                strict = strict_value
+            exclude_value: bool | None = value.exclude
+            if exclude_value is not None:
+                exclude = exclude_value
+    if min_length is not None and max_length is not None:
+        minimum: int = min_length
+        maximum: int = max_length
+        if minimum > maximum:
+            return FieldRules(
+                [],
+                None,
+                SchemaIntegerConstraintsPayload(None, None, None, None, None),
+                SchemaStringConstraintsPayload(
+                    None, None, False, False, False, False, None
+                ),
+                SchemaBytesConstraintsPayload(None, None),
+                SchemaCollectionConstraintsPayload(None, None),
+                None,
+                False,
+                "min_length cannot exceed max_length after descriptor merge",
+            )
     if to_lower and to_upper:
         return FieldRules(
             [],
             None,
             SchemaIntegerConstraintsPayload(None, None, None, None, None),
-            SchemaStringConstraintsPayload(None, None, False, False, False, False),
+            SchemaStringConstraintsPayload(
+                None, None, False, False, False, False, None
+            ),
+            SchemaBytesConstraintsPayload(None, None),
+            SchemaCollectionConstraintsPayload(None, None),
+            None,
+            False,
             "to_lower and to_upper cannot both be enabled",
         )
     return FieldRules(
-        aliases,
+        validation_aliases,
         serialization_alias,
         SchemaIntegerConstraintsPayload(
             greater_than, greater_or_equal, less_than, less_or_equal, multiple_of
         ),
         SchemaStringConstraintsPayload(
-            min_length, max_length, strip_whitespace, to_lower, to_upper, ascii_only
+            min_length,
+            max_length,
+            strip_whitespace,
+            to_lower,
+            to_upper,
+            ascii_only,
+            pattern,
         ),
+        SchemaBytesConstraintsPayload(min_length, max_length),
+        SchemaCollectionConstraintsPayload(min_length, max_length),
+        strict,
+        exclude,
         None,
     )
 
 
 @const_eval
-def model_rules(metadata: list[ShapeMetadata]) -> ModelRules:
+def float_constraints(
+    metadata: list[SchemaShapeMetadata],
+) -> SchemaFloatConstraintsPayload:
+    greater_than: int | float | None = None
+    greater_or_equal: int | float | None = None
+    less_than: int | float | None = None
+    less_or_equal: int | float | None = None
+    multiple_of: int | float | None = None
+    for value in descriptor_values(metadata):
+        if value.kind == "field":
+            if value.gt is not None:
+                greater_than = value.gt
+            if value.ge is not None:
+                greater_or_equal = value.ge
+            if value.lt is not None:
+                less_than = value.lt
+            if value.le is not None:
+                less_or_equal = value.le
+            if value.multiple_of is not None:
+                multiple_of = value.multiple_of
+    return SchemaFloatConstraintsPayload(
+        greater_than, greater_or_equal, less_than, less_or_equal, multiple_of
+    )
+
+
+@const_eval
+def model_rules(metadata: list[SchemaShapeMetadata]) -> ModelRules:
     extra: str = "ignore"
     populate_by_name: bool = False
     location_by_alias: bool = True
-    for item in metadata:
-        raw: str = item.value
-        if item.key == "pydantic.extra":
-            if raw != "ignore" and raw != "forbid":
+    strict: bool = False
+    validate_by_alias: bool = True
+    alias_prefix: str = ""
+    alias_case: str = "snake"
+    for value in descriptor_values(metadata):
+        if value.kind == "config":
+            configured_extra: str | None = value.extra
+            if configured_extra is not None:
+                extra = configured_extra
+            if extra != "ignore" and extra != "forbid":
                 return ModelRules(
                     extra,
                     populate_by_name,
                     location_by_alias,
+                    strict,
+                    validate_by_alias,
+                    alias_prefix,
+                    alias_case,
                     "extra policy must be ignore or forbid",
                 )
-            extra = raw
-        elif item.key == "pydantic.populate_by_name":
-            if raw != "true" and raw != "false":
-                return ModelRules(
-                    extra,
-                    populate_by_name,
-                    location_by_alias,
-                    "populate_by_name must be a boolean",
-                )
-            populate_by_name = raw == "true"
-        elif item.key == "pydantic.location_by_alias":
-            if raw != "true" and raw != "false":
-                return ModelRules(
-                    extra,
-                    populate_by_name,
-                    location_by_alias,
-                    "location_by_alias must be a boolean",
-                )
-            location_by_alias = raw == "true"
-    return ModelRules(extra, populate_by_name, location_by_alias, None)
+            populate_value: bool | None = value.populate_by_name
+            if populate_value is not None:
+                populate_by_name = populate_value
+            location_value: bool | None = value.location_by_alias
+            if location_value is not None:
+                location_by_alias = location_value
+            strict_value: bool | None = value.strict
+            if strict_value is not None:
+                strict = strict_value
+            validate_value: bool | None = value.validate_by_alias
+            if validate_value is not None:
+                validate_by_alias = validate_value
+            prefix_value: str | None = value.alias_prefix
+            if prefix_value is not None:
+                alias_prefix = prefix_value
+            case_value: str | None = value.alias_case
+            if case_value is not None:
+                alias_case = case_value
+    if not validate_by_alias and not populate_by_name:
+        return ModelRules(
+            extra,
+            populate_by_name,
+            location_by_alias,
+            strict,
+            validate_by_alias,
+            alias_prefix,
+            alias_case,
+            "validate_by_alias and populate_by_name cannot both be disabled",
+        )
+    return ModelRules(
+        extra,
+        populate_by_name,
+        location_by_alias,
+        strict,
+        validate_by_alias,
+        alias_prefix,
+        alias_case,
+        None,
+    )
 
 
 @const_eval
@@ -392,9 +314,12 @@ def rebase_nodes(
                         field.name,
                         field.node + offset,
                         field.required,
+                        field.default_kind,
                         field.default,
-                        field.validation_alias,
+                        field.validation_aliases,
                         field.serialization_alias,
+                        field.strict,
+                        field.exclude,
                     )
                 )
             model = SchemaModelPayload(
@@ -404,6 +329,7 @@ def rebase_nodes(
                 current_model.extra,
                 current_model.populate_by_name,
                 current_model.location_by_alias,
+                current_model.strict,
             )
         output.append(
             SchemaNodePayload(
@@ -416,7 +342,10 @@ def rebase_nodes(
                 model,
                 node.integer_target,
                 node.integer_constraints,
+                node.float_constraints,
                 node.string_constraints,
+                node.bytes_constraints,
+                node.collection_constraints,
                 node.metadata,
                 node.variants,
             )
@@ -425,7 +354,9 @@ def rebase_nodes(
 
 
 @const_eval
-def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResult:
+def build_node(
+    node: SchemaShapeNode, inherited: list[SchemaShapeMetadata]
+) -> NodeBuildResult:
     override: ErrorOverrideResult = error_override(inherited)
     if override.issue is not None:
         return NodeBuildResult([], 0, override.issue)
@@ -466,8 +397,11 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             integer_target,
             rules.integer_constraints,
+            float_constraints(inherited),
             rules.string_constraints,
-            inherited,
+            rules.bytes_constraints,
+            rules.collection_constraints,
+            runtime_metadata(inherited),
             [],
         )
         return NodeBuildResult([leaf], 0, None)
@@ -489,23 +423,26 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
-            inherited,
+            None,
+            None,
+            None,
+            runtime_metadata(inherited),
             [],
         )
         return NodeBuildResult([reference], 0, None)
     if node.kind == "list" or node.kind == "set" or node.kind == "optional":
-        element: ShapeNode | None = node.element
+        element: SchemaShapeNode | None = node.element
         if element is None:
             return NodeBuildResult([], 0, "unary schema node has no element")
-        child_metadata: list[ShapeMetadata] = []
+        child_metadata: list[SchemaShapeMetadata] = []
         if node.kind == "optional":
             child_metadata = copy_metadata(inherited)
-        elif has_integer_constraints(
-            copy_metadata(inherited)
-        ) or has_string_constraints(copy_metadata(inherited)):
-            return NodeBuildResult(
-                [], 0, "field constraints are not supported for collections"
+        else:
+            collection_issue: str | None = constraint_issue(
+                node.kind, copy_metadata(inherited)
             )
+            if collection_issue is not None:
+                return NodeBuildResult([], 0, collection_issue)
         built_element: NodeBuildResult = build_node(element, child_metadata)
         if built_element.issue is not None:
             return built_element
@@ -525,20 +462,22 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
-            inherited,
+            None,
+            None,
+            rules.collection_constraints,
+            runtime_metadata(inherited),
             [],
         )
         root: int = len(built_element.nodes)
         return NodeBuildResult(built_element.nodes + [unary], root, None)
     if node.kind == "dictionary":
-        if has_integer_constraints(copy_metadata(inherited)) or has_string_constraints(
-            copy_metadata(inherited)
-        ):
-            return NodeBuildResult(
-                [], 0, "field constraints are not supported for mappings"
-            )
-        key: ShapeNode | None = node.key
-        value: ShapeNode | None = node.value
+        mapping_issue: str | None = constraint_issue(
+            "dictionary", copy_metadata(inherited)
+        )
+        if mapping_issue is not None:
+            return NodeBuildResult([], 0, mapping_issue)
+        key: SchemaShapeNode | None = node.key
+        value: SchemaShapeNode | None = node.value
         if key is None or value is None:
             return NodeBuildResult([], 0, "mapping schema node is incomplete")
         built_key: NodeBuildResult = build_node(key, [])
@@ -563,18 +502,25 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
-            inherited,
+            None,
+            None,
+            rules.collection_constraints,
+            runtime_metadata(inherited),
             [],
         )
         root: int = len(nodes)
         return NodeBuildResult(nodes + [mapping], root, None)
     if node.kind == "tuple" or node.kind == "union":
-        if has_integer_constraints(copy_metadata(inherited)) or has_string_constraints(
-            copy_metadata(inherited)
+        sequence_issue: str | None = None
+        if node.kind == "union" and (
+            has_integer_constraints(copy_metadata(inherited))
+            or has_string_constraints(copy_metadata(inherited))
         ):
-            return NodeBuildResult(
-                [], 0, "field constraints are not supported for tuples or unions"
-            )
+            sequence_issue = "field constraints are not supported for unions"
+        if node.kind == "tuple":
+            sequence_issue = constraint_issue("tuple", copy_metadata(inherited))
+        if sequence_issue is not None:
+            return NodeBuildResult([], 0, sequence_issue)
         member_nodes: list[SchemaNodePayload] = []
         member_roots: list[int] = []
         for member in node.members:
@@ -595,12 +541,47 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
-            inherited,
+            None,
+            None,
+            rules.collection_constraints,
+            runtime_metadata(inherited),
             [],
         )
         root: int = len(member_nodes)
         return NodeBuildResult(member_nodes + [sequence], root, None)
     if node.kind == "nominal":
+        special_kind: str = ""
+        if node.identity == "pydantic_sifr.special_values.Url":
+            special_kind = "url"
+        elif node.identity == "pydantic_sifr.special_values.MultiHostUrl":
+            special_kind = "multi-host-url"
+        elif node.identity == "pydantic_sifr.special_values.Pattern":
+            special_kind = "pattern"
+        if special_kind != "":
+            if has_integer_constraints(
+                copy_metadata(inherited)
+            ) or has_string_constraints(copy_metadata(inherited)):
+                return NodeBuildResult(
+                    [], 0, "field constraints are not supported for specialized values"
+                )
+            specialized: SchemaNodePayload = SchemaNodePayload(
+                special_kind,
+                [],
+                None,
+                None,
+                override.code,
+                override.message,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                runtime_metadata(inherited),
+                [],
+            )
+            return NodeBuildResult([specialized], 0, None)
         if has_integer_constraints(copy_metadata(inherited)) or has_string_constraints(
             copy_metadata(inherited)
         ):
@@ -638,7 +619,10 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
                     None,
                     None,
                     None,
-                    copy_metadata(field.metadata),
+                    None,
+                    None,
+                    None,
+                    runtime_metadata(field.metadata),
                     [],
                 )
                 built_field = NodeBuildResult([reference_node], 0, None)
@@ -653,14 +637,30 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             field_rules_value: FieldRules = field_rules(field.metadata)
             if field_rules_value.issue is not None:
                 return NodeBuildResult([], 0, field_rules_value.issue)
+            validation_aliases: list[SchemaAliasPathPayload] = (
+                field_rules_value.validation_aliases
+            )
+            serialization_alias: str | None = field_rules_value.serialization_alias
+            if len(validation_aliases) == 0 and len(model_rules_value.alias_prefix) > 0:
+                generated_alias: str = model_rules_value.alias_prefix + field.name
+                generated_path: list[str | int] = []
+                generated_path.append(generated_alias)
+                validation_aliases.append(alias_path(generated_path))
+                if serialization_alias is None:
+                    serialization_alias = model_rules_value.alias_prefix + field.name
+            if not model_rules_value.validate_by_alias:
+                validation_aliases = []
             model_fields.append(
                 SchemaFieldPayload(
                     field.name,
                     field_root,
                     field.required,
+                    field.default_kind,
                     field.default,
-                    field_rules_value.validation_alias,
-                    field_rules_value.serialization_alias,
+                    validation_aliases,
+                    serialization_alias,
+                    field_rules_value.strict,
+                    field_rules_value.exclude,
                 )
             )
         model_payload: SchemaModelPayload = SchemaModelPayload(
@@ -670,6 +670,7 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             model_rules_value.extra,
             model_rules_value.populate_by_name,
             model_rules_value.location_by_alias,
+            model_rules_value.strict,
         )
         model_definition: str | None = node.identity
         model_value: SchemaModelPayload | None = model_payload
@@ -684,7 +685,10 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
-            inherited + node.metadata,
+            None,
+            None,
+            None,
+            runtime_metadata(inherited + node.metadata),
             [],
         )
         root: int = len(field_nodes)
@@ -711,8 +715,11 @@ def build_node(node: ShapeNode, inherited: list[ShapeMetadata]) -> NodeBuildResu
             None,
             None,
             None,
-            inherited + node.metadata,
-            node.variants,
+            None,
+            None,
+            None,
+            runtime_metadata(inherited + node.metadata),
+            runtime_variants(node),
         )
         return NodeBuildResult([enumeration], 0, None)
     if node.kind == "newtype":
@@ -789,14 +796,14 @@ def verify_nodes(nodes: list[SchemaNodePayload], root: int) -> str | None:
 
 @const_eval
 @metadata("sifr.meta.issue_template", ("schema_invalid", ["problem"]))
-def verify_schema(shape: ShapeInput) -> SchemaOutcome:
+def verify_schema(shape: SchemaShapeInput) -> SchemaOutcome:
     built: NodeBuildResult = build_node(shape.root, [])
     build_issue: str | None = built.issue
     if build_issue is not None:
-        return schema_failure(build_issue)
+        return schema_failure(build_issue, shape.declaration.origin)
     problem: str | None = verify_nodes(built.nodes, built.root)
     if problem is not None:
-        return schema_failure(problem)
+        return schema_failure(problem, shape.declaration.origin)
     program: SchemaProgramPayload = SchemaProgramPayload(
         1,
         1,

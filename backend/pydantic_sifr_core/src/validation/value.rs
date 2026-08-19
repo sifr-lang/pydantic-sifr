@@ -187,6 +187,7 @@ pub enum ValidatedValue {
     Duration(DurationValue),
     Uuid([u8; 16]),
     Url(String),
+    MultiHostUrl(String),
     Pattern(PatternValue),
     Enum(EnumValue),
     Union(UnionValue),

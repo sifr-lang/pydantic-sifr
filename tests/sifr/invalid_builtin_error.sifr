@@ -1,8 +1,5 @@
-from pydantic_sifr.schema_contract import verify_schema
+from pydantic_sifr import BaseModel, Field
 
 
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-@metadata("field", "value", "pydantic.error.builtin", "json_invalid")
-@metadata("field", "value", "pydantic.error.message", "changed")
-class InvalidBuiltInError:
-    value: int
+class InvalidBuiltInError(BaseModel):
+    value: int = Field(error_builtin="json_invalid", error_message="changed")

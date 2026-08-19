@@ -1,27 +1,18 @@
-from pydantic_sifr import JsonSchemaError
+from pydantic_sifr import BaseModel, ConfigDict, Field, JsonSchemaError
 from pydantic_sifr import SerializationError
 from pydantic_sifr import ValidationError
 from pydantic_sifr import model_dump_json
 from pydantic_sifr import model_json_schema
 from pydantic_sifr import model_validate_json
 from pydantic_sifr import model_validate_strings
-from pydantic_sifr import verify_schema
 
 
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-@metadata("pydantic.extra", "forbid")
-@metadata("field", "id", "pydantic.alias.field", "user_id")
-@metadata("field", "id", "pydantic.gt", "0")
-@metadata("field", "id", "pydantic.error.package", "demo")
-@metadata("field", "id", "pydantic.error.code", "positive_id")
-@metadata("field", "id", "pydantic.error.message", "ID must be positive")
-@metadata("field", "name", "pydantic.min_length", "1")
-@metadata("field", "nickname", "pydantic.min_length", "2")
-class User:
-    id: int64
-    name: str
+class User(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: int64 = Field(alias="user_id", gt=0)
+    name: str = Field(min_length=1)
     active: bool = True
-    nickname: str | None = None
+    nickname: str | None = Field(default=None, min_length=2)
 
 
 def main() -> Result[
@@ -68,9 +59,7 @@ def main() -> Result[
             invalid: User = model_validate_json(b'{"user_id":0,"name":"","extra":true}')
             assert invalid.id != expected_id
         except ValidationError as error:
-            error_seen = error.message.startswith(
-                '{"errors":[{"code":"demo.positive_id"'
-            )
+            error_seen = error.message.startswith('{"errors":[{"code":"greater_than"')
         except RustPanicError as error:
             raise error
         assert error_seen

@@ -8,15 +8,13 @@ identifies each adapted or blocked API.
 
 ## Declare a model
 
-Replace a Python `BaseModel` subclass with an ordinary Sifr class. Add the
-package schema specialization to each validated class.
+Replace a Python `BaseModel` subclass with a Sifr `BaseModel` subclass.
 
 ```sifr
-from pydantic_sifr import verify_schema
+from pydantic_sifr import BaseModel
 
 
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-class User:
+class User(BaseModel):
     id: int64
     name: str
     active: bool = True
@@ -27,24 +25,23 @@ only when `None` is a valid field value.
 
 ## Replace `Field` and model configuration
 
-Use static declaration metadata instead of runtime `Field` or `ConfigDict`
-objects. Metadata values are compile-time strings.
+Use `Field` for field rules. Use `ConfigDict` for model configuration.
+
+The compiler evaluates these typed descriptors during compilation.
 
 ```sifr
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-@metadata("pydantic.extra", "forbid")
-@metadata("field", "id", "pydantic.alias.field", "user_id")
-@metadata("field", "id", "pydantic.gt", "0")
-@metadata("field", "name", "pydantic.min_length", "1")
-@metadata("field", "name", "pydantic.max_length", "100")
-class User:
-    id: int64
-    name: str
+from pydantic_sifr import BaseModel, ConfigDict, Field
+
+
+class User(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: int64 = Field(alias="user_id", gt=0)
+    name: str = Field(min_length=1, max_length=100)
     active: bool = True
 ```
 
-The package applies this metadata during static schema specialization. Invalid
-metadata stops compilation with a package-owned diagnostic.
+The package normalizes each descriptor before it derives the static schema.
+An invalid argument stops compilation at that argument.
 
 ## Validate input
 
@@ -82,7 +79,7 @@ You can add thin class methods when an application needs method syntax. These
 methods must call the same functional entry points.
 
 ```sifr
-class User:
+class User(BaseModel):
     id: int64
     name: str
 
@@ -125,16 +122,18 @@ A contained Rust panic uses `RustPanicError`. It is not a validation error.
 
 ## Use aliases and nested paths
 
-Repeat alias metadata in path order. Each `field` or `index` segment selects
-the next part of the input path.
+Use `AliasPath` for a nested input path. Each segment selects the next input
+value.
 
 ```sifr
-@metadata("field", "postal_code", "pydantic.alias.field", "address_data")
-@metadata("field", "postal_code", "pydantic.alias.index", "0")
-@metadata("field", "postal_code", "pydantic.alias.field", "postal")
-class Address:
+from pydantic_sifr import AliasPath, BaseModel, Field
+
+
+class Address(BaseModel):
     city: str
-    postal_code: int64
+    postal_code: int64 = Field(
+        validation_alias=AliasPath(["address_data", 0, "postal"])
+    )
 ```
 
 The validation error location uses the alias path when the model enables alias
@@ -142,26 +141,20 @@ locations.
 
 ## APIs that are not available
 
-The package does not publish validator decorators, serializer decorators,
-computed fields, or a general `BaseModel` facade. These APIs require the typed
-method-slot work in issues [#10](https://github.com/sifr-lang/pydantic-sifr/issues/10)
-and [#14](https://github.com/sifr-lang/pydantic-sifr/issues/14).
-
-Nominal network and compiled-pattern values require the structural mapping in
-issue [#27](https://github.com/sifr-lang/pydantic-sifr/issues/27). Core support
-does not make these Sifr APIs available.
+The package does not publish validator decorators, serializer decorators, or
+computed fields in this milestone.
 
 Do not retain a Python model path beside the Sifr model. Choose one schema
 owner and one validation path for each migrated boundary.
 
 ## Migration checklist
 
-1. Replace each selected `BaseModel` subclass with an ordinary Sifr class.
-2. Add `@const_specialize` to each validated class.
-3. Convert supported field and model rules to `@metadata` declarations.
+1. Derive each selected model from `pydantic_sifr.BaseModel`.
+2. Convert field rules to `Field` calls.
+3. Convert model configuration to `ConfigDict`.
 4. Replace exception-based calls with `Result` return types.
-5. Select the structural, JSON, or strings entry point for each input boundary.
+5. Select one input function for each input boundary.
 6. Compare each required API with the compatibility matrix.
 7. Remove the Python model path after the Sifr boundary passes its tests.
 
-The complete model example is in `demos/milestone_ps_6_demo`.
+The complete declaration example is in `demos/milestone_m8_fields_configuration`.

@@ -5,11 +5,14 @@ from __future__ import annotations
 
 import argparse
 import re
+import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "src/test_schema_contract.sifr"
+SOURCE = ROOT / "tests/sifr/static_schema_contract.sifr"
+HARNESS = ROOT / "demos/milestone_m8_fields_configuration"
 PROGRAM_FIXTURE = ROOT / "tests/static_program/schema_contract_program.txt"
 IDENTITY_FIXTURE = ROOT / "tests/static_program/schema_contract_program.identity"
 
@@ -37,13 +40,24 @@ def main() -> int:
     parser.add_argument("--sifr-bin", required=True)
     parser.add_argument("--update", action="store_true")
     args = parser.parse_args()
-    emitted = subprocess.run(
-        [args.sifr_bin, "emit", str(SOURCE)],
-        cwd=ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    ).stdout
+    with tempfile.TemporaryDirectory(
+        prefix="pydantic-sifr-static-program-", dir=ROOT / "demos"
+    ) as raw:
+        project = Path(raw)
+        shutil.copyfile(HARNESS / "Cargo.toml", project / "Cargo.toml")
+        shutil.copyfile(HARNESS / "Cargo.lock", project / "Cargo.lock")
+        shutil.copyfile(HARNESS / "sifr.toml", project / "sifr.toml")
+        (project / "src").mkdir()
+        shutil.copyfile(HARNESS / "src/lib.rs", project / "src/lib.rs")
+        shutil.copyfile(SOURCE, project / "src/main.sifr")
+        subprocess.run(
+            [args.sifr_bin, "build", "--locked", "src/main.sifr"],
+            cwd=project,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        emitted = (project / "sifr_output/src/main.rs").read_text(encoding="utf-8")
     actual_program = parse_numbers(one_match(BYTE_PATTERN, emitted, "program"))
     actual_identity = parse_numbers(one_match(IDENTITY_PATTERN, emitted, "identity"))
     if args.update:

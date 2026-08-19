@@ -446,6 +446,7 @@ impl<'schema> PreparedSchema<'schema> {
                 STRUCTURAL_BRIDGE_CONTRACT_VERSION,
                 header.identity(),
                 T::shape_identity(),
+                None,
             )
             .map_err(|_| {
                 schema_error("Static schema envelope is invalid", "valid schema envelope")
@@ -628,8 +629,37 @@ impl Schema {
             Self::Decimal(_) => primitive("bigdecimal"),
             Self::Fraction(_) => primitive("pydantic_sifr.Fraction"),
             Self::Complex(_) => primitive("pydantic_sifr.Complex"),
-            Self::String(_) | Self::Url(_) => primitive("str"),
-            Self::Pattern(_) => primitive("pydantic_sifr.Pattern"),
+            Self::String(_) => primitive("str"),
+            Self::Url(_) => nominal_record(
+                "pydantic_sifr.special_values.Url",
+                &[],
+                &[NominalField {
+                    name: "value",
+                    identity: primitive("str"),
+                    required: true,
+                    default_identity: None,
+                }],
+                metadata(&[]),
+            ),
+            Self::Pattern(_) => nominal_record(
+                "pydantic_sifr.special_values.Pattern",
+                &[],
+                &[
+                    NominalField {
+                        name: "source",
+                        identity: primitive("str"),
+                        required: true,
+                        default_identity: None,
+                    },
+                    NominalField {
+                        name: "flags",
+                        identity: primitive("uint8"),
+                        required: true,
+                        default_identity: None,
+                    },
+                ],
+                metadata(&[]),
+            ),
             Self::Literal(schema) => schema.layout().identity(),
             Self::Enum(schema) => schema.structural_identity(),
             Self::Bytes(_) | Self::Uuid { .. } => primitive("bytes"),

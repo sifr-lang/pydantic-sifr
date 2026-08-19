@@ -4,8 +4,9 @@ use num_bigint::BigInt;
 use sifr_runtime::interop::structural::StaticProgramValue;
 
 use super::{
-    AliasPath, AliasSegment, ExtraPolicy, FieldDefault, IntegerConstraints, IntegerTarget,
-    ModelField, ModelSchema, Schema, StringConstraints, ValidationError, scalars::type_error,
+    AliasPath, AliasSegment, BytesConstraints, CollectionConstraints, ExtraPolicy, FieldDefault,
+    FloatConstraints, IntegerConstraints, IntegerTarget, ModelField, ModelSchema, Schema,
+    StringConstraints, StringPattern, ValidationError, scalars::type_error,
 };
 
 mod sums;
@@ -37,6 +38,7 @@ pub enum SchemaTag {
     Temporal,
     Uuid,
     Url,
+    MultiHostUrl,
     Pattern,
     Literal,
     Enum,
@@ -149,6 +151,9 @@ impl<'schema> SchemaRef<'schema> {
                 "decimal" => Ok(SchemaTag::Decimal),
                 "str" => Ok(SchemaTag::String),
                 "bytes" => Ok(SchemaTag::Bytes),
+                "url" => Ok(SchemaTag::Url),
+                "multi-host-url" => Ok(SchemaTag::MultiHostUrl),
+                "pattern" => Ok(SchemaTag::Pattern),
                 "literal" => Ok(SchemaTag::Literal),
                 "nullable" => Ok(SchemaTag::Nullable),
                 "union" => Ok(SchemaTag::Union),
@@ -220,6 +225,37 @@ impl<'schema> SchemaRef<'schema> {
             Self::Owned(Schema::String(constraints)) => Ok(constraints.clone()),
             Self::Static(schema) => schema.string_constraints(),
             _ => Err(schema_error("Schema node is not a string")),
+        }
+    }
+
+    pub fn float(self) -> Result<FloatConstraints, ValidationError> {
+        match self {
+            Self::Owned(Schema::Float(constraints)) => Ok(constraints.clone()),
+            Self::Static(schema) => schema.float_constraints(),
+            _ => Err(schema_error("Schema node is not a float")),
+        }
+    }
+
+    pub fn bytes(self) -> Result<BytesConstraints, ValidationError> {
+        match self {
+            Self::Owned(Schema::Bytes(constraints)) => Ok(constraints.clone()),
+            Self::Static(schema) => schema.bytes_constraints(),
+            _ => Err(schema_error("Schema node is not bytes")),
+        }
+    }
+
+    pub fn collection(self) -> Result<CollectionConstraints, ValidationError> {
+        match self {
+            Self::Owned(
+                Schema::List { constraints, .. }
+                | Schema::Mapping { constraints, .. }
+                | Schema::Set { constraints, .. }
+                | Schema::FrozenSet { constraints, .. }
+                | Schema::Generator { constraints, .. },
+            ) => Ok(constraints.clone()),
+            Self::Owned(Schema::Tuple(_)) => Ok(CollectionConstraints::default()),
+            Self::Static(schema) => schema.collection_constraints(),
+            _ => Err(schema_error("Schema node is not a collection")),
         }
     }
 
@@ -385,6 +421,13 @@ impl StaticSchemaRef {
             return Ok(StringConstraints::default());
         }
         let value = record(value, "string constraints")?;
+        let pattern = match field(value, "pattern")? {
+            StaticProgramValue::None => None,
+            value => Some(
+                StringPattern::compile(string(value, "string pattern")?)
+                    .map_err(|_| schema_error("Static string pattern is invalid"))?,
+            ),
+        };
         Ok(StringConstraints {
             min_length: optional_usize(field(value, "min_length")?)?,
             max_length: optional_usize(field(value, "max_length")?)?,
@@ -392,7 +435,49 @@ impl StaticSchemaRef {
             to_lower: bool_value(field(value, "to_lower")?, "to_lower")?,
             to_upper: bool_value(field(value, "to_upper")?, "to_upper")?,
             ascii_only: bool_value(field(value, "ascii_only")?, "ascii_only")?,
+            pattern,
             ..StringConstraints::default()
+        })
+    }
+
+    fn float_constraints(self) -> Result<FloatConstraints, ValidationError> {
+        let value = field(self.node_record()?, "float_constraints")?;
+        if matches!(value, StaticProgramValue::None) {
+            return Ok(FloatConstraints::default());
+        }
+        let value = record(value, "float constraints")?;
+        Ok(FloatConstraints {
+            greater_than: optional_f64(field(value, "greater_than")?)?,
+            greater_or_equal: optional_f64(field(value, "greater_or_equal")?)?,
+            less_than: optional_f64(field(value, "less_than")?)?,
+            less_or_equal: optional_f64(field(value, "less_or_equal")?)?,
+            multiple_of: optional_f64(field(value, "multiple_of")?)?,
+            ..FloatConstraints::default()
+        })
+    }
+
+    fn bytes_constraints(self) -> Result<BytesConstraints, ValidationError> {
+        let value = field(self.node_record()?, "bytes_constraints")?;
+        if matches!(value, StaticProgramValue::None) {
+            return Ok(BytesConstraints::default());
+        }
+        let value = record(value, "bytes constraints")?;
+        Ok(BytesConstraints {
+            min_length: optional_usize(field(value, "min_length")?)?,
+            max_length: optional_usize(field(value, "max_length")?)?,
+            ..BytesConstraints::default()
+        })
+    }
+
+    fn collection_constraints(self) -> Result<CollectionConstraints, ValidationError> {
+        let value = field(self.node_record()?, "collection_constraints")?;
+        if matches!(value, StaticProgramValue::None) {
+            return Ok(CollectionConstraints::default());
+        }
+        let value = record(value, "collection constraints")?;
+        Ok(CollectionConstraints {
+            min_length: optional_usize(field(value, "min_length")?)?,
+            max_length: optional_usize(field(value, "max_length")?)?,
         })
     }
 }
@@ -453,6 +538,13 @@ impl<'schema> ModelRef<'schema> {
         match self {
             Self::Owned(model) => Ok(model.location_by_alias),
             Self::Static(model) => model.flag("location_by_alias"),
+        }
+    }
+
+    pub fn strict(self) -> Result<bool, ValidationError> {
+        match self {
+            Self::Owned(_) => Ok(false),
+            Self::Static(model) => model.flag("strict"),
         }
     }
 }
@@ -521,14 +613,25 @@ impl<'schema> FieldRef<'schema> {
     pub fn default(self) -> Result<Option<DefaultRef<'schema>>, ValidationError> {
         match self {
             Self::Owned(field) => Ok(field.default.as_ref().map(DefaultRef::Owned)),
-            Self::Static(field) => {
-                let value = field.value("default")?;
-                if matches!(value, StaticProgramValue::None) && field.required()? {
-                    Ok(None)
-                } else {
-                    Ok(Some(DefaultRef::Static(value)))
-                }
-            }
+            Self::Static(field) => match field.default_kind()? {
+                "required" | "factory" => Ok(None),
+                "const" => Ok(Some(DefaultRef::Static(field.value("default")?))),
+                _ => Err(schema_error("Static field default kind is invalid")),
+            },
+        }
+    }
+
+    pub(crate) fn is_required(self) -> Result<bool, ValidationError> {
+        match self {
+            Self::Owned(field) => Ok(field.default.is_none()),
+            Self::Static(field) => Ok(field.default_kind()? == "required"),
+        }
+    }
+
+    pub(crate) fn uses_construction_default(self) -> Result<bool, ValidationError> {
+        match self {
+            Self::Owned(_) => Ok(false),
+            Self::Static(field) => Ok(field.default_kind()? == "factory"),
         }
     }
 
@@ -556,31 +659,57 @@ impl<'schema> FieldRef<'schema> {
         }
     }
 
+    pub(crate) fn strict(self) -> Result<Option<bool>, ValidationError> {
+        match self {
+            Self::Owned(_) => Ok(None),
+            Self::Static(field) => match field.value("strict")? {
+                StaticProgramValue::None => Ok(None),
+                value => bool_value(value, "field strict").map(Some),
+            },
+        }
+    }
+
+    pub(crate) fn excluded(self) -> Result<bool, ValidationError> {
+        match self {
+            Self::Owned(field) => Ok(field
+                .metadata
+                .get("pydantic.exclude")
+                .is_some_and(|value| value == "true")),
+            Self::Static(field) => bool_value(field.value("exclude")?, "field exclusion"),
+        }
+    }
+
     pub fn aliases(self) -> Result<Vec<AliasPath>, ValidationError> {
         match self {
             Self::Owned(field) => Ok(field.validation_aliases.clone()),
-            Self::Static(field) => {
-                let values = list(field.value("validation_alias")?, "validation alias")?;
-                if values.is_empty() {
-                    return Ok(Vec::new());
-                }
-                let mut segments = Vec::with_capacity(values.len());
-                for value in values {
-                    let value = record(value, "alias segment")?;
-                    match string(field_value(value, "kind")?, "alias kind")? {
-                        "field" => segments.push(AliasSegment::Field(string(
-                            field_value(value, "name")?,
-                            "alias field",
-                        )?)),
-                        "index" => segments.push(AliasSegment::Index(usize_value(
-                            field_value(value, "index")?,
-                            "alias index",
-                        )?)),
-                        _ => return Err(schema_error("Static alias segment is invalid")),
+            Self::Static(field) => list(field.value("validation_aliases")?, "validation aliases")?
+                .iter()
+                .map(|path| {
+                    let path = record(path, "validation alias path")?;
+                    let values = list(field_value(path, "segments")?, "validation alias segments")?;
+                    let mut segments = Vec::with_capacity(values.len());
+                    for value in values {
+                        let value = record(value, "alias segment")?;
+                        match string(field_value(value, "kind")?, "alias kind")? {
+                            "field" => segments.push(AliasSegment::Field(string(
+                                field_value(value, "name")?,
+                                "alias field",
+                            )?)),
+                            "index" => segments.push(AliasSegment::Index(usize_value(
+                                field_value(value, "index")?,
+                                "alias index",
+                            )?)),
+                            _ => {
+                                return Err(schema_error("Static alias segment is invalid"));
+                            }
+                        }
                     }
-                }
-                Ok(vec![AliasPath { segments }])
-            }
+                    if segments.is_empty() {
+                        return Err(schema_error("Static alias path is empty"));
+                    }
+                    Ok(AliasPath { segments })
+                })
+                .collect(),
         }
     }
 }
@@ -598,8 +727,8 @@ impl StaticFieldRef {
         string(self.value(name)?, name)
     }
 
-    fn required(self) -> Result<bool, ValidationError> {
-        bool_value(self.value("required")?, "field required")
+    fn default_kind(self) -> Result<&'static str, ValidationError> {
+        self.text("default_kind")
     }
 }
 
@@ -732,6 +861,18 @@ fn optional_usize(value: &'static StaticProgramValue) -> Result<Option<usize>, V
         return Ok(None);
     }
     usize_value(value, "length constraint").map(Some)
+}
+
+fn optional_f64(value: &'static StaticProgramValue) -> Result<Option<f64>, ValidationError> {
+    match value {
+        StaticProgramValue::None => Ok(None),
+        StaticProgramValue::FloatBits(bits) => Ok(Some(f64::from_bits(*bits))),
+        StaticProgramValue::Integer(value) => value
+            .parse::<f64>()
+            .map(Some)
+            .map_err(|_| schema_error("Static float constraint is invalid")),
+        _ => Err(schema_error("Static float constraint is invalid")),
+    }
 }
 
 fn schema_error(message: &'static str) -> ValidationError {

@@ -179,8 +179,8 @@ fn apply_options(
             let mut output = Vec::with_capacity(entries.len());
             for (name, value) in entries {
                 path.push(SelectionSegment::Field(name.clone()));
-                let keep = selected(options, path);
                 let policy = plan.field_policy(path);
+                let keep = policy.is_some() && selected(options, path);
                 let excluded_by_value = (options.exclude_none && *value == NativeValue::Null)
                     || (options.exclude_defaults
                         && policy

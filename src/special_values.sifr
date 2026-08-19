@@ -1,0 +1,44 @@
+class SpecialValueError(Error):
+    message: str
+
+
+@rust.opaque(
+    type=bridge.special_values.UrlValue,
+    structural=bridge.special_values.UrlMapping,
+    send=True,
+    sync=True,
+    clone=none,
+    close=none,
+)
+class Url:
+    @rust(bridge.special_values.url_text)
+    def text(self) -> Result[str, SpecialValueError | RustPanicError]: ...
+
+
+@rust.opaque(
+    type=bridge.special_values.MultiHostUrlValue,
+    structural=bridge.special_values.MultiHostUrlMapping,
+    send=True,
+    sync=True,
+    clone=none,
+    close=none,
+)
+class MultiHostUrl:
+    @rust(bridge.special_values.multi_host_url_text)
+    def text(self) -> Result[str, SpecialValueError | RustPanicError]: ...
+
+
+@rust.opaque(
+    type=bridge.special_values.PatternValue,
+    structural=bridge.special_values.PatternMapping,
+    send=True,
+    sync=True,
+    clone=none,
+    close=none,
+)
+class Pattern:
+    @rust(bridge.special_values.pattern_source)
+    def source(self) -> Result[str, SpecialValueError | RustPanicError]: ...
+
+    @rust(bridge.special_values.pattern_flags)
+    def flags(self) -> Result[uint8, SpecialValueError | RustPanicError]: ...

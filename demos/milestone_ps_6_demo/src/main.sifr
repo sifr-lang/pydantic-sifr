@@ -1,29 +1,21 @@
-from pydantic_sifr import ValidationError
+from pydantic_sifr import AliasPath, BaseModel, ConfigDict, Field, ValidationError
 from pydantic_sifr import model_validate as validate_model
 from pydantic_sifr import model_validate_json as validate_model_json
 from pydantic_sifr import model_validate_strings as validate_model_strings
-from pydantic_sifr import verify_schema
 
 
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-@metadata("pydantic.extra", "forbid")
-@metadata("field", "postal_code", "pydantic.alias.field", "address_data")
-@metadata("field", "postal_code", "pydantic.alias.index", "0")
-@metadata("field", "postal_code", "pydantic.alias.field", "postal")
-class Address:
+class Address(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     city: str
-    postal_code: int64
+    postal_code: int64 = Field(
+        validation_alias=AliasPath(["address_data", 0, "postal"])
+    )
 
 
-@const_specialize("pydantic_sifr.schema_contract", "verify_schema")
-@metadata("pydantic.extra", "forbid")
-@metadata("field", "id", "pydantic.alias.field", "user_id")
-@metadata("field", "id", "pydantic.gt", "0")
-@metadata("field", "name", "pydantic.min_length", "1")
-@metadata("field", "name", "pydantic.max_length", "100")
-class User:
-    id: int64
-    name: str
+class User(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: int64 = Field(alias="user_id", gt=0)
+    name: str = Field(min_length=1, max_length=100)
     address: Address
     active: bool = True
 
