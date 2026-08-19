@@ -672,7 +672,9 @@ def build_node_mode(
         return NodeBuildResult([enumeration], 0, None)
     if node.kind == "newtype":
         return NodeBuildResult([], 0, "newtype schemas are not supported")
-    return NodeBuildResult([], 0, "structural shape cannot form a schema program")
+    return NodeBuildResult(
+        [], 0, "structural shape cannot form a schema program: " + node.kind
+    )
 
 
 @const_eval

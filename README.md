@@ -73,11 +73,12 @@ format, or runtime fallback.
 
 ## Model validation
 
-The package exports `model_validate`, `model_validate_json`,
-`model_validate_strings`, `model_dump_json`, and `model_json_schema`. These
-functions use one compiler-sealed schema program. Validation constructs an
-ordinary Sifr class through one checked arena. Serialization and JSON Schema
-generation read the same sealed program.
+Adapted model types expose `model_validate`, `model_validate_json`,
+`model_validate_strings`, and `model_json_schema`. Model values expose
+`model_dump` and `model_dump_json`. These methods use one compiler-sealed
+schema program. Validation constructs an ordinary Sifr class through one
+checked arena. Serialization and JSON Schema generation read the same sealed
+program.
 
 Models can declare `field_validator` handlers in `before`, `after`, and
 `plain` modes. They can also declare `model_validator` handlers in `before`

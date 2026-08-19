@@ -45,21 +45,16 @@ An invalid argument stops compilation at that argument.
 
 ## Validate input
 
-Import the functional entry points. Each entry point returns `Result` and
+Use the attached model operations. Each operation returns `Result` and
 constructs the requested Sifr type.
 
 ```sifr
 from pydantic_sifr import ValidationError
-from pydantic_sifr import model_validate
-from pydantic_sifr import model_validate_json
-from pydantic_sifr import model_validate_strings
-from pydantic_sifr import model_dump_json
-from pydantic_sifr import model_json_schema
 
 
 def parse_user(payload: bytes) -> Result[User, ValidationError | RustPanicError]:
     try:
-        user: User = model_validate_json(payload)
+        user: User = User.model_validate_json(payload)
         return user
     except ValidationError as error:
         raise error
@@ -67,37 +62,13 @@ def parse_user(payload: bytes) -> Result[User, ValidationError | RustPanicError]
         raise error
 ```
 
-Use `model_validate` for a typed structural input. Use
-`model_validate_strings` when scalar leaves contain text that needs declared
-coercion.
+Use `User.model_validate` for typed structural input. Use
+`User.model_validate_strings` for a bare string or a structural value whose
+mapping keys and scalar leaves are strings.
 
-Use `model_dump_json(value)` for JSON output. Use
-`model_json_schema(value)` to select the value's sealed schema and emit a Draft
-2020-12 document. The schema function does not inspect the value.
-
-You can add thin class methods when an application needs method syntax. These
-methods must call the same functional entry points.
-
-```sifr
-class User(BaseModel):
-    id: int64
-    name: str
-
-    @classmethod
-    def model_validate_json(
-        cls, payload: bytes
-    ) -> Result[User, ValidationError | RustPanicError]:
-        try:
-            user: User = model_validate_json(payload)
-            return user
-        except ValidationError as error:
-            raise error
-        except RustPanicError as error:
-            raise error
-```
-
-This method does not create a second validator. Static specialization and the
-native core still own the schema and validation operation.
+Use `user.model_dump_json()` for JSON output. Use
+`User.model_json_schema()` to emit a Draft 2020-12 document without a dummy
+model value. All operations use the same sealed schema program.
 
 ## Convert validators
 

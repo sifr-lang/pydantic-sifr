@@ -25,10 +25,12 @@ class CanonicalDemoTest(unittest.TestCase):
         for marker in (
             "from pydantic_sifr import BaseModel, ConfigDict, Field, JsonSchemaError",
             "from pydantic_sifr import ValidationError",
-            "from pydantic_sifr import model_validate_json",
             "class User(BaseModel):",
             'model_config = ConfigDict(extra="forbid")',
             'Field(alias="user_id", gt=0)',
+            "User.model_validate_json(",
+            "user.model_dump_json()",
+            "User.model_json_schema()",
             "assert user.active",
             "except ValidationError as error:",
             "assert error_seen",

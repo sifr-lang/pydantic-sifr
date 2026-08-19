@@ -1,6 +1,5 @@
 from enum import Enum
 from pydantic_sifr import AliasPath, BaseModel, Field, ValidationError
-from pydantic_sifr import model_validate_json
 
 # This demo is the public static-program integration receipt for PS7 sums.
 
@@ -37,7 +36,7 @@ class Envelope(BaseModel):
 
 def main() -> Result[None, ValidationError | RustPanicError]:
     try:
-        ready: Envelope = model_validate_json(
+        ready: Envelope = Envelope.model_validate_json(
             b'{"status":1,"level":2,"value":"hello","pet":{"kind":"cat","lives":9}}'
         )
         assert ready.status == Status.READY
@@ -45,12 +44,12 @@ def main() -> Result[None, ValidationError | RustPanicError]:
         assert ready.level == expected_level
         assert ready.value == "hello"
 
-        paused: Envelope = model_validate_json(
+        paused: Envelope = Envelope.model_validate_json(
             b'{"status":2,"level":1,"value":7,"pet":{"kind":"dog","bark":true}}'
         )
         assert paused.status == Status.PAUSED
 
-        recursive: RecursiveNode = model_validate_json(
+        recursive: RecursiveNode = RecursiveNode.model_validate_json(
             b'{"value":1,"next":{"value":2,"next":null}}'
         )
         expected_recursive_value: int64 = 1
@@ -59,7 +58,7 @@ def main() -> Result[None, ValidationError | RustPanicError]:
 
         branch_seen: bool = False
         try:
-            invalid: Envelope = model_validate_json(
+            invalid: Envelope = Envelope.model_validate_json(
                 b'{"status":1,"level":2,"value":[],"pet":{"kind":"cat","lives":9}}'
             )
             assert False
