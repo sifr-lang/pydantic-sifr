@@ -265,7 +265,13 @@ fn compile_callback(
         "json-unless-none" => SerializerWhenUsed::JsonUnlessNone,
         _ => return Err(plan_error("serializer callback mode is invalid")),
     };
-    let output = builder.compile(serializer.output, 0, &mut Vec::new())?;
+    let mut output_path = match kind {
+        SerializerCallbackKind::Field | SerializerCallbackKind::Computed => {
+            vec![PlanPathSegment::Field(serializer.target)]
+        }
+        SerializerCallbackKind::Model => Vec::new(),
+    };
+    let output = builder.compile(serializer.output, 0, &mut output_path)?;
     if kind == SerializerCallbackKind::Computed {
         builder.field_policies.push(FieldPolicy {
             path: vec![PlanPathSegment::Field(serializer.target)],
@@ -457,5 +463,63 @@ fn validation_error(error: crate::ValidationError) -> SerializationPlanError {
 fn plan_error(message: impl Into<String>) -> SerializationPlanError {
     SerializationPlanError {
         message: message.into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sifr_runtime::interop::structural::primitive;
+
+    use super::*;
+    use crate::{ExtraPolicy, ModelField, ModelSchema, Schema};
+
+    #[test]
+    fn structured_callback_policies_start_below_the_callback_target() {
+        for kind in ["field-serializer", "computed-field"] {
+            let output_schema = Box::leak(Box::new(Schema::Model(
+                ModelSchema::new(
+                    "Detail",
+                    primitive("tests.Detail"),
+                    vec![ModelField::required(
+                        "label",
+                        Schema::String(Default::default()),
+                    )],
+                    ExtraPolicy::Ignore,
+                    false,
+                    true,
+                )
+                .unwrap_or_else(|error| panic!("callback output schema failed: {error}")),
+            )));
+            let mut builder = PlanBuilder {
+                nodes: Vec::new(),
+                field_policies: Vec::new(),
+            };
+
+            compile_callback(
+                &mut builder,
+                StaticSerializer {
+                    slot: 0,
+                    kind,
+                    target: "summary",
+                    when_used: "always",
+                    takes_receiver: true,
+                    output: SchemaRef::owned(output_schema),
+                    alias: None,
+                },
+            )
+            .unwrap_or_else(|error| panic!("callback plan failed: {error}"));
+
+            assert!(builder.field_policies.iter().any(|policy| {
+                policy.matches(&[
+                    SelectionSegment::Field("summary".to_owned()),
+                    SelectionSegment::Field("label".to_owned()),
+                ])
+            }));
+            assert!(
+                !builder.field_policies.iter().any(|policy| {
+                    policy.matches(&[SelectionSegment::Field("label".to_owned())])
+                })
+            );
+        }
     }
 }

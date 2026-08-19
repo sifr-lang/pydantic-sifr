@@ -102,6 +102,23 @@ class Failing(BaseModel):
         raise SerializerFailure("serializer rejected " + value)
 
 
+class Detail:
+    label: str
+
+
+class StructuredCallbacks(BaseModel):
+    value: str
+
+    @field_serializer("value")
+    @staticmethod
+    def serialize_value(own value: str) -> Detail:
+        return Detail("field:" + value)
+
+    @computed_field()
+    def summary(self) -> Detail:
+        return Detail("computed:" + self.value)
+
+
 def main() -> Result[None, SerializationError | RustPanicError]:
     try:
         zero: int = 0
@@ -181,6 +198,28 @@ def main() -> Result[None, SerializationError | RustPanicError]:
         )
         assert len(included) == 1
         assert included.get("amount") is not None
+
+        structured_callbacks: StructuredCallbacks = StructuredCallbacks("nested")
+        structured_dump: dict[str, JsonValue] = structured_callbacks.model_dump()
+        structured_value: JsonValue | None = structured_dump.get("value")
+        structured_summary: JsonValue | None = structured_dump.get("summary")
+        assert structured_value is not None
+        assert structured_summary is not None
+        if structured_value is not None:
+            field_label: JsonValue | None = structured_value.get("label")
+            assert field_label is not None
+            if field_label is not None:
+                assert field_label.as_str() == "field:nested"
+        if structured_summary is not None:
+            computed_label: JsonValue | None = structured_summary.get("label")
+            assert computed_label is not None
+            if computed_label is not None:
+                assert computed_label.as_str() == "computed:nested"
+        structured_json: bytes = structured_callbacks.model_dump_json()
+        assert (
+            structured_json
+            == b'{"value":{"label":"field:nested"},"summary":{"label":"computed:nested"}}'
+        )
 
         failed: bool = False
         try:
