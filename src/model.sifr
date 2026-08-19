@@ -1,4 +1,5 @@
 from sifr.meta import Context, MethodSlots, StaticProgram, Structural
+from sifr.json import JsonValue
 
 
 class ValidationError(Error):
@@ -60,7 +61,104 @@ def model_validate_strings_with_validators[T: MethodSlots, C: Context](
 @rust(bridge.model.dump_json)
 def model_dump_json[T: StaticProgram](
     value: T,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    by_alias: bool = False,
+    exclude_none: bool = False,
+    exclude_defaults: bool = False,
 ) -> Result[bytes, SerializationError | RustPanicError]: ...
+
+
+@rust.structural
+@rust(bridge.model.dump_json_with_serializers)
+def model_dump_json_with_serializers[T: MethodSlots, C: Context](
+    value: T,
+    mut context: C,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    by_alias: bool = False,
+    exclude_none: bool = False,
+    exclude_defaults: bool = False,
+) -> Result[bytes, SerializationError | RustPanicError]: ...
+
+
+@rust.structural
+@rust(bridge.model.dump)
+def _model_dump_structural[T: StaticProgram, Output: Structural](
+    value: T,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    by_alias: bool = False,
+    exclude_none: bool = False,
+    exclude_defaults: bool = False,
+) -> Result[Output, SerializationError | RustPanicError]: ...
+
+
+@rust.structural
+@rust(bridge.model.dump_with_serializers)
+def _model_dump_structural_with_serializers[
+    T: MethodSlots,
+    Output: Structural,
+    C: Context,
+](
+    value: T,
+    mut context: C,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    by_alias: bool = False,
+    exclude_none: bool = False,
+    exclude_defaults: bool = False,
+) -> Result[Output, SerializationError | RustPanicError]: ...
+
+
+def model_dump[T: StaticProgram](
+    value: T,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    by_alias: bool = False,
+    exclude_none: bool = False,
+    exclude_defaults: bool = False,
+) -> Result[dict[str, JsonValue], SerializationError | RustPanicError]:
+    try:
+        output: dict[str, JsonValue] = _model_dump_structural(
+            value,
+            include,
+            exclude,
+            by_alias,
+            exclude_none,
+            exclude_defaults,
+        )
+        return output
+    except SerializationError as error:
+        raise error
+    except RustPanicError as error:
+        raise error
+
+
+def model_dump_with_serializers[T: MethodSlots, C: Context](
+    value: T,
+    mut context: C,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    by_alias: bool = False,
+    exclude_none: bool = False,
+    exclude_defaults: bool = False,
+) -> Result[dict[str, JsonValue], SerializationError | RustPanicError]:
+    try:
+        output: dict[str, JsonValue] = _model_dump_structural_with_serializers(
+            value,
+            context,
+            include,
+            exclude,
+            by_alias,
+            exclude_none,
+            exclude_defaults,
+        )
+        return output
+    except SerializationError as error:
+        raise error
+    except RustPanicError as error:
+        raise error
 
 
 @rust.structural

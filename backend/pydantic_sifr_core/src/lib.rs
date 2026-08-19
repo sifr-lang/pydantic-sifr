@@ -20,9 +20,12 @@ pub use json_schema::{
     generate_json_schema, generate_prepared_json_schema, generate_prepared_json_schema_bytes,
 };
 pub use serialization::{
-    JsonIntegerProfile, JsonIntegerRangeError, SelectionPath, SelectionSegment, SerializationError,
-    SerializationErrorKind, SerializationOptions, SerializationPlan, SerializationPlanError,
-    SerializerFieldPlan, SerializerNode, SerializerNodeId, serialize_json, serialize_structural,
+    JsonIntegerProfile, JsonIntegerRangeError, SelectionPath, SelectionSegment,
+    SerializationCallbacks, SerializationError, SerializationErrorKind, SerializationOptions,
+    SerializationPlan, SerializationPlanError, SerializerCallbackKind, SerializerCallbackPlan,
+    SerializerFieldPlan, SerializerNode, SerializerNodeId, SerializerWhenUsed, serialize_json,
+    serialize_json_with_callbacks, serialize_structural, serialize_structural_with_callbacks,
+    serializer_callback_error,
 };
 pub use specialized_numeric::{Complex, Fraction, FractionError};
 pub use validation::{

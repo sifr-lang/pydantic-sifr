@@ -63,11 +63,10 @@ def rebase_nodes(
 
 
 @const_eval
-def namespace_validator_nodes(
-    nodes: list[SchemaNodePayload], slot: int, target: str
+def namespace_callback_nodes(
+    nodes: list[SchemaNodePayload], prefix: str
 ) -> list[SchemaNodePayload]:
     output: list[SchemaNodePayload] = []
-    prefix: str = "validator:" + str(slot) + ":" + target + ":"
     for node in nodes:
         namespaced_definition: str | None = None
         candidate_definition: str | None = node.definition
@@ -101,6 +100,15 @@ def namespace_validator_nodes(
             )
         )
     return output
+
+
+@const_eval
+def namespace_validator_nodes(
+    nodes: list[SchemaNodePayload], slot: int, target: str
+) -> list[SchemaNodePayload]:
+    return namespace_callback_nodes(
+        nodes, "validator:" + str(slot) + ":" + target + ":"
+    )
 
 
 @const_eval

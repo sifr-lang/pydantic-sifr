@@ -178,6 +178,16 @@ class SchemaValidatorPayload:
     targets: list[str]
 
 
+class SchemaSerializerPayload:
+    slot: int
+    kind: str
+    target: str
+    when_used: str
+    takes_receiver: bool
+    output: int
+    alias: str | None
+
+
 class SchemaProgramPayload:
     schema_program_version: int
     structural_contract_version: int
@@ -189,6 +199,7 @@ class SchemaProgramPayload:
     nodes: list[SchemaNodePayload]
     sifr_method_slots: list[CallableIdentity] = []
     validators: list[SchemaValidatorPayload] = []
+    serializers: list[SchemaSerializerPayload] = []
 
 
 class SchemaOutcome:

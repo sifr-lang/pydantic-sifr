@@ -1,7 +1,9 @@
 use serde_json::{Map, Value, json};
 use sifr_runtime::json::JsonIntegerProfile;
 
-use crate::validation::{AliasSegment, ExtraRef, SchemaRef, SchemaTag, static_declared_values};
+use crate::validation::{
+    AliasSegment, ExtraRef, SchemaRef, SchemaTag, StaticSerializer, static_declared_values,
+};
 
 use super::{
     JSON_SCHEMA_DIALECT, JsonSchemaError, JsonSchemaErrorKind, JsonSchemaMode, JsonSchemaOptions,
@@ -11,10 +13,20 @@ use super::{
 
 const MAX_STATIC_JSON_SCHEMA_NODES: usize = 4096;
 
-pub(super) fn generate(
+#[cfg(test)]
+fn generate(
     schema: SchemaRef<'_>,
     options: JsonSchemaOptions,
     integer_profile: JsonIntegerProfile,
+) -> Result<Value, JsonSchemaError> {
+    generate_with_serializers(schema, options, integer_profile, &[])
+}
+
+pub(super) fn generate_with_serializers(
+    schema: SchemaRef<'_>,
+    options: JsonSchemaOptions,
+    integer_profile: JsonIntegerProfile,
+    serializers: &[StaticSerializer],
 ) -> Result<Value, JsonSchemaError> {
     let mut generated_nodes = 0;
     let mut definitions = Vec::new();
@@ -29,6 +41,16 @@ pub(super) fn generate(
     let Some(document) = document.as_object_mut() else {
         return Err(unsupported("JSON Schema document root is not an object"));
     };
+    if options.mode == JsonSchemaMode::Serialization {
+        append_computed_fields(
+            document,
+            serializers,
+            options,
+            integer_profile,
+            &mut generated_nodes,
+            &mut definitions,
+        )?;
+    }
     let mut generated_definitions = Map::new();
     let mut definition_index = 0;
     while definition_index < definitions.len() {
@@ -52,6 +74,58 @@ pub(super) fn generate(
         Value::String(JSON_SCHEMA_DIALECT.to_owned()),
     );
     Ok(Value::Object(core::mem::take(document)))
+}
+
+fn append_computed_fields<'schema>(
+    document: &mut Map<String, Value>,
+    serializers: &[StaticSerializer],
+    options: JsonSchemaOptions,
+    integer_profile: JsonIntegerProfile,
+    generated_nodes: &mut usize,
+    definitions: &mut Vec<(String, SchemaRef<'schema>)>,
+) -> Result<(), JsonSchemaError> {
+    if !serializers
+        .iter()
+        .any(|serializer| serializer.kind == "computed-field")
+    {
+        return Ok(());
+    }
+    let properties = document
+        .get_mut("properties")
+        .and_then(Value::as_object_mut)
+        .ok_or_else(|| unsupported("computed fields require a model JSON Schema root"))?;
+    let mut computed_names = Vec::new();
+    for serializer in serializers
+        .iter()
+        .filter(|serializer| serializer.kind == "computed-field")
+    {
+        let name = if options.by_alias {
+            serializer.alias.unwrap_or(serializer.target)
+        } else {
+            serializer.target
+        };
+        if properties.contains_key(name) {
+            return Err(unsupported(
+                "computed-field aliases produce duplicate JSON Schema property names",
+            ));
+        }
+        let property = generate_node(
+            serializer.output,
+            options,
+            integer_profile,
+            1,
+            generated_nodes,
+            definitions,
+        )?;
+        properties.insert(name.to_owned(), property);
+        computed_names.push(Value::String(name.to_owned()));
+    }
+    let required = document
+        .get_mut("required")
+        .and_then(Value::as_array_mut)
+        .ok_or_else(|| unsupported("computed fields require a model required-property list"))?;
+    required.extend(computed_names);
+    Ok(())
 }
 
 fn generate_node<'schema>(
@@ -727,5 +801,68 @@ mod tests {
             assert_eq!(validation["type"], "boolean");
             assert_eq!(serialization["type"], "string");
         }
+    }
+
+    #[test]
+    fn computed_fields_appear_only_in_serialization_mode_and_honor_aliases() {
+        let scalar = record(vec![
+            ("kind", StaticProgramValue::String("str")),
+            ("children", list(Vec::new())),
+            ("definition", StaticProgramValue::None),
+            ("reference", StaticProgramValue::None),
+            ("string_constraints", StaticProgramValue::None),
+            ("metadata", list(Vec::new())),
+        ]);
+        let schema = SchemaRef::from_static_program(schema_program(vec![
+            model_node("Invoice", "1", true),
+            scalar,
+        ]))
+        .unwrap_or_else(|error| panic!("static model schema failed: {error}"));
+        let output = SchemaRef::from_static_program(schema_program(vec![scalar]))
+            .unwrap_or_else(|error| panic!("computed output schema failed: {error}"));
+        let serializers = [StaticSerializer {
+            slot: 0,
+            kind: "computed-field",
+            target: "display_name",
+            when_used: "always",
+            takes_receiver: true,
+            output,
+            alias: Some("display"),
+        }];
+
+        let validation = generate_with_serializers(
+            schema,
+            JsonSchemaOptions::new(JsonSchemaMode::Validation, true),
+            JsonIntegerProfile::Exact,
+            &serializers,
+        )
+        .unwrap_or_else(|error| panic!("validation schema failed: {error}"));
+        let serialization = generate_with_serializers(
+            schema,
+            JsonSchemaOptions::new(JsonSchemaMode::Serialization, false),
+            JsonIntegerProfile::Exact,
+            &serializers,
+        )
+        .unwrap_or_else(|error| panic!("serialization schema failed: {error}"));
+        let aliased = generate_with_serializers(
+            schema,
+            JsonSchemaOptions::new(JsonSchemaMode::Serialization, true),
+            JsonIntegerProfile::Exact,
+            &serializers,
+        )
+        .unwrap_or_else(|error| panic!("aliased serialization schema failed: {error}"));
+
+        assert!(validation["properties"].get("display_name").is_none());
+        assert_eq!(
+            serialization["properties"]["display_name"]["type"],
+            "string"
+        );
+        assert!(
+            serialization["required"]
+                .as_array()
+                .is_some_and(|items| items.contains(&Value::String("display_name".to_owned())))
+        );
+        assert_eq!(aliased["properties"]["display"]["type"], "string");
+        assert!(aliased["properties"].get("display_name").is_none());
     }
 }

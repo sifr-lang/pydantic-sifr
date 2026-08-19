@@ -11,6 +11,7 @@ from sifr.meta import (
     StaticValue,
 )
 
+from .api import PydanticModelApi, PydanticPlainModelApi
 from .descriptors import AliasSelection, PydanticDescriptor
 
 
@@ -59,44 +60,7 @@ def argument_origin(
 
 @const_eval
 def issue_arguments() -> PydanticDescriptor:
-    return PydanticDescriptor(
-        "issue",
-        "required",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
+    return PydanticDescriptor("issue", "required")
 
 
 @const_eval
@@ -244,44 +208,87 @@ def method_descriptor_issues(
     output: list[PlannedIssue[PydanticDescriptor]] = []
     reason: str | None = None
     mode: str | None = descriptor.validator_mode
-    if mode is None:
-        reason = "missing_validator_mode"
-    elif descriptor.kind == "field-validator":
-        selected_mode: str = mode
-        if (
-            selected_mode != "before"
-            and selected_mode != "after"
-            and selected_mode != "plain"
-        ):
-            reason = "invalid_field_validator_mode"
-        targets: list[str] | None = descriptor.validator_fields
-        if reason is None:
-            if targets is None:
-                reason = "empty_validator_targets"
-            else:
-                selected_targets: list[str] = targets
-                if len(selected_targets) == 0:
+    if descriptor.kind == "field-validator":
+        if mode is None:
+            reason = "missing_validator_mode"
+        else:
+            selected_mode: str = mode
+            if (
+                selected_mode != "before"
+                and selected_mode != "after"
+                and selected_mode != "plain"
+            ):
+                reason = "invalid_field_validator_mode"
+            targets: list[str] | None = descriptor.validator_fields
+            if reason is None:
+                if targets is None:
                     reason = "empty_validator_targets"
                 else:
-                    seen: list[str] = []
-                    for target in selected_targets:
-                        if reason is None:
-                            duplicate: bool = False
-                            for existing in seen:
-                                if target == existing:
-                                    duplicate = True
-                            if target == "*":
-                                reason = "wildcard_validator_target"
-                            elif len(target) == 0:
-                                reason = "empty_validator_target"
-                            elif duplicate:
-                                reason = "duplicate_validator_target"
-                            else:
-                                seen.append(target)
+                    selected_targets: list[str] = targets
+                    if len(selected_targets) == 0:
+                        reason = "empty_validator_targets"
+                    else:
+                        seen: list[str] = []
+                        for target in selected_targets:
+                            if reason is None:
+                                duplicate: bool = False
+                                for existing in seen:
+                                    if target == existing:
+                                        duplicate = True
+                                if target == "*":
+                                    reason = "wildcard_validator_target"
+                                elif len(target) == 0:
+                                    reason = "empty_validator_target"
+                                elif duplicate:
+                                    reason = "duplicate_validator_target"
+                                else:
+                                    seen.append(target)
     elif descriptor.kind == "model-validator":
-        selected_mode: str = mode
-        if selected_mode != "before" and selected_mode != "after":
-            reason = "invalid_model_validator_mode"
+        if mode is None:
+            reason = "missing_validator_mode"
+        else:
+            selected_mode: str = mode
+            if selected_mode != "before" and selected_mode != "after":
+                reason = "invalid_model_validator_mode"
+    elif descriptor.kind == "field-serializer":
+        targets: list[str] | None = descriptor.serializer_fields
+        if targets is None:
+            reason = "empty_serializer_targets"
+        else:
+            selected_targets: list[str] = targets
+            if len(selected_targets) == 0:
+                reason = "empty_serializer_targets"
+            else:
+                seen: list[str] = []
+                for target in selected_targets:
+                    if reason is None:
+                        duplicate: bool = False
+                        for existing in seen:
+                            if target == existing:
+                                duplicate = True
+                        if target == "*":
+                            reason = "wildcard_serializer_target"
+                        elif len(target) == 0:
+                            reason = "empty_serializer_target"
+                        elif duplicate:
+                            reason = "duplicate_serializer_target"
+                        else:
+                            seen.append(target)
+    if reason is None and (
+        descriptor.kind == "field-serializer" or descriptor.kind == "model-serializer"
+    ):
+        when_used: str | None = descriptor.serializer_when_used
+        if when_used is None:
+            reason = "missing_serializer_when_used"
+        else:
+            selected_when_used: str = when_used
+            if (
+                selected_when_used != "always"
+                and selected_when_used != "unless-none"
+                and selected_when_used != "json"
+                and selected_when_used != "json-unless-none"
+            ):
+                reason = "invalid_serializer_when_used"
     if reason is not None:
         output.append(descriptor_issue(reason, fallback))
     return output
@@ -354,6 +361,12 @@ def config_descriptor_issues(
 @metadata("sifr.meta.issue_template", ("empty_validator_target", []))
 @metadata("sifr.meta.issue_template", ("wildcard_validator_target", []))
 @metadata("sifr.meta.issue_template", ("duplicate_validator_target", []))
+@metadata("sifr.meta.issue_template", ("empty_serializer_targets", []))
+@metadata("sifr.meta.issue_template", ("empty_serializer_target", []))
+@metadata("sifr.meta.issue_template", ("wildcard_serializer_target", []))
+@metadata("sifr.meta.issue_template", ("duplicate_serializer_target", []))
+@metadata("sifr.meta.issue_template", ("missing_serializer_when_used", []))
+@metadata("sifr.meta.issue_template", ("invalid_serializer_when_used", []))
 def adapt_model(
     declaration: DeclarationInput[PydanticDescriptor],
 ) -> DeclarationPlan[PydanticDescriptor]:
@@ -361,6 +374,7 @@ def adapt_model(
     metadata: list[PlannedMetadata[PydanticDescriptor]] = []
     issues: list[PlannedIssue[PydanticDescriptor]] = []
     handlers: list[PlannedHandler[PydanticDescriptor]] = []
+    has_serializers: bool = False
     for item in declaration.declaration.items:
         if item.kind == "field":
             declared_type: str | None = item.declared_type
@@ -432,8 +446,17 @@ def adapt_model(
         elif use.target_kind == "method":
             descriptor: PydanticDescriptor = use.value
             if (
+                descriptor.kind == "field-serializer"
+                or descriptor.kind == "model-serializer"
+                or descriptor.kind == "computed-field"
+            ):
+                has_serializers = True
+            if (
                 descriptor.kind == "field-validator"
                 or descriptor.kind == "model-validator"
+                or descriptor.kind == "field-serializer"
+                or descriptor.kind == "model-serializer"
+                or descriptor.kind == "computed-field"
             ):
                 issue_descriptor: PydanticDescriptor = use.value
                 for issue in method_descriptor_issues(issue_descriptor, use.origin):
@@ -444,6 +467,9 @@ def adapt_model(
                     handlers.append(
                         PlannedHandler(target, handler_descriptor, use.origin)
                     )
+    attached_api_symbol: str = "PydanticPlainModelApi"
+    if has_serializers:
+        attached_api_symbol = "PydanticModelApi"
     return DeclarationPlan(
         fields,
         metadata,
@@ -451,8 +477,8 @@ def adapt_model(
         "verify_schema",
         issues,
         handlers,
-        None,
-        None,
+        "pydantic_sifr.api",
+        attached_api_symbol,
     )
 
 
@@ -751,4 +777,40 @@ def model_validator(mode: str) -> PydanticDescriptor:
         None,
         None,
         mode,
+    )
+
+
+@method_descriptor("pydantic_sifr.declarations", "adapt_model")
+def field_serializer(
+    field: str,
+    additional_fields: list[str] | None = None,
+    when_used: str = "always",
+) -> PydanticDescriptor:
+    fields: list[str] = [field]
+    if additional_fields is not None:
+        for target in additional_fields:
+            fields.append(target)
+    return PydanticDescriptor(
+        "field-serializer",
+        "required",
+        serializer_fields=fields,
+        serializer_when_used=when_used,
+    )
+
+
+@method_descriptor("pydantic_sifr.declarations", "adapt_model")
+def model_serializer(when_used: str = "always") -> PydanticDescriptor:
+    return PydanticDescriptor(
+        "model-serializer",
+        "required",
+        serializer_when_used=when_used,
+    )
+
+
+@method_descriptor("pydantic_sifr.declarations", "adapt_model")
+def computed_field(alias: str | None = None) -> PydanticDescriptor:
+    return PydanticDescriptor(
+        "computed-field",
+        "required",
+        serializer_alias=alias,
     )

@@ -17,6 +17,7 @@ pub enum SerializationErrorKind {
     Limit,
     UnsupportedJsonValue,
     IntegerRange,
+    Callback,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -102,7 +103,10 @@ pub(super) fn verify_shape<T: StructuralProject>(
     }
 }
 
-fn native_value(input: &InputArena, id: InputId) -> Result<NativeValue, SerializationError> {
+pub(super) fn native_value(
+    input: &InputArena,
+    id: InputId,
+) -> Result<NativeValue, SerializationError> {
     let value = input.get(id).ok_or_else(|| {
         SerializationError::new(
             SerializationErrorKind::InvalidProjection,
@@ -168,7 +172,7 @@ fn native_value(input: &InputArena, id: InputId) -> Result<NativeValue, Serializ
     }
 }
 
-fn apply_options(
+pub(super) fn apply_options(
     plan: &SerializationPlan,
     value: &NativeValue,
     options: &SerializationOptions,

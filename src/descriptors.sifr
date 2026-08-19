@@ -8,43 +8,46 @@ class AliasSelection:
 class PydanticDescriptor:
     kind: str
     default_kind: str
-    default_value: StaticValue | None
-    default_factory: CallableIdentity | None
-    alias: str | None
-    validation_alias: AliasSelection | None
-    serialization_alias: str | None
-    gt: int | float | None
-    ge: int | float | None
-    lt: int | float | None
-    le: int | float | None
-    multiple_of: int | float | None
-    min_length: int | None
-    max_length: int | None
-    pattern: str | None
-    discriminator: AliasSelection | None
-    strict: bool | None
-    strip_whitespace: bool | None
-    to_lower: bool | None
-    to_upper: bool | None
-    ascii_only: bool | None
-    title: str | None
-    description: str | None
-    examples: list[str] | None
-    json_schema_extra: dict[str, str] | None
-    exclude: bool | None
-    extra: str | None
-    populate_by_name: bool | None
-    validate_by_alias: bool | None
-    location_by_alias: bool | None
-    alias_prefix: str | None
-    alias_case: str | None
-    literal_values: list[int | str | bool] | None
-    union_labels: list[str] | None
-    discriminator_tags: list[str] | None
-    problem: str | None
+    default_value: StaticValue | None = None
+    default_factory: CallableIdentity | None = None
+    alias: str | None = None
+    validation_alias: AliasSelection | None = None
+    serialization_alias: str | None = None
+    gt: int | float | None = None
+    ge: int | float | None = None
+    lt: int | float | None = None
+    le: int | float | None = None
+    multiple_of: int | float | None = None
+    min_length: int | None = None
+    max_length: int | None = None
+    pattern: str | None = None
+    discriminator: AliasSelection | None = None
+    strict: bool | None = None
+    strip_whitespace: bool | None = None
+    to_lower: bool | None = None
+    to_upper: bool | None = None
+    ascii_only: bool | None = None
+    title: str | None = None
+    description: str | None = None
+    examples: list[str] | None = None
+    json_schema_extra: dict[str, str] | None = None
+    exclude: bool | None = None
+    extra: str | None = None
+    populate_by_name: bool | None = None
+    validate_by_alias: bool | None = None
+    location_by_alias: bool | None = None
+    alias_prefix: str | None = None
+    alias_case: str | None = None
+    literal_values: list[int | str | bool] | None = None
+    union_labels: list[str] | None = None
+    discriminator_tags: list[str] | None = None
+    problem: str | None = None
     error_builtin: str | None = None
     error_package: str | None = None
     error_code: str | None = None
     error_message: str | None = None
     validator_fields: list[str] | None = None
     validator_mode: str | None = None
+    serializer_fields: list[str] | None = None
+    serializer_when_used: str | None = None
+    serializer_alias: str | None = None

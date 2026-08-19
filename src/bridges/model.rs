@@ -2,12 +2,13 @@ use core::{cell::RefCell, fmt, marker::PhantomData};
 
 use pydantic_sifr_core::{
     CallbackOutputSink, JsonIntegerProfile, JsonLimits, JsonSchemaMode, JsonSchemaOptions,
-    PreparedSchema, SerializationOptions, SerializationPlan, ValidationCallbacks, ValidationError,
-    ValidationOptions, generate_prepared_json_schema_bytes, serialize_json,
-    validate_json_and_construct, validate_json_and_construct_with_callbacks,
-    validate_json_strings_and_construct, validate_json_strings_and_construct_with_callbacks,
-    validate_structural_and_construct, validate_structural_and_construct_with_callbacks,
-    validator_callback_error,
+    PreparedSchema, SelectionPath, SerializationCallbacks, SerializationOptions, SerializationPlan,
+    ValidationCallbacks, ValidationError, ValidationOptions, generate_prepared_json_schema_bytes,
+    serialize_json, serialize_json_with_callbacks, serialize_structural,
+    serialize_structural_with_callbacks, serializer_callback_error, validate_json_and_construct,
+    validate_json_and_construct_with_callbacks, validate_json_strings_and_construct,
+    validate_json_strings_and_construct_with_callbacks, validate_structural_and_construct,
+    validate_structural_and_construct_with_callbacks, validator_callback_error,
 };
 use sifr_runtime::interop::structural::{
     MethodSlotTable, StaticProgramType, StructuralConstruct, StructuralProject, StructuralType,
@@ -132,6 +133,36 @@ where
     }
 }
 
+impl<Context, T> SerializationCallbacks for SlotCallbacks<'_, Context, T>
+where
+    Context: StructuralType,
+    T: MethodSlotTable<Context>,
+{
+    fn invoke(
+        &self,
+        slot: usize,
+        input: pydantic_sifr_core::ValidatedArena,
+    ) -> Result<pydantic_sifr_core::InputArena, pydantic_sifr_core::SerializationError> {
+        let signature = T::slot_signatures()
+            .get(slot)
+            .ok_or_else(|| serializer_callback_error("Serializer slot is out of range"))?;
+        let input = input
+            .into_structural_arena(signature.input())
+            .map_err(|error| serializer_callback_error(error.to_string()))?;
+        let mut sink = CallbackOutputSink::new(JsonLimits::default())
+            .map_err(|error| serializer_callback_error(error.to_string()))?;
+        let mut context = self.context.try_borrow_mut().map_err(|_| {
+            serializer_callback_error(
+                "Serializer context is already borrowed by an active callback",
+            )
+        })?;
+        T::invoke_slot(slot, input, &mut **context, None, &mut sink)
+            .map_err(|error| serializer_callback_error(error.to_string()))?;
+        sink.finish()
+            .map_err(|error| serializer_callback_error(error.to_string()))
+    }
+}
+
 pub fn validate_with_validators<Context, Input, T>(
     payload: &Input,
     context: &mut Context,
@@ -228,7 +259,14 @@ where
     .map_err(|error| ModelValidationError::from_validation(&error))
 }
 
-pub fn dump_json<T>(value: &T) -> Result<Vec<u8>, ModelSerializationError>
+pub fn dump_json<T>(
+    value: &T,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+    by_alias: bool,
+    exclude_none: bool,
+    exclude_defaults: bool,
+) -> Result<Vec<u8>, ModelSerializationError>
 where
     T: StructuralProject + StaticProgramType,
 {
@@ -239,11 +277,143 @@ where
                 message: error.to_string(),
             }
         })?;
-    serialize_json(&plan, value, &SerializationOptions::default()).map_err(|error| {
-        ModelSerializationError {
-            message: error.to_string(),
-        }
+    ensure_no_serializer_callbacks(&plan)?;
+    let options = serialization_options(include, exclude, by_alias, exclude_none, exclude_defaults);
+    serialize_json(&plan, value, &options).map_err(|error| ModelSerializationError {
+        message: error.to_string(),
     })
+}
+
+pub fn dump_json_with_serializers<Context, T>(
+    value: &T,
+    context: &mut Context,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+    by_alias: bool,
+    exclude_none: bool,
+    exclude_defaults: bool,
+) -> Result<Vec<u8>, ModelSerializationError>
+where
+    Context: StructuralType,
+    T: StructuralProject + StaticProgramType + MethodSlotTable<Context>,
+{
+    let schema = serializer_schema::<Context, T>()?;
+    let plan = SerializationPlan::from_prepared(schema, JsonIntegerProfile::Exact)
+        .map_err(serialization_plan_error)?;
+    let options = serialization_options(include, exclude, by_alias, exclude_none, exclude_defaults);
+    let callbacks = SlotCallbacks::<Context, T>::new(context);
+    serialize_json_with_callbacks(schema, &plan, value, &options, &callbacks)
+        .map_err(serialization_error)
+}
+
+pub fn dump<Output, T>(
+    value: &T,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+    by_alias: bool,
+    exclude_none: bool,
+    exclude_defaults: bool,
+) -> Result<Output, ModelSerializationError>
+where
+    T: StructuralProject + StaticProgramType,
+    Output: StructuralConstruct + StructuralType,
+{
+    let schema = PreparedSchema::from_static::<T>().map_err(serialization_setup_error)?;
+    let plan = SerializationPlan::from_prepared(schema, JsonIntegerProfile::Exact)
+        .map_err(serialization_plan_error)?;
+    ensure_no_serializer_callbacks(&plan)?;
+    let options = serialization_options(include, exclude, by_alias, exclude_none, exclude_defaults);
+    let value = serialize_structural(&plan, value, &options).map_err(serialization_error)?;
+    super::json_value::construct_json_object(&value).map_err(serialization_message)
+}
+
+pub fn dump_with_serializers<Context, Output, T>(
+    value: &T,
+    context: &mut Context,
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+    by_alias: bool,
+    exclude_none: bool,
+    exclude_defaults: bool,
+) -> Result<Output, ModelSerializationError>
+where
+    Context: StructuralType,
+    T: StructuralProject + StaticProgramType + MethodSlotTable<Context>,
+    Output: StructuralConstruct + StructuralType,
+{
+    let schema = serializer_schema::<Context, T>()?;
+    let plan = SerializationPlan::from_prepared(schema, JsonIntegerProfile::Exact)
+        .map_err(serialization_plan_error)?;
+    let options = serialization_options(include, exclude, by_alias, exclude_none, exclude_defaults);
+    let callbacks = SlotCallbacks::<Context, T>::new(context);
+    let value = serialize_structural_with_callbacks(schema, &plan, value, &options, &callbacks)
+        .map_err(serialization_error)?;
+    super::json_value::construct_json_object(&value).map_err(serialization_message)
+}
+
+fn serializer_schema<Context, T>() -> Result<PreparedSchema<'static>, ModelSerializationError>
+where
+    Context: StructuralType,
+    T: StructuralProject + StaticProgramType + MethodSlotTable<Context>,
+{
+    let program = T::static_program();
+    if program.header().slot_table_identity() != Some(T::slot_table_identity()) {
+        return Err(serialization_message(
+            "Serializer slot table does not match the static schema program",
+        ));
+    }
+    PreparedSchema::from_static::<T>().map_err(serialization_setup_error)
+}
+
+fn serialization_options(
+    include: Option<Vec<String>>,
+    exclude: Option<Vec<String>>,
+    by_alias: bool,
+    exclude_none: bool,
+    exclude_defaults: bool,
+) -> SerializationOptions {
+    SerializationOptions {
+        by_alias,
+        exclude_none,
+        exclude_defaults,
+        include: include
+            .unwrap_or_default()
+            .into_iter()
+            .map(SelectionPath::field)
+            .collect(),
+        exclude: exclude
+            .unwrap_or_default()
+            .into_iter()
+            .map(SelectionPath::field)
+            .collect(),
+        ..SerializationOptions::default()
+    }
+}
+
+fn serialization_plan_error(
+    error: pydantic_sifr_core::SerializationPlanError,
+) -> ModelSerializationError {
+    serialization_message(error.to_string())
+}
+
+fn ensure_no_serializer_callbacks(plan: &SerializationPlan) -> Result<(), ModelSerializationError> {
+    if plan.callbacks().is_empty() {
+        Ok(())
+    } else {
+        Err(serialization_message(
+            "Serializer handlers require model_dump_with_serializers or model_dump_json_with_serializers",
+        ))
+    }
+}
+
+fn serialization_error(error: pydantic_sifr_core::SerializationError) -> ModelSerializationError {
+    serialization_message(error.to_string())
+}
+
+fn serialization_message(message: impl Into<String>) -> ModelSerializationError {
+    ModelSerializationError {
+        message: message.into(),
+    }
 }
 
 pub fn json_schema<T>(_target: &T) -> Result<Vec<u8>, ModelJsonSchemaError>
