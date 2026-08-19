@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PYDANTIC_PIN = "f59e929c999e8b2efc7b12fd0bc1685c1a186be3"
-SIFR_PIN = "6152fc50984395a640c42f31e9e270cd3a9e09c8"
+SIFR_PIN = "0ab08c47605b694e396a4c30c621fd1ae79b07e1"
 
 
 class Ps11ManifestAuditTest(unittest.TestCase):

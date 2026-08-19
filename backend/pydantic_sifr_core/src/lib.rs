@@ -11,8 +11,9 @@ pub mod validation;
 pub use adapter::{TypeAdapter, TypeAdapterBuildError, TypeAdapterBuildErrorKind};
 pub use arena::{Arena, ArenaError, ArenaId};
 pub use input::{
-    InputArena, InputId, InputValue, JsonInputError, JsonLimits, NativeInputError, NativeValue,
-    ObjectKind, SequenceKind, build_native_input, parse_json, project_structural_input,
+    CallbackOutputSink, InputArena, InputId, InputValue, JsonInputError, JsonLimits,
+    NativeInputError, NativeValue, ObjectKind, SequenceKind, build_native_input, parse_json,
+    project_structural_input,
 };
 pub use json_schema::{
     JSON_SCHEMA_DIALECT, JsonSchemaError, JsonSchemaErrorKind, JsonSchemaMode, JsonSchemaOptions,
@@ -35,8 +36,10 @@ pub use validation::{
     Schema, SchemaErrorOverride, SchemaTag, StringConstraints, StringPattern, TaggedUnionChoice,
     TaggedUnionSchema, TemporalKind, TemporalSchema, TimeValue, UnionChoice, UnionMode,
     UnionSchema, UnionValue, UrlConstraints, ValidatedArena, ValidatedIterator, ValidatedValue,
-    ValidationError, ValidationLimits, ValidationOptions, ValueId, validate,
-    validate_and_construct, validate_json_and_construct, validate_json_strings_and_construct,
-    validate_native_and_construct, validate_strings_and_construct,
-    validate_structural_and_construct, validated_iterator,
+    ValidationCallbacks, ValidationError, ValidationLimits, ValidationOptions, ValueId, validate,
+    validate_and_construct, validate_and_construct_with_callbacks, validate_json_and_construct,
+    validate_json_and_construct_with_callbacks, validate_json_strings_and_construct,
+    validate_json_strings_and_construct_with_callbacks, validate_native_and_construct,
+    validate_strings_and_construct, validate_structural_and_construct,
+    validate_structural_and_construct_with_callbacks, validated_iterator, validator_callback_error,
 };

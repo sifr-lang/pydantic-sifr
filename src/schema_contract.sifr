@@ -1,34 +1,31 @@
 from .errors import SchemaIssue, SchemaIssueArgs
-from .descriptors import AliasSelection, PydanticDescriptor
-from sifr.meta import SourceOrigin
+from .descriptors import PydanticDescriptor
+from sifr.meta import CallableIdentity, SourceOrigin
 from .schema_errors import error_override
 from .schema_metadata import runtime_metadata
 from .schema_constraints import constraint_issue, copy_metadata
-from .schema_constraints import (
-    descriptor_values,
-    has_integer_constraints,
-    has_string_constraints,
-    has_text_constraints,
-)
+from .schema_constraints import descriptor_values
+from .schema_constraints import has_integer_constraints, has_string_constraints
+from .schema_constraints import has_text_constraints
 from .schema_constraints import primitive_kind, sum_kind
 from .schema_types import ErrorOverrideResult
 from .schema_types import FieldRules
 from .schema_types import ModelRules
 from .schema_types import NodeBuildResult
-from .schema_types import SchemaAliasSegmentPayload
 from .schema_types import SchemaAliasPathPayload
-from .schema_types import SchemaBytesConstraintsPayload
-from .schema_types import SchemaCollectionConstraintsPayload
 from .schema_types import SchemaFieldPayload
-from .schema_types import SchemaFloatConstraintsPayload
-from .schema_types import SchemaIntegerConstraintsPayload
 from .schema_types import SchemaModelPayload
 from .schema_types import SchemaNodePayload
 from .schema_types import SchemaOutcome
 from .schema_types import SchemaProgramPayload
-from .schema_types import SchemaStringConstraintsPayload
-from .schema_types import SchemaVariantPayload
-from .schema_types import SchemaShapeInput, SchemaShapeMetadata, SchemaShapeNode
+from .schema_types import SchemaValidatorPayload
+from .schema_types import SchemaShapeField, SchemaShapeInput, SchemaShapeMetadata
+from .schema_types import SchemaShapeMethod, SchemaShapeNode, SchemaShapeParameter
+from .schema_rules import alias_path, alias_paths, empty_field_rules
+from .schema_rules import field_rules, float_constraints, model_rules
+from .schema_rules import runtime_variants
+from .schema_nodes import expected_arity, namespace_validator_nodes, rebase_nodes
+from .schema_nodes import verify_nodes
 
 
 @const_eval
@@ -46,316 +43,399 @@ def schema_failure(problem: str, own origin: SourceOrigin) -> SchemaOutcome:
 
 
 @const_eval
-def alias_path(value: list[str | int]) -> SchemaAliasPathPayload:
-    segments: list[SchemaAliasSegmentPayload] = []
-    for segment in value:
-        if isinstance(segment, str):
-            segments.append(SchemaAliasSegmentPayload("field", segment, None))
-        else:
-            index: int = segment
-            segments.append(SchemaAliasSegmentPayload("index", None, index))
-    return SchemaAliasPathPayload(segments)
-
-
-@const_eval
-def alias_paths(
-    value: AliasSelection | None,
-) -> list[SchemaAliasPathPayload]:
-    output: list[SchemaAliasPathPayload] = []
-    if value is not None:
-        for path in value.paths:
-            output.append(alias_path(path))
+def validator_targets(descriptor: PydanticDescriptor) -> list[str]:
+    output: list[str] = []
+    targets: list[str] | None = descriptor.validator_fields
+    if targets is not None:
+        selected: list[str] = targets
+        for target in selected:
+            output.append(target)
     return output
 
 
 @const_eval
-def runtime_variants(node: SchemaShapeNode) -> list[SchemaVariantPayload]:
-    output: list[SchemaVariantPayload] = []
-    for variant in node.variants:
-        output.append(SchemaVariantPayload(variant.name, variant.value, []))
-    return output
+def targets_field(descriptor: PydanticDescriptor, field: str) -> bool:
+    for target in validator_targets(descriptor):
+        if target == field:
+            return True
+    return False
 
 
 @const_eval
-def field_rules(metadata: list[SchemaShapeMetadata]) -> FieldRules:
-    validation_aliases: list[SchemaAliasPathPayload] = []
-    serialization_alias: str | None = None
-    greater_than: int | float | None = None
-    greater_or_equal: int | float | None = None
-    less_than: int | float | None = None
-    less_or_equal: int | float | None = None
-    multiple_of: int | float | None = None
-    min_length: int | None = None
-    max_length: int | None = None
-    pattern: str | None = None
-    strip_whitespace: bool = False
-    to_lower: bool = False
-    to_upper: bool = False
-    ascii_only: bool = False
-    strict: bool | None = None
-    exclude: bool = False
-    for value in descriptor_values(metadata):
-        if value.kind == "field":
-            selected_aliases: list[SchemaAliasPathPayload] = alias_paths(
-                value.validation_alias
-            )
-            direct_alias: str | None = value.alias
-            if len(selected_aliases) == 0:
-                if direct_alias is not None:
-                    direct_path: list[str | int] = []
-                    direct_path.append(direct_alias)
-                    selected_aliases.append(alias_path(direct_path))
-            if len(selected_aliases) > 0:
-                validation_aliases = selected_aliases
-            selected_serialization_alias: str | None = value.serialization_alias
-            if selected_serialization_alias is None:
-                selected_serialization_alias = value.alias
-            if selected_serialization_alias is not None:
-                serialization_alias = selected_serialization_alias
-            if value.gt is not None:
-                greater_than = value.gt
-            if value.ge is not None:
-                greater_or_equal = value.ge
-            if value.lt is not None:
-                less_than = value.lt
-            if value.le is not None:
-                less_or_equal = value.le
-            if value.multiple_of is not None:
-                multiple_of = value.multiple_of
-            if value.min_length is not None:
-                min_length = value.min_length
-            if value.max_length is not None:
-                max_length = value.max_length
-            if value.pattern is not None:
-                pattern = value.pattern
-            strip_value: bool | None = value.strip_whitespace
-            if strip_value is not None:
-                strip_whitespace = strip_value
-            lower_value: bool | None = value.to_lower
-            if lower_value is not None:
-                to_lower = lower_value
-            upper_value: bool | None = value.to_upper
-            if upper_value is not None:
-                to_upper = upper_value
-            ascii_value: bool | None = value.ascii_only
-            if ascii_value is not None:
-                ascii_only = ascii_value
-            strict_value: bool | None = value.strict
-            if strict_value is not None:
-                strict = strict_value
-            exclude_value: bool | None = value.exclude
-            if exclude_value is not None:
-                exclude = exclude_value
-    if min_length is not None and max_length is not None:
-        minimum: int = min_length
-        maximum: int = max_length
-        if minimum > maximum:
-            return FieldRules(
-                [],
-                None,
-                SchemaIntegerConstraintsPayload(None, None, None, None, None),
-                SchemaStringConstraintsPayload(
-                    None, None, False, False, False, False, None
-                ),
-                SchemaBytesConstraintsPayload(None, None),
-                SchemaCollectionConstraintsPayload(None, None),
-                None,
-                False,
-                "min_length cannot exceed max_length after descriptor merge",
-            )
-    if to_lower and to_upper:
-        return FieldRules(
-            [],
-            None,
-            SchemaIntegerConstraintsPayload(None, None, None, None, None),
-            SchemaStringConstraintsPayload(
-                None, None, False, False, False, False, None
-            ),
-            SchemaBytesConstraintsPayload(None, None),
-            SchemaCollectionConstraintsPayload(None, None),
-            None,
-            False,
-            "to_lower and to_upper cannot both be enabled",
-        )
-    return FieldRules(
-        validation_aliases,
-        serialization_alias,
-        SchemaIntegerConstraintsPayload(
-            greater_than, greater_or_equal, less_than, less_or_equal, multiple_of
-        ),
-        SchemaStringConstraintsPayload(
-            min_length,
-            max_length,
-            strip_whitespace,
-            to_lower,
-            to_upper,
-            ascii_only,
-            pattern,
-        ),
-        SchemaBytesConstraintsPayload(min_length, max_length),
-        SchemaCollectionConstraintsPayload(min_length, max_length),
-        strict,
-        exclude,
-        None,
-    )
+def field_exists(node: SchemaShapeNode, target: str) -> bool:
+    for field in node.fields:
+        if field.name == target:
+            return True
+    return False
 
 
 @const_eval
-def float_constraints(
-    metadata: list[SchemaShapeMetadata],
-) -> SchemaFloatConstraintsPayload:
-    greater_than: int | float | None = None
-    greater_or_equal: int | float | None = None
-    less_than: int | float | None = None
-    less_or_equal: int | float | None = None
-    multiple_of: int | float | None = None
-    for value in descriptor_values(metadata):
-        if value.kind == "field":
-            if value.gt is not None:
-                greater_than = value.gt
-            if value.ge is not None:
-                greater_or_equal = value.ge
-            if value.lt is not None:
-                less_than = value.lt
-            if value.le is not None:
-                less_or_equal = value.le
-            if value.multiple_of is not None:
-                multiple_of = value.multiple_of
-    return SchemaFloatConstraintsPayload(
-        greater_than, greater_or_equal, less_than, less_or_equal, multiple_of
-    )
+def same_shape_head(left: SchemaShapeNode, right: SchemaShapeNode) -> bool:
+    if left.kind != right.kind:
+        return False
+    if left.kind == "primitive" or left.kind == "fixed_integer":
+        return left.name == right.name
+    if (
+        left.kind == "nominal"
+        or left.kind == "enum"
+        or left.kind == "newtype"
+        or left.kind == "recursive_reference"
+    ):
+        return left.identity == right.identity
+    return True
 
 
 @const_eval
-def model_rules(metadata: list[SchemaShapeMetadata]) -> ModelRules:
-    extra: str = "ignore"
-    populate_by_name: bool = False
-    location_by_alias: bool = True
-    strict: bool = False
-    validate_by_alias: bool = True
-    alias_prefix: str = ""
-    alias_case: str = "snake"
-    for value in descriptor_values(metadata):
-        if value.kind == "config":
-            configured_extra: str | None = value.extra
-            if configured_extra is not None:
-                extra = configured_extra
-            if extra != "ignore" and extra != "forbid":
-                return ModelRules(
-                    extra,
-                    populate_by_name,
-                    location_by_alias,
-                    strict,
-                    validate_by_alias,
-                    alias_prefix,
-                    alias_case,
-                    "extra policy must be ignore or forbid",
+def is_model_output(output: SchemaShapeNode, model: SchemaShapeNode) -> bool:
+    if same_shape_head(output, model):
+        return True
+    return output.kind == "recursive_reference" and output.identity == model.identity
+
+
+@const_eval
+def nested_validator_problem(node: SchemaShapeNode, is_root: bool) -> str | None:
+    if node.kind == "nominal":
+        if not is_root:
+            for method in node.methods:
+                descriptor: PydanticDescriptor | None = method.descriptor
+                if descriptor is not None:
+                    selected: PydanticDescriptor = descriptor
+                    if (
+                        selected.kind == "field-validator"
+                        or selected.kind == "model-validator"
+                    ):
+                        return "nested models with validators require their own validation boundary"
+        for field in node.fields:
+            problem: str | None = nested_validator_problem(field.type, False)
+            if problem is not None:
+                return problem
+    elif node.kind == "list" or node.kind == "set" or node.kind == "optional":
+        element: SchemaShapeNode | None = node.element
+        if element is not None:
+            problem: str | None = nested_validator_problem(element, False)
+            if problem is not None:
+                return problem
+    elif node.kind == "dictionary":
+        key: SchemaShapeNode | None = node.key
+        if key is not None:
+            problem: str | None = nested_validator_problem(key, False)
+            if problem is not None:
+                return problem
+        value: SchemaShapeNode | None = node.value
+        if value is not None:
+            problem: str | None = nested_validator_problem(value, False)
+            if problem is not None:
+                return problem
+    elif node.kind == "tuple" or node.kind == "union":
+        for member in node.members:
+            problem: str | None = nested_validator_problem(member, False)
+            if problem is not None:
+                return problem
+    elif node.kind == "newtype":
+        inner: SchemaShapeNode | None = node.inner
+        if inner is not None:
+            problem: str | None = nested_validator_problem(inner, False)
+            if problem is not None:
+                return problem
+    return None
+
+
+@const_eval
+def validator_problem(node: SchemaShapeNode, method: SchemaShapeMethod) -> str | None:
+    descriptor: PydanticDescriptor | None = method.descriptor
+    if descriptor is None:
+        return None
+    selected: PydanticDescriptor = descriptor
+    if method.is_async:
+        return "validator methods cannot be async"
+    if selected.kind == "field-validator":
+        targets: list[str] = validator_targets(selected)
+        for target in targets:
+            if not field_exists(node, target):
+                return "field validator target does not name a declared field"
+        if method.receiver is not None:
+            return "field validator cannot declare an instance receiver"
+        if method.kind != "class" and method.kind != "static":
+            return "field validator must be a class or static method"
+        if len(method.params) == 0:
+            return "field validator has no value input"
+        if len(method.params) > 2:
+            return "field validator has too many inputs"
+        parameter: SchemaShapeParameter | None = method.params[0]
+        if parameter is not None:
+            selected_parameter: SchemaShapeParameter = parameter
+            if selected_parameter.convention != "own":
+                return "field validator value input must be owned"
+        for target in targets:
+            for field in node.fields:
+                if field.name == target and not same_shape_head(
+                    method.output, field.type
+                ):
+                    return "field validator output does not match its field type"
+        mode: str | None = selected.validator_mode
+        if mode == "after":
+            after_parameter: SchemaShapeParameter | None = method.params[0]
+            if after_parameter is not None:
+                selected_parameter: SchemaShapeParameter = after_parameter
+                for target in targets:
+                    for field in node.fields:
+                        if field.name == target and not same_shape_head(
+                            selected_parameter.type, field.type
+                        ):
+                            return "field after validator input does not match its field type"
+    elif selected.kind == "model-validator":
+        mode: str | None = selected.validator_mode
+        if mode == "before":
+            if method.receiver is not None:
+                return "model before validator cannot declare an instance receiver"
+            if method.kind != "class" and method.kind != "static":
+                return "model before validator must be a class or static method"
+            if len(method.params) == 0:
+                return "model before validator has no structural input"
+            if len(method.params) > 2:
+                return "model before validator has too many inputs"
+            parameter: SchemaShapeParameter | None = method.params[0]
+            if parameter is not None:
+                selected_parameter: SchemaShapeParameter = parameter
+                if selected_parameter.convention != "own":
+                    return "model before validator input must be owned"
+                if selected_parameter.type.kind != "nominal":
+                    return "model before validator input must be a concrete structural type"
+            if method.output.kind != "nominal":
+                return (
+                    "model before validator output must be a concrete structural type"
                 )
-            populate_value: bool | None = value.populate_by_name
-            if populate_value is not None:
-                populate_by_name = populate_value
-            location_value: bool | None = value.location_by_alias
-            if location_value is not None:
-                location_by_alias = location_value
-            strict_value: bool | None = value.strict
-            if strict_value is not None:
-                strict = strict_value
-            validate_value: bool | None = value.validate_by_alias
-            if validate_value is not None:
-                validate_by_alias = validate_value
-            prefix_value: str | None = value.alias_prefix
-            if prefix_value is not None:
-                alias_prefix = prefix_value
-            case_value: str | None = value.alias_case
-            if case_value is not None:
-                alias_case = case_value
-    if not validate_by_alias and not populate_by_name:
-        return ModelRules(
-            extra,
-            populate_by_name,
-            location_by_alias,
-            strict,
-            validate_by_alias,
-            alias_prefix,
-            alias_case,
-            "validate_by_alias and populate_by_name cannot both be disabled",
-        )
-    return ModelRules(
-        extra,
-        populate_by_name,
-        location_by_alias,
-        strict,
-        validate_by_alias,
-        alias_prefix,
-        alias_case,
+        elif mode == "after":
+            if method.kind != "regular" or method.receiver != "own":
+                return "model after validator must consume its model receiver"
+            if len(method.params) > 1:
+                return "model after validator has too many inputs"
+            if not is_model_output(method.output, node):
+                return "model after validator output must be its model type"
+    return None
+
+
+@const_eval
+def validator_node(
+    kind: str,
+    children: list[int],
+    slot: int,
+    target: str,
+) -> SchemaNodePayload:
+    return SchemaNodePayload(
+        kind,
+        children,
         None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        [],
+        [],
+        slot,
+        target,
     )
 
 
 @const_eval
-def rebase_nodes(
-    nodes: list[SchemaNodePayload], offset: int
-) -> list[SchemaNodePayload]:
-    output: list[SchemaNodePayload] = []
-    for node in nodes:
-        children: list[int] = []
-        for child in node.children:
-            children.append(child + offset)
-        model: SchemaModelPayload | None = None
-        node_model: SchemaModelPayload | None = node.model
-        if node_model is None:
-            model = None
-        else:
-            current_model: SchemaModelPayload = node_model
-            fields: list[SchemaFieldPayload] = []
-            for field in current_model.fields:
-                fields.append(
-                    SchemaFieldPayload(
-                        field.name,
-                        field.node + offset,
-                        field.required,
-                        field.default_kind,
-                        field.default,
-                        field.validation_aliases,
-                        field.serialization_alias,
-                        field.strict,
-                        field.exclude,
+def wrap_before_validator(
+    own current: NodeBuildResult,
+    input_type: SchemaShapeNode,
+    slot: int,
+    target: str,
+    kind: str,
+) -> NodeBuildResult:
+    built_input: NodeBuildResult = build_node(input_type, [])
+    if built_input.issue is not None:
+        return built_input
+    current_offset: int = len(built_input.nodes)
+    nodes: list[SchemaNodePayload] = built_input.nodes + rebase_nodes(
+        current.nodes, current_offset
+    )
+    wrapper: SchemaNodePayload = validator_node(
+        kind,
+        [built_input.root, current.root + current_offset],
+        slot,
+        target,
+    )
+    root: int = len(nodes)
+    return NodeBuildResult(nodes + [wrapper], root, None)
+
+
+@const_eval
+def wrap_after_validator(
+    own current: NodeBuildResult,
+    output_type: SchemaShapeNode,
+    slot: int,
+    target: str,
+) -> NodeBuildResult:
+    built_output: NodeBuildResult = build_node_mode(output_type, [], False)
+    if built_output.issue is not None:
+        return built_output
+    namespaced_output: list[SchemaNodePayload] = namespace_validator_nodes(
+        built_output.nodes, slot, target
+    )
+    output_offset: int = len(current.nodes)
+    nodes: list[SchemaNodePayload] = current.nodes + rebase_nodes(
+        namespaced_output, output_offset
+    )
+    wrapper: SchemaNodePayload = validator_node(
+        "function-after",
+        [current.root, built_output.root + output_offset],
+        slot,
+        target,
+    )
+    root: int = len(nodes)
+    return NodeBuildResult(nodes + [wrapper], root, None)
+
+
+@const_eval
+def field_validator_pipeline(
+    node: SchemaShapeNode,
+    field: SchemaShapeField,
+    own normal: NodeBuildResult,
+) -> NodeBuildResult:
+    current: NodeBuildResult = normal
+    slot: int = 0
+    for method in node.methods:
+        descriptor: PydanticDescriptor | None = method.descriptor
+        target: CallableIdentity | None = method.target
+        if descriptor is not None and target is not None:
+            selected: PydanticDescriptor = descriptor
+            if selected.kind == "field-validator" or selected.kind == "model-validator":
+                if (
+                    selected.kind == "field-validator"
+                    and selected.validator_mode == "plain"
+                    and targets_field(selected, field.name)
+                ):
+                    output: NodeBuildResult = build_node_mode(field.type, [], False)
+                    if output.issue is not None:
+                        return output
+                    parameter: SchemaShapeParameter | None = method.params[0]
+                    if parameter is not None:
+                        selected_parameter: SchemaShapeParameter = parameter
+                        current = wrap_before_validator(
+                            output,
+                            selected_parameter.type,
+                            slot,
+                            "field:" + field.name,
+                            "function-plain",
+                        )
+                slot += 1
+    slot = 0
+    for method in node.methods:
+        descriptor: PydanticDescriptor | None = method.descriptor
+        target: CallableIdentity | None = method.target
+        if descriptor is not None and target is not None:
+            selected: PydanticDescriptor = descriptor
+            if selected.kind == "field-validator" or selected.kind == "model-validator":
+                if (
+                    selected.kind == "field-validator"
+                    and selected.validator_mode == "before"
+                    and targets_field(selected, field.name)
+                ):
+                    parameter: SchemaShapeParameter | None = method.params[0]
+                    if parameter is not None:
+                        selected_parameter: SchemaShapeParameter = parameter
+                        current = wrap_before_validator(
+                            current,
+                            selected_parameter.type,
+                            slot,
+                            "field:" + field.name,
+                            "function-before",
+                        )
+                    if current.issue is not None:
+                        return current
+                slot += 1
+    slot = 0
+    for method in node.methods:
+        descriptor: PydanticDescriptor | None = method.descriptor
+        target: CallableIdentity | None = method.target
+        if descriptor is not None and target is not None:
+            selected: PydanticDescriptor = descriptor
+            if selected.kind == "field-validator" or selected.kind == "model-validator":
+                if (
+                    selected.kind == "field-validator"
+                    and selected.validator_mode == "after"
+                    and targets_field(selected, field.name)
+                ):
+                    current = wrap_after_validator(
+                        current,
+                        field.type,
+                        slot,
+                        "field:" + field.name,
                     )
-                )
-            model = SchemaModelPayload(
-                current_model.name,
-                current_model.identity,
-                fields,
-                current_model.extra,
-                current_model.populate_by_name,
-                current_model.location_by_alias,
-                current_model.strict,
-            )
-        output.append(
-            SchemaNodePayload(
-                node.kind,
-                children,
-                node.definition,
-                node.reference,
-                node.error_code,
-                node.error_message,
-                model,
-                node.integer_target,
-                node.integer_constraints,
-                node.float_constraints,
-                node.string_constraints,
-                node.bytes_constraints,
-                node.collection_constraints,
-                node.metadata,
-                node.variants,
-            )
-        )
-    return output
+                    if current.issue is not None:
+                        return current
+                slot += 1
+    return current
+
+
+@const_eval
+def model_validator_pipeline(
+    node: SchemaShapeNode, own normal: NodeBuildResult
+) -> NodeBuildResult:
+    current: NodeBuildResult = normal
+    slot: int = 0
+    for method in node.methods:
+        descriptor: PydanticDescriptor | None = method.descriptor
+        target: CallableIdentity | None = method.target
+        if descriptor is not None and target is not None:
+            selected: PydanticDescriptor = descriptor
+            if selected.kind == "field-validator" or selected.kind == "model-validator":
+                if (
+                    selected.kind == "model-validator"
+                    and selected.validator_mode == "before"
+                ):
+                    parameter: SchemaShapeParameter | None = method.params[0]
+                    if parameter is not None:
+                        selected_parameter: SchemaShapeParameter = parameter
+                        current = wrap_before_validator(
+                            current,
+                            selected_parameter.type,
+                            slot,
+                            "model",
+                            "function-before",
+                        )
+                    if current.issue is not None:
+                        return current
+                slot += 1
+    slot = 0
+    for method in node.methods:
+        descriptor: PydanticDescriptor | None = method.descriptor
+        target: CallableIdentity | None = method.target
+        if descriptor is not None and target is not None:
+            selected: PydanticDescriptor = descriptor
+            if selected.kind == "field-validator" or selected.kind == "model-validator":
+                if (
+                    selected.kind == "model-validator"
+                    and selected.validator_mode == "after"
+                ):
+                    current = wrap_after_validator(current, node, slot, "model")
+                    if current.issue is not None:
+                        return current
+                slot += 1
+    return current
 
 
 @const_eval
 def build_node(
     node: SchemaShapeNode, inherited: list[SchemaShapeMetadata]
+) -> NodeBuildResult:
+    return build_node_mode(node, inherited, True)
+
+
+@const_eval
+def build_node_mode(
+    node: SchemaShapeNode,
+    inherited: list[SchemaShapeMetadata],
+    apply_validators: bool,
 ) -> NodeBuildResult:
     override: ErrorOverrideResult = error_override(inherited)
     if override.issue is not None:
@@ -443,7 +523,9 @@ def build_node(
             )
             if collection_issue is not None:
                 return NodeBuildResult([], 0, collection_issue)
-        built_element: NodeBuildResult = build_node(element, child_metadata)
+        built_element: NodeBuildResult = build_node_mode(
+            element, child_metadata, apply_validators
+        )
         if built_element.issue is not None:
             return built_element
         unary_kind: str = "list"
@@ -480,10 +562,10 @@ def build_node(
         value: SchemaShapeNode | None = node.value
         if key is None or value is None:
             return NodeBuildResult([], 0, "mapping schema node is incomplete")
-        built_key: NodeBuildResult = build_node(key, [])
+        built_key: NodeBuildResult = build_node_mode(key, [], apply_validators)
         if built_key.issue is not None:
             return built_key
-        built_value: NodeBuildResult = build_node(value, [])
+        built_value: NodeBuildResult = build_node_mode(value, [], apply_validators)
         if built_value.issue is not None:
             return built_value
         value_offset: int = len(built_key.nodes)
@@ -524,7 +606,9 @@ def build_node(
         member_nodes: list[SchemaNodePayload] = []
         member_roots: list[int] = []
         for member in node.members:
-            built_member: NodeBuildResult = build_node(member, [])
+            built_member: NodeBuildResult = build_node_mode(
+                member, [], apply_validators
+            )
             if built_member.issue is not None:
                 return built_member
             offset: int = len(member_nodes)
@@ -627,9 +711,15 @@ def build_node(
                 )
                 built_field = NodeBuildResult([reference_node], 0, None)
             else:
-                built_field = build_node(field.type, field.metadata)
+                built_field = build_node_mode(
+                    field.type, field.metadata, apply_validators
+                )
             if built_field.issue is not None:
                 return built_field
+            if apply_validators:
+                built_field = field_validator_pipeline(node, field, built_field)
+                if built_field.issue is not None:
+                    return built_field
             offset: int = len(field_nodes)
             field_nodes = field_nodes + rebase_nodes(built_field.nodes, offset)
             field_root: int = built_field.root + offset
@@ -692,7 +782,12 @@ def build_node(
             [],
         )
         root: int = len(field_nodes)
-        return NodeBuildResult(field_nodes + [model], root, None)
+        normal_model: NodeBuildResult = NodeBuildResult(
+            field_nodes + [model], root, None
+        )
+        if not apply_validators:
+            return normal_model
+        return model_validator_pipeline(node, normal_model)
     if node.kind == "enum":
         if has_integer_constraints(copy_metadata(inherited)) or has_string_constraints(
             copy_metadata(inherited)
@@ -728,75 +823,18 @@ def build_node(
 
 
 @const_eval
-def expected_arity(kind: str) -> int:
-    if kind == "list" or kind == "set" or kind == "nullable":
-        return 1
-    if kind == "dict":
-        return 2
-    if kind == "lax-or-strict" or kind == "json-or-structural":
-        return 2
-    if (
-        kind == "model"
-        or kind == "tuple"
-        or kind == "union"
-        or kind == "literal"
-        or kind == "tagged-union"
-        or kind == "chain"
-    ):
-        return -1
-    return 0
-
-
-@const_eval
-def verify_nodes(nodes: list[SchemaNodePayload], root: int) -> str | None:
-    count: int = len(nodes)
-    if count == 0:
-        return "schema program has no nodes"
-    if count > 4096:
-        return "schema program exceeds the static node limit"
-    if root < 0 or root >= count:
-        return "schema root is out of range"
-    for node in nodes:
-        arity: int = expected_arity(node.kind)
-        if arity >= 0 and len(node.children) != arity:
-            return "schema node has invalid child arity"
-        if node.kind == "chain" and len(node.children) == 0:
-            return "typed chain has no steps"
-        for child in node.children:
-            if child < 0 or child >= count:
-                return "schema child index is out of range"
-        if node.reference is not None and node.kind != "definition-ref":
-            return "non-reference schema node has a reference"
-        if node.kind == "definition-ref" and node.reference is None:
-            return "definition reference has no identity"
-        if node.kind == "model" and node.model is None:
-            return "model schema node has no model payload"
-        if node.error_code is None and node.error_message is not None:
-            return "schema node has an error message without a code"
-        if node.error_code is not None and node.error_message is None:
-            return "schema node has an error code without a message"
-    for left in nodes:
-        if left.definition is not None:
-            matches: int = 0
-            for right in nodes:
-                if right.definition == left.definition:
-                    matches += 1
-            if matches != 1:
-                return "schema program has duplicate definition identities"
-    for reference in nodes:
-        if reference.reference is not None:
-            found: bool = False
-            for target in nodes:
-                if target.definition == reference.reference:
-                    found = True
-            if not found:
-                return "schema program has a dangling definition reference"
-    return None
-
-
-@const_eval
 @metadata("sifr.meta.issue_template", ("schema_invalid", ["problem"]))
 def verify_schema(shape: SchemaShapeInput) -> SchemaOutcome:
+    nested_problem: str | None = nested_validator_problem(shape.root, True)
+    if nested_problem is not None:
+        return schema_failure(nested_problem, shape.declaration.origin)
+    for method in shape.root.methods:
+        problem: str | None = validator_problem(shape.root, method)
+        if problem is not None:
+            origin: SourceOrigin | None = method.origin
+            if origin is not None:
+                return schema_failure(problem, origin)
+            return schema_failure(problem, shape.declaration.origin)
     built: NodeBuildResult = build_node(shape.root, [])
     build_issue: str | None = built.issue
     if build_issue is not None:
@@ -804,6 +842,25 @@ def verify_schema(shape: SchemaShapeInput) -> SchemaOutcome:
     problem: str | None = verify_nodes(built.nodes, built.root)
     if problem is not None:
         return schema_failure(problem, shape.declaration.origin)
+    slots: list[CallableIdentity] = []
+    validators: list[SchemaValidatorPayload] = []
+    for method in shape.root.methods:
+        target: CallableIdentity | None = method.target
+        descriptor: PydanticDescriptor | None = method.descriptor
+        if target is not None and descriptor is not None:
+            selected: PydanticDescriptor = descriptor
+            if selected.kind == "field-validator" or selected.kind == "model-validator":
+                slots.append(target)
+                mode: str | None = selected.validator_mode
+                if mode is not None:
+                    validators.append(
+                        SchemaValidatorPayload(
+                            len(slots) - 1,
+                            selected.kind,
+                            mode,
+                            validator_targets(selected),
+                        )
+                    )
     program: SchemaProgramPayload = SchemaProgramPayload(
         1,
         1,
@@ -813,5 +870,7 @@ def verify_schema(shape: SchemaShapeInput) -> SchemaOutcome:
         shape.canonical_identity,
         built.root,
         built.nodes,
+        slots,
+        validators,
     )
     return SchemaOutcome("produced", program, [])

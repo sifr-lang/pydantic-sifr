@@ -446,7 +446,7 @@ impl<'schema> PreparedSchema<'schema> {
                 STRUCTURAL_BRIDGE_CONTRACT_VERSION,
                 header.identity(),
                 T::shape_identity(),
-                None,
+                header.slot_table_identity(),
             )
             .map_err(|_| {
                 schema_error("Static schema envelope is invalid", "valid schema envelope")

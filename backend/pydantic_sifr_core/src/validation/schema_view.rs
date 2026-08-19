@@ -10,6 +10,7 @@ use super::{
 };
 
 mod sums;
+mod validators;
 pub(crate) use sums::{StaticMetadata, StaticVariant};
 
 #[derive(Clone, Copy, Debug)]
@@ -58,6 +59,9 @@ pub enum SchemaTag {
     LaxOrStrict,
     JsonOrStructural,
     Chain,
+    FunctionBefore,
+    FunctionAfter,
+    FunctionPlain,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -169,6 +173,9 @@ impl<'schema> SchemaRef<'schema> {
                 "lax-or-strict" => Ok(SchemaTag::LaxOrStrict),
                 "json-or-structural" => Ok(SchemaTag::JsonOrStructural),
                 "chain" => Ok(SchemaTag::Chain),
+                "function-before" => Ok(SchemaTag::FunctionBefore),
+                "function-after" => Ok(SchemaTag::FunctionAfter),
+                "function-plain" => Ok(SchemaTag::FunctionPlain),
                 _ => Err(schema_error("Static schema kind is not supported")),
             },
         }

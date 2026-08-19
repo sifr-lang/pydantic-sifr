@@ -17,7 +17,7 @@ num-traits = { version = "=0.2.19", default-features = false, features = ["std"]
 regex = { version = "=1.13.1", default-features = false, features = ["std", "perf", "unicode"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.149"
-sifr_runtime = { git = "https://github.com/sifr-lang/sifr.git", rev = "6152fc50984395a640c42f31e9e270cd3a9e09c8", default-features = false, features = ["structural"] }
+sifr_runtime = { git = "https://github.com/sifr-lang/sifr.git", rev = "0ab08c47605b694e396a4c30c621fd1ae79b07e1", default-features = false, features = ["structural"] }
 speedate = "=0.17.0"
 url = { version = "=2.5.8", default-features = false, features = ["std"] }
 uuid = { version = "=1.24.0", default-features = false, features = ["std"] }

@@ -4,6 +4,7 @@ from sifr.meta import (
     DeclarationInput,
     DeclarationPlan,
     PlannedField,
+    PlannedHandler,
     PlannedIssue,
     PlannedMetadata,
     SourceOrigin,
@@ -140,7 +141,11 @@ def field_descriptor_issues(
     reason: str | None = None
     argument_name: str = ""
     argument_position: int = 0
-    if has_argument(item, "default", 0) and has_argument(item, "default_factory", 1):
+    if (
+        target_kind == "field"
+        and has_argument(item, "default", 0)
+        and has_argument(item, "default_factory", 1)
+    ):
         reason = "default_conflict"
         argument_name = "default_factory"
         argument_position = 1
@@ -232,6 +237,57 @@ def field_descriptor_issues(
 
 
 @const_eval
+def method_descriptor_issues(
+    own descriptor: PydanticDescriptor,
+    own fallback: SourceOrigin,
+) -> list[PlannedIssue[PydanticDescriptor]]:
+    output: list[PlannedIssue[PydanticDescriptor]] = []
+    reason: str | None = None
+    mode: str | None = descriptor.validator_mode
+    if mode is None:
+        reason = "missing_validator_mode"
+    elif descriptor.kind == "field-validator":
+        selected_mode: str = mode
+        if (
+            selected_mode != "before"
+            and selected_mode != "after"
+            and selected_mode != "plain"
+        ):
+            reason = "invalid_field_validator_mode"
+        targets: list[str] | None = descriptor.validator_fields
+        if reason is None:
+            if targets is None:
+                reason = "empty_validator_targets"
+            else:
+                selected_targets: list[str] = targets
+                if len(selected_targets) == 0:
+                    reason = "empty_validator_targets"
+                else:
+                    seen: list[str] = []
+                    for target in selected_targets:
+                        if reason is None:
+                            duplicate: bool = False
+                            for existing in seen:
+                                if target == existing:
+                                    duplicate = True
+                            if target == "*":
+                                reason = "wildcard_validator_target"
+                            elif len(target) == 0:
+                                reason = "empty_validator_target"
+                            elif duplicate:
+                                reason = "duplicate_validator_target"
+                            else:
+                                seen.append(target)
+    elif descriptor.kind == "model-validator":
+        selected_mode: str = mode
+        if selected_mode != "before" and selected_mode != "after":
+            reason = "invalid_model_validator_mode"
+    if reason is not None:
+        output.append(descriptor_issue(reason, fallback))
+    return output
+
+
+@const_eval
 def config_descriptor_issues(
     item: ClassDeclarationItem,
     own descriptor: PydanticDescriptor,
@@ -291,12 +347,20 @@ def config_descriptor_issues(
 @metadata("sifr.meta.issue_template", ("empty_literal_values", []))
 @metadata("sifr.meta.issue_template", ("invalid_discriminator_path", []))
 @metadata("sifr.meta.issue_template", ("empty_discriminator_tags", []))
+@metadata("sifr.meta.issue_template", ("missing_validator_mode", []))
+@metadata("sifr.meta.issue_template", ("invalid_field_validator_mode", []))
+@metadata("sifr.meta.issue_template", ("invalid_model_validator_mode", []))
+@metadata("sifr.meta.issue_template", ("empty_validator_targets", []))
+@metadata("sifr.meta.issue_template", ("empty_validator_target", []))
+@metadata("sifr.meta.issue_template", ("wildcard_validator_target", []))
+@metadata("sifr.meta.issue_template", ("duplicate_validator_target", []))
 def adapt_model(
     declaration: DeclarationInput[PydanticDescriptor],
 ) -> DeclarationPlan[PydanticDescriptor]:
     fields: list[PlannedField] = []
     metadata: list[PlannedMetadata[PydanticDescriptor]] = []
     issues: list[PlannedIssue[PydanticDescriptor]] = []
+    handlers: list[PlannedHandler[PydanticDescriptor]] = []
     for item in declaration.declaration.items:
         if item.kind == "field":
             declared_type: str | None = item.declared_type
@@ -365,13 +429,28 @@ def adapt_model(
                         metadata_value,
                     )
                 )
+        elif use.target_kind == "method":
+            descriptor: PydanticDescriptor = use.value
+            if (
+                descriptor.kind == "field-validator"
+                or descriptor.kind == "model-validator"
+            ):
+                issue_descriptor: PydanticDescriptor = use.value
+                for issue in method_descriptor_issues(issue_descriptor, use.origin):
+                    issues.append(issue)
+                target: CallableIdentity | None = use.target_callable
+                if target is not None:
+                    handler_descriptor: PydanticDescriptor = use.value
+                    handlers.append(
+                        PlannedHandler(target, handler_descriptor, use.origin)
+                    )
     return DeclarationPlan(
         fields,
         metadata,
         "pydantic_sifr.schema_contract",
         "verify_schema",
         issues,
-        [],
+        handlers,
         None,
         None,
     )
@@ -568,4 +647,108 @@ def ConfigDict(
         None,
         None,
         None,
+    )
+
+
+@method_descriptor("pydantic_sifr.declarations", "adapt_model")
+def field_validator(
+    field: str,
+    additional_fields: list[str] | None = None,
+    mode: str = "after",
+) -> PydanticDescriptor:
+    fields: list[str] = [field]
+    if additional_fields is not None:
+        for target in additional_fields:
+            fields.append(target)
+    return PydanticDescriptor(
+        "field-validator",
+        "required",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        fields,
+        mode,
+    )
+
+
+@method_descriptor("pydantic_sifr.declarations", "adapt_model")
+def model_validator(mode: str) -> PydanticDescriptor:
+    return PydanticDescriptor(
+        "model-validator",
+        "required",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        mode,
     )

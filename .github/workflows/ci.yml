@@ -1,7 +1,7 @@
 name: ci
 
 env:
-  SIFR_REV: 6152fc50984395a640c42f31e9e270cd3a9e09c8
+  SIFR_REV: 0ab08c47605b694e396a4c30c621fd1ae79b07e1
 
 on:
   pull_request:

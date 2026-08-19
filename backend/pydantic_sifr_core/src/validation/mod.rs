@@ -3,6 +3,7 @@ mod construction;
 mod control;
 mod definitions;
 mod error;
+mod function_validators;
 mod models;
 mod scalars;
 mod schema;
@@ -17,12 +18,15 @@ mod value;
 
 pub use collections::{ValidatedIterator, validated_iterator};
 pub use construction::{
-    validate_and_construct, validate_json_and_construct, validate_json_strings_and_construct,
-    validate_native_and_construct, validate_strings_and_construct,
-    validate_structural_and_construct,
+    validate_and_construct, validate_and_construct_with_callbacks, validate_json_and_construct,
+    validate_json_and_construct_with_callbacks, validate_json_strings_and_construct,
+    validate_json_strings_and_construct_with_callbacks, validate_native_and_construct,
+    validate_strings_and_construct, validate_structural_and_construct,
+    validate_structural_and_construct_with_callbacks,
 };
 pub use definitions::{DefinitionSchema, DefinitionsSchema};
 pub use error::{ErrorDetail, LocationItem, ValidationError, ValidationLimits};
+pub use function_validators::{ValidationCallbacks, validator_callback_error};
 pub use schema::{
     AliasPath, AliasSegment, BytesConstraints, BytesJsonMode, ChainSchema, CollectionConstraints,
     ComplexConstraints, DecimalConstraints, ExtraPolicy, FieldDefault, FloatConstraints,
@@ -134,6 +138,27 @@ pub(crate) fn validate_ref(
     validate_at(schema, input, input.root(), options)
 }
 
+pub(crate) fn validate_ref_with_callbacks<'input>(
+    schema: SchemaRef<'_>,
+    input: &'input InputArena,
+    options: ValidationOptions,
+    callbacks: &'input dyn ValidationCallbacks,
+) -> Result<ValidatedArena, ValidationError> {
+    validate_at_depth_with_context_mode(
+        schema,
+        input,
+        input.root(),
+        options,
+        0,
+        ValidationContext {
+            definition_scopes: Arc::new(Vec::new()),
+            active_references: Vec::new(),
+            enforce_strings_input: true,
+        },
+        Some(callbacks),
+    )
+}
+
 fn validate_at(
     schema: SchemaRef<'_>,
     input: &InputArena,
@@ -181,6 +206,7 @@ pub(crate) fn validate_at_depth_with_context(
             active_references,
             enforce_strings_input: true,
         },
+        None,
     )
 }
 
@@ -190,13 +216,14 @@ struct ValidationContext {
     enforce_strings_input: bool,
 }
 
-fn validate_at_depth_with_context_mode(
+fn validate_at_depth_with_context_mode<'input>(
     schema: SchemaRef<'_>,
-    input: &InputArena,
+    input: &'input InputArena,
     root: InputId,
     options: ValidationOptions,
     start_depth: usize,
     context: ValidationContext,
+    callbacks: Option<&'input dyn ValidationCallbacks>,
 ) -> Result<ValidatedArena, ValidationError> {
     validate_options(options)?;
     if context.enforce_strings_input && options.profile == InputProfile::Strings {
@@ -209,6 +236,7 @@ fn validate_at_depth_with_context_mode(
         options,
         definition_scopes: context.definition_scopes,
         active_references: context.active_references,
+        callbacks,
     };
     let root = state.validate_node(schema, root, start_depth)?;
     Ok(ValidatedArena::new(root, state.values))
@@ -242,6 +270,7 @@ pub(crate) struct ValidationState<'a> {
     options: ValidationOptions,
     definition_scopes: DefinitionScopes,
     active_references: Vec<(InputId, &'static str)>,
+    callbacks: Option<&'a dyn ValidationCallbacks>,
 }
 
 impl ValidationState<'_> {
@@ -288,6 +317,14 @@ impl ValidationState<'_> {
                 | schema_view::SchemaTag::Chain
         ) {
             return control::validate_control(self, schema, input_id, depth);
+        }
+        if matches!(
+            tag,
+            schema_view::SchemaTag::FunctionBefore
+                | schema_view::SchemaTag::FunctionAfter
+                | schema_view::SchemaTag::FunctionPlain
+        ) {
+            return function_validators::validate_function(self, schema, input_id, depth);
         }
         if matches!(
             tag,
@@ -390,7 +427,7 @@ impl ValidationState<'_> {
     }
 
     pub(crate) fn validate_branch(
-        &self,
+        &mut self,
         schema: SchemaRef<'_>,
         root: InputId,
         start_depth: usize,
@@ -399,7 +436,7 @@ impl ValidationState<'_> {
     }
 
     pub(crate) fn validate_branch_with_options(
-        &self,
+        &mut self,
         schema: SchemaRef<'_>,
         root: InputId,
         start_depth: usize,
@@ -411,32 +448,37 @@ impl ValidationState<'_> {
             options,
             definition_scopes: Arc::clone(&self.definition_scopes),
             active_references: self.active_references.clone(),
+            callbacks: self.callbacks,
         };
         let root = state.validate_node(schema, root, start_depth)?;
         Ok(ValidatedArena::new(root, state.values))
     }
 
     pub(crate) fn validate_input(
-        &self,
+        &mut self,
         schema: SchemaRef<'_>,
         input: &InputArena,
         root: InputId,
         options: ValidationOptions,
         start_depth: usize,
     ) -> Result<ValidatedArena, ValidationError> {
-        validate_at_depth_with_context(
+        validate_at_depth_with_context_mode(
             schema,
             input,
             root,
             options,
             start_depth,
-            Arc::clone(&self.definition_scopes),
-            Vec::new(),
+            ValidationContext {
+                definition_scopes: Arc::clone(&self.definition_scopes),
+                active_references: Vec::new(),
+                enforce_strings_input: true,
+            },
+            self.callbacks,
         )
     }
 
     pub(crate) fn validate_chain_input(
-        &self,
+        &mut self,
         schema: SchemaRef<'_>,
         input: &InputArena,
         root: InputId,
@@ -453,7 +495,24 @@ impl ValidationState<'_> {
                 active_references: Vec::new(),
                 enforce_strings_input: false,
             },
+            self.callbacks,
         )
+    }
+
+    pub(crate) fn invoke_validator(
+        &mut self,
+        slot: usize,
+        input: ValidatedArena,
+    ) -> Result<InputArena, ValidationError> {
+        self.callbacks
+            .ok_or_else(|| {
+                scalars::type_error(
+                    "validator_unavailable",
+                    "Validator schema requires a checked callback table",
+                    "validator-aware validation entry point",
+                )
+            })?
+            .invoke(slot, input)
     }
 
     pub(crate) fn push_definition_scope(&mut self, scope: DefinitionScope) {

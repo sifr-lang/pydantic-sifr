@@ -2,8 +2,8 @@ use num_bigint::BigInt;
 use num_traits::ToPrimitive;
 use sifr_runtime::SifrInt;
 use sifr_runtime::interop::structural::{
-    NodeId, ShapeIdentity, StructuralContractError, StructuralEdgeKind, StructuralKind,
-    StructuralNodeEdge, StructuralNodeRef, StructuralScalar, StructuralSource,
+    ArenaNode, NodeId, ShapeIdentity, StructuralArena, StructuralContractError, StructuralEdgeKind,
+    StructuralKind, StructuralNodeEdge, StructuralNodeRef, StructuralScalar, StructuralSource,
 };
 
 use crate::{Arena, ArenaId};
@@ -16,7 +16,7 @@ const PYDANTIC_MULTI_HOST_URL_IDENTITY: &str = "pydantic_sifr.special_values.Mul
 const PYDANTIC_PATTERN_IDENTITY: &str = "pydantic_sifr.special_values.Pattern";
 
 impl ValidatedArena {
-    pub(crate) fn prepare_structural(
+    pub fn prepare_structural(
         &mut self,
         shape: ShapeIdentity,
     ) -> Result<(), StructuralContractError> {
@@ -29,6 +29,39 @@ impl ValidatedArena {
         self.edges = Some(build_structural_edges(&self.values));
         self.moved = vec![false; self.values.len()];
         Ok(())
+    }
+
+    pub fn into_structural_arena(
+        mut self,
+        shape: ShapeIdentity,
+    ) -> Result<StructuralArena, StructuralContractError> {
+        self.prepare_structural(shape)?;
+        let descriptions = self
+            .descriptions
+            .take()
+            .ok_or(StructuralContractError::InvalidNode)?;
+        let edges = self
+            .edges
+            .take()
+            .ok_or(StructuralContractError::InvalidNode)?;
+        let root = node_id(self.root);
+        let mut nodes = Vec::with_capacity(self.values.len());
+        for (index, ((kind, nominal), node_edges)) in
+            descriptions.into_iter().zip(edges).enumerate()
+        {
+            let id =
+                ArenaId::from_usize(index).map_err(|_| StructuralContractError::InvalidNode)?;
+            if is_scalar_kind(kind) {
+                let value = self
+                    .values
+                    .get_mut(id)
+                    .ok_or(StructuralContractError::InvalidNode)?;
+                nodes.push(ArenaNode::scalar(kind, take_structural_scalar(value)?));
+            } else {
+                nodes.push(ArenaNode::aggregate(kind, nominal, node_edges));
+            }
+        }
+        StructuralArena::seal(shape, root, nodes)
     }
 }
 

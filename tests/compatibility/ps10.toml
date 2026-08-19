@@ -17,10 +17,10 @@ blocker = ""
 
 [[surface]]
 name = "api/validators"
-status = "blocked"
-evidence = ""
-difference = "Typed validator declarations require handler-bearing method-slot dispatch."
-blocker = "https://github.com/sifr-lang/pydantic-sifr/issues/10"
+status = "adapted"
+evidence = "demos/milestone_m9_validators/src/main.sifr"
+difference = "Checked field validators support before, after, and plain modes; checked model validators support before and after modes. Before handlers declare a static input type. Wrap mode and wildcard targets are excluded."
+blocker = ""
 
 [[surface]]
 name = "api/serialization"

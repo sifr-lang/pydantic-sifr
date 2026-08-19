@@ -79,6 +79,12 @@ functions use one compiler-sealed schema program. Validation constructs an
 ordinary Sifr class through one checked arena. Serialization and JSON Schema
 generation read the same sealed program.
 
+Models can declare `field_validator` handlers in `before`, `after`, and
+`plain` modes. They can also declare `model_validator` handlers in `before`
+and `after` modes. Each handler has a checked method signature and a sealed
+method slot. The runtime dispatches only those slots. Validator-aware
+validation functions accept typed mutable context.
+
 Models derive from `BaseModel`. Typed `Field`, `ConfigDict`, and `Constraints`
 descriptors define compile-time field and model rules. Users do not write raw
 schema metadata. `Field` also carries checked `error_builtin`, `error_package`,
@@ -100,6 +106,10 @@ models, and labelled branch errors through the same public API.
 
 [`demos/milestone_m8_fields_configuration`](demos/milestone_m8_fields_configuration)
 shows the complete M8 declaration surface and mapped special values.
+
+[`demos/milestone_m9_validators`](demos/milestone_m9_validators) shows field
+and model validators for JSON and structural input. It also shows multiple
+field targets, typed context, and checked callback errors.
 
 Sum declarations use package-owned metadata. Literal keys are
 `pydantic.literal.none|bool|int|str|bytes`. Enum fields use the corresponding
@@ -141,7 +151,7 @@ Core suites in isolated pytest processes from that commit's root `uv.lock`.
 The historical standalone Pydantic Core checkout is not a conformance source.
 
 The gate uses Sifr implementation commit
-`6152fc50984395a640c42f31e9e270cd3a9e09c8`. CI builds that exact compiler
+`0ab08c47605b694e396a4c30c621fd1ae79b07e1`. CI builds that exact compiler
 source. The runtime manifests and lockfiles pin the same commit.
 
 See [Certification](docs/certification.md) for the audited revisions, ledger
