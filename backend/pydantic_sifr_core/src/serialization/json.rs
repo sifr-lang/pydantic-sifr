@@ -10,7 +10,7 @@ use crate::JsonLimits;
 use super::{
     SelectionSegment, SerializationError, SerializationErrorKind, SerializationOptions,
     SerializationPlan,
-    output::{native_json_bytes, verify_shape},
+    output::{native_json_bytes, serialize_structural, verify_shape},
     selection::selected,
 };
 
@@ -21,6 +21,26 @@ pub fn serialize_json<T: StructuralProject>(
     value: &T,
     options: &SerializationOptions,
 ) -> Result<Vec<u8>, SerializationError> {
+    if plan.root_model() {
+        validate_limits(options.limits)?;
+        let value = serialize_structural(plan, value, options)?;
+        let output = native_json_bytes(
+            &value,
+            plan.integer_profile(),
+            options.limits.max_integer_digits,
+            "$",
+        )?
+        .ok_or_else(|| {
+            SerializationError::new(
+                SerializationErrorKind::UnsupportedJsonValue,
+                "root model produced a value that is not JSON-compatible",
+            )
+        })?;
+        if output.len() > options.limits.max_input_bytes {
+            return Err(limit_error("maximum JSON output bytes"));
+        }
+        return Ok(output);
+    }
     verify_shape::<T>(plan)?;
     validate_limits(options.limits)?;
     let mut writer = JsonWriter {

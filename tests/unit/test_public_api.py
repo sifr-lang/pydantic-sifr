@@ -14,6 +14,14 @@ def package_root_exports(source: str) -> list[str]:
     for line in source.splitlines():
         if not line:
             continue
+        alias = re.fullmatch(
+            r"type ([A-Za-z_][A-Za-z0-9_]*)\[[A-Za-z_][A-Za-z0-9_]*\] = "
+            r"[A-Za-z_][A-Za-z0-9_]*",
+            line,
+        )
+        if alias is not None:
+            exports.append(alias.group(1))
+            continue
         statement = re.fullmatch(r"from [A-Za-z0-9_.]+ import (.+)", line)
         if statement is None:
             raise ValueError(f"unsupported package-root statement: {line}")
@@ -54,7 +62,6 @@ class PublicApiTest(unittest.TestCase):
                 "model_dump_json",
                 "model_dump_json_with_serializers",
                 "model_dump_with_serializers",
-                "model_json_schema",
                 "model_validate",
                 "model_validate_json",
                 "model_validate_json_with_validators",
@@ -66,6 +73,7 @@ class PublicApiTest(unittest.TestCase):
                 "Pattern",
                 "SpecialValueError",
                 "Url",
+                "TypeAdapter",
             ],
         )
 

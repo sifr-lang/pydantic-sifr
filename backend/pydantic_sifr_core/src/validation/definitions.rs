@@ -265,6 +265,7 @@ mod tests {
             active_references: Vec::new(),
             callbacks: None,
             skip_callbacks: false,
+            serialization_input: false,
         };
         assert!(state.enter_reference(input.root(), "tests.Loop"));
         let error = match validate_reference(

@@ -504,7 +504,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pydantic-sifr-m8-fields-configuration"
+name = "pydantic-sifr-m11-model-operations"
 version = "0.0.0"
 dependencies = [
  "pydantic-sifr",

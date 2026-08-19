@@ -1,15 +1,18 @@
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 use pydantic_sifr_core::{
-    ExtraPolicy, InputProfile, IntegerConstraints, IntegerTarget, JsonLimits, ModelField,
-    ModelSchema, NativeValue, PreparedSchema, Schema, StringConstraints, ValidatedArena,
-    ValidationOptions, validate_json_and_construct, validate_native_and_construct,
-    validate_strings_and_construct,
+    ExtraPolicy, InputProfile, IntegerConstraints, IntegerTarget, JsonIntegerProfile, JsonLimits,
+    JsonSchemaMode, JsonSchemaOptions, ModelField, ModelSchema, NativeValue, PreparedSchema,
+    Schema, SerializationOptions, SerializationPlan, StringConstraints, ValidatedArena,
+    ValidationOptions, generate_json_schema, serialize_json, serialize_structural,
+    validate_json_and_construct, validate_native_and_construct, validate_strings_and_construct,
+    validate_structural_strings_and_construct,
 };
 use sifr_runtime::interop::structural::{
     ConstructToken, NodeId, NominalField, ShapeIdentity, StructuralConstruct,
-    StructuralContractError, StructuralEdgeKind, StructuralKind, StructuralSource, StructuralType,
-    metadata, nominal_record, unary_container,
+    StructuralContractError, StructuralEdge, StructuralEdgeKind, StructuralEnter, StructuralKind,
+    StructuralProject, StructuralSource, StructuralType, StructuralVisitor, VisitControl, metadata,
+    nominal_record, unary_container,
 };
 
 #[derive(Debug, Eq, PartialEq)]
@@ -17,6 +20,96 @@ struct User {
     id: i64,
     name: String,
     note: Option<String>,
+}
+
+#[derive(Debug, Eq, PartialEq)]
+struct IntRoot {
+    root: i64,
+}
+
+impl StructuralType for IntRoot {
+    fn shape_identity() -> ShapeIdentity {
+        nominal_record(
+            "IntRoot",
+            &[],
+            &[nominal_field::<i64>("root")],
+            metadata(&[]),
+        )
+    }
+}
+
+impl StructuralConstruct for IntRoot {
+    fn structural_construct_at<Source: StructuralSource>(
+        source: &mut Source,
+        node: NodeId,
+        token: ConstructToken,
+    ) -> Result<Self, StructuralContractError> {
+        let nodes = record_nodes(source, node, "IntRoot", &["root"])?;
+        Ok(Self {
+            root: i64::structural_construct_at(source, nodes[0], token)?,
+        })
+    }
+}
+
+impl StructuralProject for IntRoot {
+    fn structural_project<'value, V: StructuralVisitor<'value>>(
+        &'value self,
+        visitor: &mut V,
+    ) -> Result<(), V::Error> {
+        let control = visitor.enter(StructuralEnter::new(
+            StructuralKind::Record,
+            Some("IntRoot"),
+            1,
+        ))?;
+        if control == VisitControl::Continue {
+            visitor.edge(StructuralEdge::new(StructuralEdgeKind::RecordField("root")))?;
+            self.root.structural_project(visitor)?;
+        }
+        visitor.exit(StructuralKind::Record)
+    }
+}
+
+struct UserStringInput {
+    id: String,
+    name: String,
+    note: String,
+}
+
+impl StructuralType for UserStringInput {
+    fn shape_identity() -> ShapeIdentity {
+        nominal_record(
+            "UserStringInput",
+            &[],
+            &[
+                nominal_field::<String>("id"),
+                nominal_field::<String>("name"),
+                nominal_field::<String>("note"),
+            ],
+            metadata(&[]),
+        )
+    }
+}
+
+impl StructuralProject for UserStringInput {
+    fn structural_project<'value, V: StructuralVisitor<'value>>(
+        &'value self,
+        visitor: &mut V,
+    ) -> Result<(), V::Error> {
+        let control = visitor.enter(StructuralEnter::new(
+            StructuralKind::Record,
+            Some("UserStringInput"),
+            3,
+        ))?;
+        if control == VisitControl::Continue {
+            visitor.edge(StructuralEdge::new(StructuralEdgeKind::RecordField("id")))?;
+            self.id.structural_project(visitor)?;
+            visitor.edge(StructuralEdge::new(StructuralEdgeKind::RecordField("name")))?;
+            self.name.structural_project(visitor)?;
+            visitor.edge(StructuralEdge::new(StructuralEdgeKind::RecordField("note")))?;
+            self.note.structural_project(visitor)?;
+        }
+        visitor.exit(StructuralKind::Record)
+    }
 }
 
 impl StructuralType for User {
@@ -239,6 +332,90 @@ fn json_native_and_strings_entry_points_construct_the_target_directly() {
     .unwrap_or_else(|error| panic!("strings construction failed: {error}"));
     assert_eq!(strings.id, 3);
     assert_eq!(strings.name, "Sam");
+}
+
+#[test]
+fn string_structural_entry_point_constructs_bare_and_nested_targets() {
+    let integer = Schema::Integer {
+        target: IntegerTarget::I64,
+        constraints: IntegerConstraints::default(),
+    };
+    let integer = prepared(&integer);
+    let bare = validate_structural_strings_and_construct::<i64, String>(
+        &integer,
+        &"41".to_owned(),
+        JsonLimits::default(),
+        ValidationOptions::default(),
+    )
+    .unwrap_or_else(|error| panic!("bare string construction failed: {error}"));
+    assert_eq!(bare, 41);
+
+    let user_schema = user_schema();
+    let user_schema = prepared(&user_schema);
+    let input = UserStringInput {
+        id: "42".to_owned(),
+        name: "Ada".to_owned(),
+        note: "ready".to_owned(),
+    };
+    let user = validate_structural_strings_and_construct::<User, _>(
+        &user_schema,
+        &input,
+        JsonLimits::default(),
+        ValidationOptions::default(),
+    )
+    .unwrap_or_else(|error| panic!("nested string construction failed: {error}"));
+    assert_eq!(user.id, 42);
+    assert_eq!(user.note.as_deref(), Some("ready"));
+}
+
+#[test]
+fn root_model_uses_scalar_validation_serialization_and_json_schema() {
+    let schema = Schema::Model(
+        ModelSchema::new_root(
+            "IntRoot",
+            IntRoot::shape_identity(),
+            ModelField::required(
+                "root",
+                Schema::Integer {
+                    target: IntegerTarget::I64,
+                    constraints: IntegerConstraints::default(),
+                },
+            ),
+        )
+        .unwrap_or_else(|error| panic!("root model schema failed: {error}")),
+    );
+    let prepared = prepared(&schema);
+    let value = validate_structural_strings_and_construct::<IntRoot, String>(
+        &prepared,
+        &"41".to_owned(),
+        JsonLimits::default(),
+        ValidationOptions::default(),
+    )
+    .unwrap_or_else(|error| panic!("root model validation failed: {error}"));
+    assert_eq!(value, IntRoot { root: 41 });
+
+    let plan = SerializationPlan::from_prepared(prepared, JsonIntegerProfile::Exact)
+        .unwrap_or_else(|error| panic!("root model plan failed: {error}"));
+    let options = SerializationOptions::default();
+    assert_eq!(
+        serialize_structural(&plan, &value, &options)
+            .unwrap_or_else(|error| panic!("root model projection failed: {error}")),
+        NativeValue::Integer("41".to_owned()),
+    );
+    assert_eq!(
+        serialize_json(&plan, &value, &options)
+            .unwrap_or_else(|error| panic!("root model JSON failed: {error}")),
+        b"41",
+    );
+
+    let document = generate_json_schema(
+        &schema,
+        JsonSchemaOptions::new(JsonSchemaMode::Validation, true),
+        JsonIntegerProfile::Exact,
+    )
+    .unwrap_or_else(|error| panic!("root model JSON Schema failed: {error}"));
+    assert_eq!(document["type"], "integer");
+    assert!(document.get("properties").is_none());
 }
 
 #[test]

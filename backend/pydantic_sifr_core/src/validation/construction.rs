@@ -117,6 +117,37 @@ where
     validate_and_construct_with_callbacks(schema, &input, options, callbacks)
 }
 
+pub fn validate_structural_strings_and_construct<T, Input>(
+    schema: &PreparedSchema<'_>,
+    input: &Input,
+    input_limits: JsonLimits,
+    mut options: ValidationOptions,
+) -> Result<T, ValidationError>
+where
+    T: StructuralConstruct,
+    Input: StructuralProject,
+{
+    options.profile = InputProfile::Strings;
+    let input = project_structural_input(input, input_limits).map_err(native_input_error)?;
+    validate_and_construct(schema, &input, options)
+}
+
+pub fn validate_structural_strings_and_construct_with_callbacks<T, Input>(
+    schema: &PreparedSchema<'_>,
+    input: &Input,
+    input_limits: JsonLimits,
+    mut options: ValidationOptions,
+    callbacks: &dyn ValidationCallbacks,
+) -> Result<T, ValidationError>
+where
+    T: StructuralConstruct,
+    Input: StructuralProject,
+{
+    options.profile = InputProfile::Strings;
+    let input = project_structural_input(input, input_limits).map_err(native_input_error)?;
+    validate_and_construct_with_callbacks(schema, &input, options, callbacks)
+}
+
 pub fn validate_strings_and_construct<T>(
     schema: &PreparedSchema<'_>,
     input: &NativeValue,

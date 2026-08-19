@@ -1,0 +1,98 @@
+from sifr.json import JsonValue
+from pydantic_sifr import BaseModel, JsonSchemaError, RootModel, TypeAdapter
+from pydantic_sifr import SerializationError, ValidationError
+
+
+class Address(BaseModel):
+    postal_code: int64
+
+
+class AddressStrings:
+    postal_code: str
+
+
+class User(BaseModel):
+    id: int64
+    address: Address
+
+
+class UserStrings:
+    id: str
+    address: AddressStrings
+
+
+class Envelope[T](BaseModel):
+    value: T
+
+
+class ConcreteEnvelope(Envelope[int64]):
+    label: str
+
+
+class IntRoot(RootModel[int64]):
+    pass
+
+
+def main() -> Result[
+    None,
+    ValidationError | SerializationError | JsonSchemaError | RustPanicError,
+]:
+    try:
+        from_json: User = User.model_validate_json(
+            b'{"id":7,"address":{"postal_code":21}}'
+        )
+        expected_json_id: int64 = 7
+        assert from_json.id == expected_json_id
+        from_structural: User = User.model_validate(from_json)
+        expected_postal_code: int64 = 21
+        assert from_structural.address.postal_code == expected_postal_code
+        user_dump: bytes = from_json.model_dump_json()
+        assert user_dump == b'{"id":7,"address":{"postal_code":21}}'
+        from_strings: User = User.model_validate_strings(
+            UserStrings("8", AddressStrings("22"))
+        )
+        expected_string_id: int64 = 8
+        expected_string_postal_code: int64 = 22
+        assert from_strings.id == expected_string_id
+        assert from_strings.address.postal_code == expected_string_postal_code
+
+        adapted: User = TypeAdapter[User].model_validate_json(
+            b'{"id":9,"address":{"postal_code":23}}'
+        )
+        expected_adapted_id: int64 = 9
+        assert adapted.id == expected_adapted_id
+
+        rooted: IntRoot = IntRoot.model_validate_strings("41")
+        expected_root: int64 = 41
+        assert rooted.root == expected_root
+        root_dump: bytes = rooted.model_dump_json()
+        assert root_dump == b"41"
+
+        concrete: ConcreteEnvelope = ConcreteEnvelope.model_validate_json(
+            b'{"value":42,"label":"answer"}'
+        )
+        expected_concrete_value: int64 = 42
+        assert concrete.value == expected_concrete_value
+        concrete_dump: dict[str, JsonValue] = concrete.model_dump()
+        assert len(concrete_dump) == 2
+
+        schema: bytes = User.model_json_schema()
+        adapted_schema: bytes = TypeAdapter[User].model_json_schema()
+        root_schema: bytes = IntRoot.model_json_schema()
+        assert schema == adapted_schema
+        try:
+            schema_text: str = schema.decode()
+            root_schema_text: str = root_schema.decode()
+            assert '"properties"' in schema_text
+            assert '"type":"integer"' in root_schema_text
+        except ParseError:
+            assert False
+    except ValidationError as error:
+        raise error
+    except SerializationError as error:
+        raise error
+    except JsonSchemaError as error:
+        raise error
+    except RustPanicError as error:
+        raise error
+    return None

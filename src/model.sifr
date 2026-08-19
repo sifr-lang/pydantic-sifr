@@ -1,4 +1,4 @@
-from sifr.meta import Context, MethodSlots, StaticProgram, Structural
+from sifr.meta import Context, MethodSlots, StaticProgram, StringStructural, Structural
 from sifr.json import JsonValue
 
 
@@ -18,6 +18,7 @@ class JsonSchemaError(Error):
 @rust(bridge.model.validate)
 def model_validate[T: StaticProgram, Input: Structural](
     payload: Input,
+    strict: bool | None = None,
 ) -> Result[T, ValidationError | RustPanicError]: ...
 
 
@@ -25,13 +26,15 @@ def model_validate[T: StaticProgram, Input: Structural](
 @rust(bridge.model.validate_json)
 def model_validate_json[T: StaticProgram](
     payload: bytes,
+    strict: bool | None = None,
 ) -> Result[T, ValidationError | RustPanicError]: ...
 
 
 @rust.structural
 @rust(bridge.model.validate_strings)
-def model_validate_strings[T: StaticProgram](
-    payload: bytes,
+def model_validate_strings[T: StaticProgram, Input: StringStructural](
+    payload: Input,
+    strict: bool | None = None,
 ) -> Result[T, ValidationError | RustPanicError]: ...
 
 
@@ -39,21 +42,25 @@ def model_validate_strings[T: StaticProgram](
 @rust(bridge.model.validate_with_validators)
 # This path dispatches only the method slots sealed in the static program.
 def model_validate_with_validators[T: MethodSlots, Input: Structural, C: Context](
-    payload: Input, mut context: C
+    payload: Input, mut context: C, strict: bool | None = None
 ) -> Result[T, ValidationError | RustPanicError]: ...
 
 
 @rust.structural
 @rust(bridge.model.validate_json_with_validators)
 def model_validate_json_with_validators[T: MethodSlots, C: Context](
-    payload: bytes, mut context: C
+    payload: bytes, mut context: C, strict: bool | None = None
 ) -> Result[T, ValidationError | RustPanicError]: ...
 
 
 @rust.structural
 @rust(bridge.model.validate_strings_with_validators)
-def model_validate_strings_with_validators[T: MethodSlots, C: Context](
-    payload: bytes, mut context: C
+def model_validate_strings_with_validators[
+    T: MethodSlots,
+    Input: StringStructural,
+    C: Context,
+](
+    payload: Input, mut context: C, strict: bool | None = None
 ) -> Result[T, ValidationError | RustPanicError]: ...
 
 
@@ -66,6 +73,7 @@ def model_dump_json[T: StaticProgram](
     by_alias: bool = False,
     exclude_none: bool = False,
     exclude_defaults: bool = False,
+    integer_profile: str = "exact",
 ) -> Result[bytes, SerializationError | RustPanicError]: ...
 
 
@@ -79,6 +87,7 @@ def model_dump_json_with_serializers[T: MethodSlots, C: Context](
     by_alias: bool = False,
     exclude_none: bool = False,
     exclude_defaults: bool = False,
+    integer_profile: str = "exact",
 ) -> Result[bytes, SerializationError | RustPanicError]: ...
 
 
@@ -91,6 +100,7 @@ def _model_dump_structural[T: StaticProgram, Output: Structural](
     by_alias: bool = False,
     exclude_none: bool = False,
     exclude_defaults: bool = False,
+    integer_profile: str = "exact",
 ) -> Result[Output, SerializationError | RustPanicError]: ...
 
 
@@ -108,6 +118,7 @@ def _model_dump_structural_with_serializers[
     by_alias: bool = False,
     exclude_none: bool = False,
     exclude_defaults: bool = False,
+    integer_profile: str = "exact",
 ) -> Result[Output, SerializationError | RustPanicError]: ...
 
 
@@ -118,6 +129,7 @@ def model_dump[T: StaticProgram](
     by_alias: bool = False,
     exclude_none: bool = False,
     exclude_defaults: bool = False,
+    integer_profile: str = "exact",
 ) -> Result[dict[str, JsonValue], SerializationError | RustPanicError]:
     try:
         output: dict[str, JsonValue] = _model_dump_structural(
@@ -127,6 +139,7 @@ def model_dump[T: StaticProgram](
             by_alias,
             exclude_none,
             exclude_defaults,
+            integer_profile,
         )
         return output
     except SerializationError as error:
@@ -143,6 +156,7 @@ def model_dump_with_serializers[T: MethodSlots, C: Context](
     by_alias: bool = False,
     exclude_none: bool = False,
     exclude_defaults: bool = False,
+    integer_profile: str = "exact",
 ) -> Result[dict[str, JsonValue], SerializationError | RustPanicError]:
     try:
         output: dict[str, JsonValue] = _model_dump_structural_with_serializers(
@@ -153,16 +167,10 @@ def model_dump_with_serializers[T: MethodSlots, C: Context](
             by_alias,
             exclude_none,
             exclude_defaults,
+            integer_profile,
         )
         return output
     except SerializationError as error:
         raise error
     except RustPanicError as error:
         raise error
-
-
-@rust.structural
-@rust(bridge.model.json_schema)
-def model_json_schema[T: StaticProgram](
-    target: T,
-) -> Result[bytes, JsonSchemaError | RustPanicError]: ...

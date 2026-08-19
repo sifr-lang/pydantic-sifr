@@ -16,9 +16,11 @@ class SameEngineTest(unittest.TestCase):
             for path in sorted((ROOT / "src").rglob("*.sifr"))
         )
         bridges = re.findall(r"@rust\(([^)]+)\)", sources)
-        self.assertEqual(
+        self.assertCountEqual(
             bridges,
             [
+                "bridge.model.json_schema",
+                "bridge.model.json_schema",
                 "bridge.model.validate",
                 "bridge.model.validate_json",
                 "bridge.model.validate_strings",
@@ -29,7 +31,6 @@ class SameEngineTest(unittest.TestCase):
                 "bridge.model.dump_json_with_serializers",
                 "bridge.model.dump",
                 "bridge.model.dump_with_serializers",
-                "bridge.model.json_schema",
                 "bridge.special_values.url_text",
                 "bridge.special_values.multi_host_url_text",
                 "bridge.special_values.pattern_source",

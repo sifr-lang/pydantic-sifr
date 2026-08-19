@@ -113,6 +113,7 @@ class SchemaModelPayload:
     populate_by_name: bool
     location_by_alias: bool
     strict: bool
+    root_model: bool = False
 
 
 class SchemaIntegerConstraintsPayload:

@@ -315,6 +315,7 @@ pub struct ModelSchema {
     pub(crate) extra: ExtraPolicy,
     pub(crate) populate_by_name: bool,
     pub(crate) location_by_alias: bool,
+    pub(crate) root_model: bool,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -415,6 +416,29 @@ impl ModelSchema {
             extra,
             populate_by_name,
             location_by_alias,
+            root_model: false,
+        })
+    }
+
+    pub fn new_root(
+        name: &'static str,
+        structural_identity: ShapeIdentity,
+        field: ModelField,
+    ) -> Result<Self, ValidationError> {
+        if field.name != "root" || !field.input || field.default.is_some() {
+            return Err(schema_error(
+                "A root model must contain one required root field",
+                "required root field",
+            ));
+        }
+        Ok(Self {
+            name,
+            structural_identity,
+            fields: vec![field],
+            extra: ExtraPolicy::Ignore,
+            populate_by_name: false,
+            location_by_alias: true,
+            root_model: true,
         })
     }
 }

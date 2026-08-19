@@ -482,9 +482,28 @@ fn model_schema<'schema>(
     definitions: &mut Vec<(String, SchemaRef<'schema>)>,
 ) -> Result<Value, JsonSchemaError> {
     let model = schema.model().map_err(schema_error)?;
+    let fields = model.fields().map_err(schema_error)?;
+    if model.root_model().map_err(schema_error)? {
+        let [field] = fields.as_slice() else {
+            return Err(unsupported(
+                "a root model must contain exactly one root field",
+            ));
+        };
+        if field.name().map_err(schema_error)? != "root" {
+            return Err(unsupported("a root model field must be named root"));
+        }
+        return generate_node(
+            field.schema().map_err(schema_error)?,
+            options,
+            integer_profile,
+            depth + 1,
+            generated_nodes,
+            definitions,
+        );
+    }
     let mut properties = Map::new();
     let mut required = Vec::new();
-    for field in model.fields().map_err(schema_error)? {
+    for field in fields {
         if options.mode == JsonSchemaMode::Validation && !field.input() {
             continue;
         }
@@ -625,6 +644,7 @@ mod tests {
                     ("populate_by_name", StaticProgramValue::Bool(false)),
                     ("location_by_alias", StaticProgramValue::Bool(true)),
                     ("strict", StaticProgramValue::Bool(false)),
+                    ("root_model", StaticProgramValue::Bool(false)),
                 ]),
             ),
             ("metadata", list(Vec::new())),

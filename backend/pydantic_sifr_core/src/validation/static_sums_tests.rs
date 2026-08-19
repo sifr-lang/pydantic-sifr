@@ -148,6 +148,7 @@ fn model_node(name: &'static str, field_node: &'static str) -> StaticProgramValu
         ("populate_by_name", StaticProgramValue::Bool(false)),
         ("location_by_alias", StaticProgramValue::Bool(true)),
         ("strict", StaticProgramValue::Bool(false)),
+        ("root_model", StaticProgramValue::Bool(false)),
     ]);
     record(vec![
         ("kind", StaticProgramValue::String("model")),

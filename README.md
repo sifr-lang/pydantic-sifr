@@ -115,6 +115,10 @@ field targets, typed context, and checked callback errors.
 attached dump methods, field and model serializers, computed fields, typed
 context, selections, aliases, and checked callback errors.
 
+[`demos/milestone_m11_model_operations`](demos/milestone_m11_model_operations)
+shows attached validation and JSON Schema methods, string-structural input,
+`RootModel[T]`, `TypeAdapter[T]`, and concrete generic models.
+
 Sum declarations use package-owned metadata. Literal keys are
 `pydantic.literal.none|bool|int|str|bytes`. Enum fields use the corresponding
 `pydantic.enum.*` keys in variant order. Integer values are canonical decimal
@@ -155,7 +159,7 @@ Core suites in isolated pytest processes from that commit's root `uv.lock`.
 The historical standalone Pydantic Core checkout is not a conformance source.
 
 The gate uses Sifr implementation commit
-`c1b41a6078cff5bb678bd94df5bbf4e8c7e0ec6c`. CI builds that exact compiler
+`0e16cc73b2d1ba20a59db7f168193eb01a618ab5`. CI builds that exact compiler
 source. The runtime manifests and lockfiles pin the same commit.
 
 See [Certification](docs/certification.md) for the audited revisions, ledger

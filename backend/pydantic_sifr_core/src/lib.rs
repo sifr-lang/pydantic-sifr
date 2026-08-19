@@ -44,5 +44,7 @@ pub use validation::{
     validate_json_and_construct_with_callbacks, validate_json_strings_and_construct,
     validate_json_strings_and_construct_with_callbacks, validate_native_and_construct,
     validate_strings_and_construct, validate_structural_and_construct,
-    validate_structural_and_construct_with_callbacks, validated_iterator, validator_callback_error,
+    validate_structural_and_construct_with_callbacks, validate_structural_strings_and_construct,
+    validate_structural_strings_and_construct_with_callbacks, validated_iterator,
+    validator_callback_error,
 };
