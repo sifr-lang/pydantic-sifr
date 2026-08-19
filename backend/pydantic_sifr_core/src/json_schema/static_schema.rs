@@ -321,15 +321,53 @@ fn reserved_extra_key(key: &str) -> bool {
     matches!(
         key,
         "$schema"
+            | "$id"
+            | "$anchor"
+            | "$dynamicAnchor"
+            | "$dynamicRef"
             | "$defs"
             | "$ref"
             | "type"
+            | "const"
+            | "enum"
+            | "not"
+            | "if"
+            | "then"
+            | "else"
+            | "format"
+            | "pattern"
+            | "minimum"
+            | "maximum"
+            | "exclusiveMinimum"
+            | "exclusiveMaximum"
+            | "multipleOf"
+            | "minLength"
+            | "maxLength"
+            | "minItems"
+            | "maxItems"
+            | "uniqueItems"
+            | "prefixItems"
+            | "items"
+            | "contains"
+            | "minContains"
+            | "maxContains"
             | "properties"
+            | "patternProperties"
+            | "propertyNames"
+            | "minProperties"
+            | "maxProperties"
             | "required"
             | "additionalProperties"
+            | "dependentSchemas"
+            | "unevaluatedProperties"
+            | "unevaluatedItems"
             | "anyOf"
             | "oneOf"
             | "allOf"
+            | "title"
+            | "description"
+            | "default"
+            | "examples"
     )
 }
 
@@ -622,5 +660,13 @@ mod tests {
         )
         .unwrap_or_else(|error| panic!("JSON Schema failed: {error}"));
         assert_eq!(document["required"], json!([]));
+    }
+
+    #[test]
+    fn schema_extras_cannot_replace_structural_keywords() {
+        for key in ["items", "pattern", "enum", "minimum", "properties"] {
+            assert!(super::reserved_extra_key(key));
+        }
+        assert!(!super::reserved_extra_key("x-package-note"));
     }
 }

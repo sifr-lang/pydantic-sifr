@@ -81,7 +81,8 @@ generation read the same sealed program.
 
 Models derive from `BaseModel`. Typed `Field`, `ConfigDict`, and `Constraints`
 descriptors define compile-time field and model rules. Users do not write raw
-schema metadata.
+schema metadata. `Field` also carries checked `error_builtin`, `error_package`,
+`error_code`, and `error_message` override values.
 
 Native structural input uses compiler-generated visitation. The adapter writes
 directly into the input arena and does not create a generic model tree. The

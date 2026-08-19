@@ -3,6 +3,16 @@ from .schema_types import SchemaShapeMetadata
 
 
 @const_eval
+def descriptor_values(
+    metadata: list[SchemaShapeMetadata],
+) -> list[PydanticDescriptor]:
+    output: list[PydanticDescriptor] = []
+    for item in metadata:
+        output.append(item.value)
+    return output
+
+
+@const_eval
 def primitive_kind(name: str) -> str:
     if name == "int" or name == "bigint":
         return "int"
@@ -33,61 +43,53 @@ def copy_metadata(
 
 @const_eval
 def has_integer_constraints(metadata: list[SchemaShapeMetadata]) -> bool:
-    for item in metadata:
-        if item.key == "pydantic.field":
-            value: PydanticDescriptor = item.value
-            if (
-                value.gt is not None
-                or value.ge is not None
-                or value.lt is not None
-                or value.le is not None
-                or value.multiple_of is not None
-            ):
-                return True
+    for value in descriptor_values(metadata):
+        if (
+            value.gt is not None
+            or value.ge is not None
+            or value.lt is not None
+            or value.le is not None
+            or value.multiple_of is not None
+        ):
+            return True
     return False
 
 
 @const_eval
 def has_string_constraints(metadata: list[SchemaShapeMetadata]) -> bool:
-    for item in metadata:
-        if item.key == "pydantic.field":
-            value: PydanticDescriptor = item.value
-            if (
-                value.min_length is not None
-                or value.max_length is not None
-                or value.pattern is not None
-                or value.strip_whitespace is not None
-                or value.to_lower is not None
-                or value.to_upper is not None
-                or value.ascii_only is not None
-            ):
-                return True
+    for value in descriptor_values(metadata):
+        if (
+            value.min_length is not None
+            or value.max_length is not None
+            or value.pattern is not None
+            or value.strip_whitespace is not None
+            or value.to_lower is not None
+            or value.to_upper is not None
+            or value.ascii_only is not None
+        ):
+            return True
     return False
 
 
 @const_eval
 def has_length_constraints(metadata: list[SchemaShapeMetadata]) -> bool:
-    for item in metadata:
-        if item.key == "pydantic.field":
-            value: PydanticDescriptor = item.value
-            if value.min_length is not None or value.max_length is not None:
-                return True
+    for value in descriptor_values(metadata):
+        if value.min_length is not None or value.max_length is not None:
+            return True
     return False
 
 
 @const_eval
 def has_text_constraints(metadata: list[SchemaShapeMetadata]) -> bool:
-    for item in metadata:
-        if item.key == "pydantic.field":
-            value: PydanticDescriptor = item.value
-            if (
-                value.pattern is not None
-                or value.strip_whitespace is not None
-                or value.to_lower is not None
-                or value.to_upper is not None
-                or value.ascii_only is not None
-            ):
-                return True
+    for value in descriptor_values(metadata):
+        if (
+            value.pattern is not None
+            or value.strip_whitespace is not None
+            or value.to_lower is not None
+            or value.to_upper is not None
+            or value.ascii_only is not None
+        ):
+            return True
     return False
 
 
@@ -127,17 +129,15 @@ def is_literal_key(key: str) -> bool:
 
 @const_eval
 def sum_kind(base: str, metadata: list[SchemaShapeMetadata]) -> str:
-    for item in metadata:
-        if item.key == "pydantic.field":
-            value: PydanticDescriptor = item.value
-            if value.literal_values is not None and (
-                base == "int" or base == "str" or base == "bool"
-            ):
-                return "literal"
-            if (
-                base == "union"
-                and value.discriminator is not None
-                and value.discriminator_tags is not None
-            ):
-                return "tagged-union"
+    for value in descriptor_values(metadata):
+        if value.literal_values is not None and (
+            base == "int" or base == "str" or base == "bool"
+        ):
+            return "literal"
+        if (
+            base == "union"
+            and value.discriminator is not None
+            and value.discriminator_tags is not None
+        ):
+            return "tagged-union"
     return base + ""

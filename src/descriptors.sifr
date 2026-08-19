@@ -42,3 +42,7 @@ class PydanticDescriptor:
     union_labels: list[str] | None
     discriminator_tags: list[str] | None
     problem: str | None
+    error_builtin: str | None = None
+    error_package: str | None = None
+    error_code: str | None = None
+    error_message: str | None = None

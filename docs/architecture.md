@@ -55,6 +55,7 @@ stable.
 Built-in errors have fixed codes, messages, and context keys. A custom code
 must be package-qualified. A custom declaration must register one exact
 message and context set. An override cannot change a built-in declaration.
+Typed `Field` arguments carry these override values into the sealed schema.
 
 Malformed schemas return stable package diagnostics during specialization.
 Malformed JSON returns typed runtime errors with stable codes and source

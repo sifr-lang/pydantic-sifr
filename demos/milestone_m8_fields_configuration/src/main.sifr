@@ -64,6 +64,7 @@ class CompatibilityModel(BaseModel):
     data: bytes = Field(min_length=1, max_length=8)
     values: list[int64] = Field(min_length=1, max_length=3)
     level: int64 = Field(literal_values=[1, 2])
+    flag: bool = Field(literal_values=[True])
     status: Status
     choice: int64 | str = Field(union_labels=["integer", "text"])
     pet: Cat | Dog = Field(
@@ -87,6 +88,10 @@ class GeneratedAliasModel(BaseModel):
 
 class AliasChoiceModel(BaseModel):
     value: int64 = Field(validation_alias=AliasChoices(["first", "second"]))
+
+
+class MergeOrderModel(BaseModel):
+    value: Annotated[str, Constraints(min_length=2)] = Field(min_length=3)
 
 
 class SeparateAliasModel(BaseModel):
@@ -166,7 +171,7 @@ def main() -> Result[
             raise error
         assert extra_error_seen
         compatible: CompatibilityModel = model_validate_json(
-            b'{"payload":[{"value":4}],"score":1.5,"code":"valid","annotated_code":"merged","data":"x","values":[1,2],"level":2,"status":1,"choice":"text","pet":{"kind":"cat","lives":9},"nested":{"user_id":3,"name":"Nested"},"recursive":{"value":1,"next":{"value":2}},"boxed":{"value":5},"url":"https://EXAMPLE.com/a/../b","multi_host_url":"postgres://user:pass@one.example:5432,TWO.example:5433/db","compiled_pattern":"^abc$"}'
+            b'{"payload":[{"value":4}],"score":1.5,"code":"valid","annotated_code":"merged","data":"x","values":[1,2],"level":2,"flag":true,"status":1,"choice":"text","pet":{"kind":"cat","lives":9},"nested":{"user_id":3,"name":"Nested"},"recursive":{"value":1,"next":{"value":2}},"boxed":{"value":5},"url":"https://EXAMPLE.com/a/../b","multi_host_url":"postgres://user:pass@one.example:5432,TWO.example:5433/db","compiled_pattern":"^abc$"}'
         )
         expected_path: int64 = 4
         assert compatible.path_value == expected_path
@@ -190,6 +195,17 @@ def main() -> Result[
         fallback_alias: AliasChoiceModel = model_validate_json(b'{"second":2}')
         expected_fallback_alias: int64 = 2
         assert fallback_alias.value == expected_fallback_alias
+        merged_field: MergeOrderModel = model_validate_json(b'{"value":"abc"}')
+        assert merged_field.value == "abc"
+        merge_error_seen: bool = False
+        try:
+            invalid_merge: MergeOrderModel = model_validate_json(b'{"value":"ab"}')
+            assert invalid_merge.value != "ab"
+        except ValidationError:
+            merge_error_seen = True
+        except RustPanicError as error:
+            raise error
+        assert merge_error_seen
         separate_alias: SeparateAliasModel = model_validate_json(
             b'{"input":{"value":3}}'
         )

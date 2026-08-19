@@ -23,7 +23,7 @@ Blocked entries do not have a fallback, compatibility shim, or second runtime.
 | `api/networks` | Network values | adapted | `Url` validates and constructs a mapped nominal Sifr value. | `src/special_values.sifr`; `src/bridges/special_values.rs` |
 | `core/multi_host_url_serialization` | Multi-host URL serialization | adapted | `MultiHostUrl` validates and constructs a mapped nominal Sifr value. | `src/special_values.sifr`; `src/bridges/special_values.rs` |
 | `api/pattern` | Compiled patterns | adapted | `Pattern` validates a bounded pattern and exposes its source and flags. | `src/special_values.sifr`; `src/bridges/special_values.rs` |
-| `api/field_metadata` | Field metadata | adapted | Typed descriptors define constraints, aliases, and bounded JSON Schema annotations. | `src/declarations.sifr`; `src/schema_contract.sifr` |
+| `api/field_metadata` | Field metadata | adapted | Typed descriptors define constraints, aliases, checked error overrides, and bounded JSON Schema annotations. | `src/declarations.sifr`; `src/schema_contract.sifr` |
 | `api/errors` | Validation errors | adapted | Validation failures are typed `Result` errors with stable codes, ordered locations, context, expected values, and truncation state. | `backend/pydantic_sifr_core/tests/validation_models.rs`; `src/errors.sifr` |
 | `api/json_schema` | JSON Schema | adapted | `model_json_schema` emits Draft 2020-12 from the sealed static schema with deterministic `$defs`, aliases, constraints, and modes. | `src/model.sifr`; `backend/pydantic_sifr_core/tests/json_schema_dialect.rs` |
 

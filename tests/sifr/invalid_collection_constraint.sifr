@@ -1,0 +1,5 @@
+from pydantic_sifr import BaseModel, Field
+
+
+class InvalidCollectionConstraint(BaseModel):
+    values: list[int] = Field(pattern="^[0-9]+$")

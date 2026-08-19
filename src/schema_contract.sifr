@@ -1,8 +1,11 @@
 from .errors import SchemaIssue, SchemaIssueArgs
 from .descriptors import AliasSelection, PydanticDescriptor
 from sifr.meta import SourceOrigin
+from .schema_errors import error_override
+from .schema_metadata import runtime_metadata
 from .schema_constraints import constraint_issue, copy_metadata
 from .schema_constraints import (
+    descriptor_values,
     has_integer_constraints,
     has_string_constraints,
     has_text_constraints,
@@ -20,7 +23,6 @@ from .schema_types import SchemaFieldPayload
 from .schema_types import SchemaFloatConstraintsPayload
 from .schema_types import SchemaIntegerConstraintsPayload
 from .schema_types import SchemaModelPayload
-from .schema_types import SchemaMetadataPayload
 from .schema_types import SchemaNodePayload
 from .schema_types import SchemaOutcome
 from .schema_types import SchemaProgramPayload
@@ -44,11 +46,6 @@ def schema_failure(problem: str, own origin: SourceOrigin) -> SchemaOutcome:
 
 
 @const_eval
-def error_override(metadata: list[SchemaShapeMetadata]) -> ErrorOverrideResult:
-    return ErrorOverrideResult(None, None, None)
-
-
-@const_eval
 def alias_path(value: list[str | int]) -> SchemaAliasPathPayload:
     segments: list[SchemaAliasSegmentPayload] = []
     for segment in value:
@@ -68,89 +65,6 @@ def alias_paths(
     if value is not None:
         for path in value.paths:
             output.append(alias_path(path))
-    return output
-
-
-@const_eval
-def runtime_metadata(
-    metadata: list[SchemaShapeMetadata],
-) -> list[SchemaMetadataPayload]:
-    output: list[SchemaMetadataPayload] = []
-    for item in metadata:
-        if item.key == "pydantic.field":
-            value: PydanticDescriptor = item.value
-            title: str | None = value.title
-            if title is not None:
-                output.append(SchemaMetadataPayload("pydantic.title", title))
-            description: str | None = value.description
-            if description is not None:
-                output.append(
-                    SchemaMetadataPayload("pydantic.description", description)
-                )
-            examples: list[str] | None = value.examples
-            if examples is not None:
-                for example in examples:
-                    output.append(SchemaMetadataPayload("pydantic.example", example))
-            json_schema_extra: dict[str, str] | None = value.json_schema_extra
-            if json_schema_extra is not None:
-                for key in json_schema_extra:
-                    extra_value: str | None = json_schema_extra[key]
-                    if extra_value is not None:
-                        output.append(
-                            SchemaMetadataPayload(
-                                "pydantic.json_schema_extra." + key,
-                                extra_value,
-                            )
-                        )
-            literal_values: list[int | str | bool] | None = value.literal_values
-            if literal_values is not None:
-                for literal in literal_values:
-                    if isinstance(literal, bool):
-                        output.append(
-                            SchemaMetadataPayload("pydantic.literal.bool", str(literal))
-                        )
-                    elif isinstance(literal, int):
-                        output.append(
-                            SchemaMetadataPayload("pydantic.literal.int", str(literal))
-                        )
-                    else:
-                        literal_text: str = literal
-                        output.append(
-                            SchemaMetadataPayload("pydantic.literal.str", literal_text)
-                        )
-            union_labels: list[str] | None = value.union_labels
-            if union_labels is not None:
-                for label in union_labels:
-                    output.append(SchemaMetadataPayload("pydantic.union.label", label))
-            discriminator: AliasSelection | None = value.discriminator
-            discriminator_tags: list[str] | None = value.discriminator_tags
-            if discriminator is not None and discriminator_tags is not None:
-                if len(discriminator.paths) == 1:
-                    for segment in discriminator.paths[0]:
-                        if isinstance(segment, str):
-                            output.append(
-                                SchemaMetadataPayload(
-                                    "pydantic.discriminator.field", segment
-                                )
-                            )
-                        else:
-                            segment_index: int = segment
-                            output.append(
-                                SchemaMetadataPayload(
-                                    "pydantic.discriminator.index", str(segment_index)
-                                )
-                            )
-                    choice: int = 0
-                    for tag in discriminator_tags:
-                        output.append(
-                            SchemaMetadataPayload(
-                                "pydantic.discriminator.choice", str(choice)
-                            )
-                        )
-                        output.append(
-                            SchemaMetadataPayload("pydantic.discriminator.tag.str", tag)
-                        )
-                        choice += 1
     return output
 
 
@@ -180,9 +94,8 @@ def field_rules(metadata: list[SchemaShapeMetadata]) -> FieldRules:
     ascii_only: bool = False
     strict: bool | None = None
     exclude: bool = False
-    for item in metadata:
-        if item.key == "pydantic.field":
-            value: PydanticDescriptor = item.value
+    for value in descriptor_values(metadata):
+        if value.kind == "field":
             selected_aliases: list[SchemaAliasPathPayload] = alias_paths(
                 value.validation_alias
             )
@@ -233,6 +146,23 @@ def field_rules(metadata: list[SchemaShapeMetadata]) -> FieldRules:
             exclude_value: bool | None = value.exclude
             if exclude_value is not None:
                 exclude = exclude_value
+    if min_length is not None and max_length is not None:
+        minimum: int = min_length
+        maximum: int = max_length
+        if minimum > maximum:
+            return FieldRules(
+                [],
+                None,
+                SchemaIntegerConstraintsPayload(None, None, None, None, None),
+                SchemaStringConstraintsPayload(
+                    None, None, False, False, False, False, None
+                ),
+                SchemaBytesConstraintsPayload(None, None),
+                SchemaCollectionConstraintsPayload(None, None),
+                None,
+                False,
+                "min_length cannot exceed max_length after descriptor merge",
+            )
     if to_lower and to_upper:
         return FieldRules(
             [],
@@ -279,9 +209,8 @@ def float_constraints(
     less_than: int | float | None = None
     less_or_equal: int | float | None = None
     multiple_of: int | float | None = None
-    for item in metadata:
-        if item.key == "pydantic.field":
-            value: PydanticDescriptor = item.value
+    for value in descriptor_values(metadata):
+        if value.kind == "field":
             if value.gt is not None:
                 greater_than = value.gt
             if value.ge is not None:
@@ -306,9 +235,8 @@ def model_rules(metadata: list[SchemaShapeMetadata]) -> ModelRules:
     validate_by_alias: bool = True
     alias_prefix: str = ""
     alias_case: str = "snake"
-    for item in metadata:
-        if item.key == "pydantic.config":
-            value: PydanticDescriptor = item.value
+    for value in descriptor_values(metadata):
+        if value.kind == "config":
             configured_extra: str | None = value.extra
             if configured_extra is not None:
                 extra = configured_extra

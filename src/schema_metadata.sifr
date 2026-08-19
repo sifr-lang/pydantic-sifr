@@ -1,0 +1,107 @@
+from .descriptors import AliasSelection
+from .descriptors import PydanticDescriptor
+from .schema_types import SchemaMetadataPayload, SchemaShapeMetadata
+
+
+@const_eval
+def runtime_metadata(
+    metadata: list[SchemaShapeMetadata],
+) -> list[SchemaMetadataPayload]:
+    output: list[SchemaMetadataPayload] = []
+    for item in metadata:
+        value: PydanticDescriptor = item.value
+        if value.kind == "field":
+            error_builtin: str | None = value.error_builtin
+            if error_builtin is not None:
+                output.append(
+                    SchemaMetadataPayload("pydantic.error.builtin", error_builtin)
+                )
+            error_package: str | None = value.error_package
+            if error_package is not None:
+                output.append(
+                    SchemaMetadataPayload("pydantic.error.package", error_package)
+                )
+            error_code: str | None = value.error_code
+            if error_code is not None:
+                output.append(SchemaMetadataPayload("pydantic.error.code", error_code))
+            error_message: str | None = value.error_message
+            if error_message is not None:
+                output.append(
+                    SchemaMetadataPayload("pydantic.error.message", error_message)
+                )
+            title: str | None = value.title
+            if title is not None:
+                output.append(SchemaMetadataPayload("pydantic.title", title))
+            description: str | None = value.description
+            if description is not None:
+                output.append(
+                    SchemaMetadataPayload("pydantic.description", description)
+                )
+            examples: list[str] | None = value.examples
+            if examples is not None:
+                for example in examples:
+                    output.append(SchemaMetadataPayload("pydantic.example", example))
+            json_schema_extra: dict[str, str] | None = value.json_schema_extra
+            if json_schema_extra is not None:
+                for key in json_schema_extra:
+                    extra_value: str | None = json_schema_extra[key]
+                    if extra_value is not None:
+                        output.append(
+                            SchemaMetadataPayload(
+                                "pydantic.json_schema_extra." + key,
+                                extra_value,
+                            )
+                        )
+            literal_values: list[int | str | bool] | None = value.literal_values
+            if literal_values is not None:
+                for literal in literal_values:
+                    if isinstance(literal, bool):
+                        literal_bool: str = "false"
+                        if literal:
+                            literal_bool = "true"
+                        output.append(
+                            SchemaMetadataPayload("pydantic.literal.bool", literal_bool)
+                        )
+                    elif isinstance(literal, int):
+                        output.append(
+                            SchemaMetadataPayload("pydantic.literal.int", str(literal))
+                        )
+                    else:
+                        literal_text: str = literal
+                        output.append(
+                            SchemaMetadataPayload("pydantic.literal.str", literal_text)
+                        )
+            union_labels: list[str] | None = value.union_labels
+            if union_labels is not None:
+                for label in union_labels:
+                    output.append(SchemaMetadataPayload("pydantic.union.label", label))
+            discriminator: AliasSelection | None = value.discriminator
+            discriminator_tags: list[str] | None = value.discriminator_tags
+            if discriminator is not None and discriminator_tags is not None:
+                if len(discriminator.paths) == 1:
+                    for segment in discriminator.paths[0]:
+                        if isinstance(segment, str):
+                            output.append(
+                                SchemaMetadataPayload(
+                                    "pydantic.discriminator.field", segment
+                                )
+                            )
+                        else:
+                            segment_index: int = segment
+                            output.append(
+                                SchemaMetadataPayload(
+                                    "pydantic.discriminator.index", str(segment_index)
+                                )
+                            )
+                    choice: int = 0
+                    for tag in discriminator_tags:
+                        output.append(
+                            SchemaMetadataPayload(
+                                "pydantic.discriminator.choice", str(choice)
+                            )
+                        )
+                        output.append(
+                            SchemaMetadataPayload("pydantic.discriminator.tag.str", tag)
+                        )
+                        choice += 1
+    return output

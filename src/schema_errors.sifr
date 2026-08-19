@@ -1,0 +1,75 @@
+from .descriptors import PydanticDescriptor
+from .schema_types import ErrorOverrideResult
+from .schema_types import SchemaShapeMetadata
+
+
+@const_eval
+def error_override(
+    metadata: list[SchemaShapeMetadata],
+) -> ErrorOverrideResult:
+    built_in: str = ""
+    package: str = ""
+    code: str = ""
+    message: str = ""
+    has_built_in: bool = False
+    has_package: bool = False
+    has_code: bool = False
+    has_message: bool = False
+    for item in metadata:
+        value: PydanticDescriptor = item.value
+        error_builtin: str | None = value.error_builtin
+        if error_builtin is not None:
+            if has_built_in:
+                return ErrorOverrideResult(None, None, "duplicate built-in error code")
+            built_in = error_builtin
+            has_built_in = True
+        error_package: str | None = value.error_package
+        if error_package is not None:
+            if has_package:
+                return ErrorOverrideResult(None, None, "duplicate custom error package")
+            package = error_package
+            has_package = True
+        error_code: str | None = value.error_code
+        if error_code is not None:
+            if has_code:
+                return ErrorOverrideResult(None, None, "duplicate custom error code")
+            code = error_code
+            has_code = True
+        error_message: str | None = value.error_message
+        if error_message is not None:
+            if has_message:
+                return ErrorOverrideResult(None, None, "duplicate error message")
+            message = error_message
+            has_message = True
+    if has_built_in:
+        if has_package or has_code:
+            return ErrorOverrideResult(
+                None, None, "error override mixes built-in and custom codes"
+            )
+        expected: str = ""
+        if built_in == "json_invalid":
+            expected = "Invalid JSON: {error}"
+        elif built_in == "schema_invalid":
+            expected = "Invalid schema: {error}"
+        elif built_in == "input_limit_exceeded":
+            expected = "Input limit exceeded: {limit}"
+        elif built_in == "internal_program_load":
+            expected = "Schema program could not be loaded"
+        if expected == "":
+            return ErrorOverrideResult(None, None, "unknown built-in error code")
+        if not has_message or message != expected:
+            return ErrorOverrideResult(
+                None, None, "built-in error message cannot change"
+            )
+        return ErrorOverrideResult(built_in, message, None)
+    if has_package or has_code or has_message:
+        if not has_package or not has_code or not has_message:
+            return ErrorOverrideResult(
+                None, None, "custom error declaration is incomplete"
+            )
+        if len(package) == 0 or len(code) == 0 or len(message) == 0:
+            return ErrorOverrideResult(
+                None, None, "custom error declaration contains an empty value"
+            )
+        return ErrorOverrideResult(package + "." + code, message, None)
+    return ErrorOverrideResult(None, None, None)

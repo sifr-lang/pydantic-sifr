@@ -1,0 +1,6 @@
+from typing import Annotated
+from pydantic_sifr import BaseModel, Constraints, Field
+
+
+class InvalidMergedConstraint(BaseModel):
+    value: Annotated[str, Constraints(min_length=9)] = Field(max_length=8)

@@ -13,6 +13,10 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "demos/milestone_m8_fields_configuration"
 CASES = {
+    "tests/sifr/invalid_constraints_descriptor_argument.sifr": (
+        "invalid_min_length",
+        "min_length=-1",
+    ),
     "tests/sifr/invalid_field_descriptor_argument.sifr": (
         "invalid_multiple_of",
         "multiple_of=0",

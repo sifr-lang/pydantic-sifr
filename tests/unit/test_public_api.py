@@ -50,7 +50,7 @@ class PublicApiTest(unittest.TestCase):
                 "model_validate",
                 "model_validate_json",
                 "model_validate_strings",
-                "_verify_schema",
+                "verify_schema",
                 "MultiHostUrl",
                 "Pattern",
                 "SpecialValueError",

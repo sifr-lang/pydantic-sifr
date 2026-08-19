@@ -1,0 +1,14 @@
+from pydantic_sifr import BaseModel, Field
+
+
+class SchemaContractProbe(BaseModel):
+    value: int = Field(
+        error_package="example",
+        error_code="positive",
+        error_message="Must be positive",
+    )
+
+
+def main() -> None:
+    probe: SchemaContractProbe = SchemaContractProbe(1)
+    assert probe.value == 1

@@ -13,7 +13,7 @@ from .model import model_json_schema
 from .model import model_validate
 from .model import model_validate_json
 from .model import model_validate_strings
-from .schema_contract import verify_schema as _verify_schema
+from .schema_contract import verify_schema
 from .special_values import MultiHostUrl
 from .special_values import Pattern
 from .special_values import SpecialValueError

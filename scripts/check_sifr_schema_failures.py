@@ -12,6 +12,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 HARNESS = ROOT / "demos/milestone_m8_fields_configuration"
 CASES = {
+    "tests/sifr/invalid_custom_error.sifr": (
+        "custom error declaration is incomplete"
+    ),
+    "tests/sifr/invalid_builtin_error.sifr": (
+        "built-in error message cannot change"
+    ),
+    "tests/sifr/invalid_collection_constraint.sifr": (
+        "text constraints require a string field"
+    ),
+    "tests/sifr/invalid_merged_constraint.sifr": (
+        "min_length cannot exceed max_length after descriptor merge"
+    ),
     "tests/sifr/invalid_literal_constraint.sifr": (
         "field constraints are not supported for literal fields"
     ),
