@@ -1,0 +1,137 @@
+from .descriptors import PydanticDescriptor
+from .schema_types import SchemaShapeMethod, SchemaShapeNode, SchemaShapeParameter
+
+
+@const_eval
+def serializer_targets(descriptor: PydanticDescriptor) -> list[str]:
+    output: list[str] = []
+    targets: list[str] | None = descriptor.serializer_fields
+    if targets is not None:
+        selected: list[str] = targets
+        for target in selected:
+            output.append(target)
+    return output
+
+
+@const_eval
+def serializer_field_exists(node: SchemaShapeNode, target: str) -> bool:
+    for field in node.fields:
+        if field.name == target:
+            return True
+    return False
+
+
+@const_eval
+def serializer_same_shape(left: SchemaShapeNode, right: SchemaShapeNode) -> bool:
+    if left.kind != right.kind:
+        return False
+    if left.kind == "primitive" or left.kind == "fixed_integer":
+        return left.name == right.name
+    if (
+        left.kind == "nominal"
+        or left.kind == "enum"
+        or left.kind == "newtype"
+        or left.kind == "recursive_reference"
+    ):
+        return left.identity == right.identity
+    return True
+
+
+@const_eval
+def serializer_value_parameter(
+    method: SchemaShapeMethod,
+) -> SchemaShapeParameter | None:
+    parameter: SchemaShapeParameter | None = method.params[0]
+    return parameter
+
+
+@const_eval
+def field_serializer_problem(
+    node: SchemaShapeNode,
+    method: SchemaShapeMethod,
+    descriptor: PydanticDescriptor,
+) -> str | None:
+    targets: list[str] = serializer_targets(descriptor)
+    for target in targets:
+        if not serializer_field_exists(node, target):
+            return "field serializer target does not name a declared field"
+    takes_receiver: bool = method.receiver is not None
+    if takes_receiver:
+        if method.kind != "regular" or method.receiver != "borrow":
+            return "field serializer receiver must be an immutable instance borrow"
+    elif method.kind != "class" and method.kind != "static":
+        return "field serializer must be an instance, class, or static method"
+    if len(method.params) == 0:
+        return "field serializer has no value input"
+    if len(method.params) > 2:
+        return "field serializer has too many inputs"
+    parameter: SchemaShapeParameter | None = serializer_value_parameter(method)
+    if parameter is not None:
+        selected_parameter: SchemaShapeParameter = parameter
+        if selected_parameter.convention != "own":
+            return "field serializer value input must be owned"
+        for target in targets:
+            for field in node.fields:
+                if field.name == target and not serializer_same_shape(
+                    selected_parameter.type, field.type
+                ):
+                    return "field serializer input does not match its field type"
+    return None
+
+
+@const_eval
+def serializer_problem(node: SchemaShapeNode, method: SchemaShapeMethod) -> str | None:
+    descriptor: PydanticDescriptor | None = method.descriptor
+    if descriptor is None:
+        return None
+    selected: PydanticDescriptor = descriptor
+    if (
+        selected.kind != "field-serializer"
+        and selected.kind != "model-serializer"
+        and selected.kind != "computed-field"
+    ):
+        return None
+    if method.is_async:
+        return "serializer and computed-field methods cannot be async"
+    if selected.kind == "field-serializer":
+        return field_serializer_problem(node, method, selected)
+    if selected.kind == "model-serializer":
+        if method.kind != "regular" or method.receiver != "borrow":
+            return "model serializer must use an immutable instance receiver"
+        if len(method.params) > 1:
+            return "model serializer has too many inputs"
+        return None
+    if method.kind != "regular" or method.receiver != "borrow":
+        return "computed field must use an immutable instance receiver"
+    if len(method.params) != 0:
+        return "computed field must be a zero-argument instance method"
+    if method.output.kind == "primitive" and method.output.name == "None":
+        return "computed field must return a value"
+    alias: str | None = selected.serializer_alias
+    if alias is not None:
+        selected_alias: str = alias
+        if len(selected_alias) == 0:
+            return "computed field alias must not be empty"
+    return None
+
+
+@const_eval
+def serializer_set_problem(node: SchemaShapeNode) -> str | None:
+    model_serializers: int = 0
+    computed_names: list[str] = []
+    for method in node.methods:
+        descriptor: PydanticDescriptor | None = method.descriptor
+        if descriptor is not None:
+            selected: PydanticDescriptor = descriptor
+            if selected.kind == "model-serializer":
+                model_serializers += 1
+            elif selected.kind == "computed-field":
+                if serializer_field_exists(node, method.name):
+                    return "computed field name conflicts with a declared field"
+                for name in computed_names:
+                    if name == method.name:
+                        return "computed field names must be unique"
+                computed_names.append(method.name)
+    if model_serializers > 1:
+        return "a model can declare at most one model serializer"
+    return None

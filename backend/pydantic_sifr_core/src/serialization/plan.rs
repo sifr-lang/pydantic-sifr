@@ -3,7 +3,10 @@ use core::fmt;
 use sifr_runtime::interop::structural::ShapeIdentity;
 use sifr_runtime::json::JsonIntegerProfile;
 
-use crate::{NativeValue, PreparedSchema, SchemaTag, validation::SchemaRef};
+use crate::{
+    NativeValue, PreparedSchema, SchemaTag,
+    validation::{SchemaRef, StaticSerializer, static_serializers},
+};
 
 use super::{SelectionPath, SelectionSegment};
 
@@ -56,6 +59,69 @@ pub struct SerializerNode {
     fields: Vec<SerializerFieldPlan>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SerializerCallbackKind {
+    Field,
+    Model,
+    Computed,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum SerializerWhenUsed {
+    Always,
+    UnlessNone,
+    Json,
+    JsonUnlessNone,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct SerializerCallbackPlan {
+    slot: usize,
+    kind: SerializerCallbackKind,
+    target: &'static str,
+    when_used: SerializerWhenUsed,
+    takes_receiver: bool,
+    output: SerializerNodeId,
+    alias: Option<&'static str>,
+}
+
+impl SerializerCallbackPlan {
+    #[must_use]
+    pub const fn slot(&self) -> usize {
+        self.slot
+    }
+
+    #[must_use]
+    pub const fn kind(&self) -> SerializerCallbackKind {
+        self.kind
+    }
+
+    #[must_use]
+    pub const fn target(&self) -> &'static str {
+        self.target
+    }
+
+    #[must_use]
+    pub const fn when_used(&self) -> SerializerWhenUsed {
+        self.when_used
+    }
+
+    #[must_use]
+    pub const fn takes_receiver(&self) -> bool {
+        self.takes_receiver
+    }
+
+    #[must_use]
+    pub const fn output(&self) -> SerializerNodeId {
+        self.output
+    }
+
+    #[must_use]
+    pub const fn alias(&self) -> Option<&'static str> {
+        self.alias
+    }
+}
+
 impl SerializerNode {
     #[must_use]
     pub const fn tag(&self) -> SchemaTag {
@@ -80,6 +146,7 @@ pub struct SerializationPlan {
     root: SerializerNodeId,
     nodes: Vec<SerializerNode>,
     field_policies: Vec<FieldPolicy>,
+    callbacks: Vec<SerializerCallbackPlan>,
 }
 
 impl SerializationPlan {
@@ -92,12 +159,22 @@ impl SerializationPlan {
             field_policies: Vec::new(),
         };
         let root = builder.compile(schema.schema(), 0, &mut Vec::new())?;
+        let callbacks = schema
+            .static_program()
+            .map(static_serializers)
+            .transpose()
+            .map_err(validation_error)?
+            .unwrap_or_default()
+            .into_iter()
+            .map(|serializer| compile_callback(&mut builder, serializer))
+            .collect::<Result<Vec<_>, _>>()?;
         Ok(Self {
             structural_identity: schema.structural_identity(),
             integer_profile,
             root,
             nodes: builder.nodes,
             field_policies: builder.field_policies,
+            callbacks,
         })
     }
 
@@ -124,6 +201,11 @@ impl SerializationPlan {
     #[must_use]
     pub fn node(&self, id: SerializerNodeId) -> Option<&SerializerNode> {
         self.nodes.get(id.raw() as usize)
+    }
+
+    #[must_use]
+    pub fn callbacks(&self) -> &[SerializerCallbackPlan] {
+        &self.callbacks
     }
 
     pub fn set_field_alias(
@@ -164,6 +246,50 @@ impl SerializationPlan {
             .iter()
             .find(|policy| policy.matches(path))
     }
+}
+
+fn compile_callback(
+    builder: &mut PlanBuilder,
+    serializer: StaticSerializer,
+) -> Result<SerializerCallbackPlan, SerializationPlanError> {
+    let kind = match serializer.kind {
+        "field-serializer" if !serializer.target.is_empty() => SerializerCallbackKind::Field,
+        "model-serializer" if serializer.target.is_empty() => SerializerCallbackKind::Model,
+        "computed-field" if !serializer.target.is_empty() => SerializerCallbackKind::Computed,
+        _ => return Err(plan_error("serializer callback target is invalid")),
+    };
+    let when_used = match serializer.when_used {
+        "always" => SerializerWhenUsed::Always,
+        "unless-none" => SerializerWhenUsed::UnlessNone,
+        "json" => SerializerWhenUsed::Json,
+        "json-unless-none" => SerializerWhenUsed::JsonUnlessNone,
+        _ => return Err(plan_error("serializer callback mode is invalid")),
+    };
+    let mut output_path = match kind {
+        SerializerCallbackKind::Field | SerializerCallbackKind::Computed => {
+            vec![PlanPathSegment::Field(serializer.target)]
+        }
+        SerializerCallbackKind::Model => Vec::new(),
+    };
+    let output = builder.compile(serializer.output, 0, &mut output_path)?;
+    if kind == SerializerCallbackKind::Computed {
+        builder.field_policies.push(FieldPolicy {
+            path: vec![PlanPathSegment::Field(serializer.target)],
+            name: serializer.target,
+            alias: serializer.alias.map(str::to_owned),
+            default: None,
+            node: output,
+        });
+    }
+    Ok(SerializerCallbackPlan {
+        slot: serializer.slot,
+        kind,
+        target: serializer.target,
+        when_used,
+        takes_receiver: serializer.takes_receiver,
+        output,
+        alias: serializer.alias,
+    })
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -337,5 +463,63 @@ fn validation_error(error: crate::ValidationError) -> SerializationPlanError {
 fn plan_error(message: impl Into<String>) -> SerializationPlanError {
     SerializationPlanError {
         message: message.into(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use sifr_runtime::interop::structural::primitive;
+
+    use super::*;
+    use crate::{ExtraPolicy, ModelField, ModelSchema, Schema};
+
+    #[test]
+    fn structured_callback_policies_start_below_the_callback_target() {
+        for kind in ["field-serializer", "computed-field"] {
+            let output_schema = Box::leak(Box::new(Schema::Model(
+                ModelSchema::new(
+                    "Detail",
+                    primitive("tests.Detail"),
+                    vec![ModelField::required(
+                        "label",
+                        Schema::String(Default::default()),
+                    )],
+                    ExtraPolicy::Ignore,
+                    false,
+                    true,
+                )
+                .unwrap_or_else(|error| panic!("callback output schema failed: {error}")),
+            )));
+            let mut builder = PlanBuilder {
+                nodes: Vec::new(),
+                field_policies: Vec::new(),
+            };
+
+            compile_callback(
+                &mut builder,
+                StaticSerializer {
+                    slot: 0,
+                    kind,
+                    target: "summary",
+                    when_used: "always",
+                    takes_receiver: true,
+                    output: SchemaRef::owned(output_schema),
+                    alias: None,
+                },
+            )
+            .unwrap_or_else(|error| panic!("callback plan failed: {error}"));
+
+            assert!(builder.field_policies.iter().any(|policy| {
+                policy.matches(&[
+                    SelectionSegment::Field("summary".to_owned()),
+                    SelectionSegment::Field("label".to_owned()),
+                ])
+            }));
+            assert!(
+                !builder.field_policies.iter().any(|policy| {
+                    policy.matches(&[SelectionSegment::Field("label".to_owned())])
+                })
+            );
+        }
     }
 }

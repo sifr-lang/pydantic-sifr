@@ -6,7 +6,7 @@ use sifr_runtime::json::JsonIntegerProfile;
 
 use crate::{
     ComplexConstraints, ExtraPolicy, FractionConstraints, LiteralValue, PreparedSchema, Schema,
-    validation::TemporalKind,
+    validation::{TemporalKind, static_serializers},
 };
 
 mod static_schema;
@@ -109,8 +109,28 @@ pub fn generate_prepared_json_schema(
         crate::validation::SchemaRef::Owned(schema) => {
             generate_json_schema(schema, options, integer_profile)
         }
-        schema @ crate::validation::SchemaRef::Static(_) => {
-            static_schema::generate(schema, options, integer_profile)
+        static_schema @ crate::validation::SchemaRef::Static(_) => {
+            let serializers = if options.mode == JsonSchemaMode::Serialization {
+                schema
+                    .static_program()
+                    .map(static_serializers)
+                    .transpose()
+                    .map_err(|error| {
+                        JsonSchemaError::new(
+                            JsonSchemaErrorKind::UnsupportedSchema,
+                            error.to_string(),
+                        )
+                    })?
+                    .unwrap_or_default()
+            } else {
+                Vec::new()
+            };
+            static_schema::generate_with_serializers(
+                static_schema,
+                options,
+                integer_profile,
+                &serializers,
+            )
         }
     }
 }

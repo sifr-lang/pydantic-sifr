@@ -202,4 +202,5 @@ owner and one validation path for each migrated boundary.
 
 The complete field and configuration example is in
 `demos/milestone_m8_fields_configuration`. The validator example is in
-`demos/milestone_m9_validators`.
+`demos/milestone_m9_validators`. The serializer and computed-field example is
+in `demos/milestone_m10_serializers`.

@@ -78,11 +78,18 @@ cd demos/milestone_m9_validators
 "$SIFR_BIN" run --locked
 ```
 
+```bash
+cd demos/milestone_m10_serializers
+"$SIFR_BIN" fetch --locked
+"$SIFR_BIN" run --locked
+```
+
 The PS6 demo covers inputs, constraints, aliases, defaults, and errors. The PS7
 demo covers sums and recursion. The M8 demo covers the declaration facade. The
-M9 demo covers checked field and model validators.
+M9 demo covers checked field and model validators. The M10 demo covers attached
+dump methods, serializers, computed fields, selections, and typed context.
 
-All four demos are mandatory in the package gates.
+All five demos are mandatory in the package gates.
 
 ## Select an input profile
 

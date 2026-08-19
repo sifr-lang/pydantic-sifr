@@ -1,0 +1,225 @@
+from sifr.json import JsonValue
+from sifr.meta import Context, MethodSlots, NoContext, StaticProgram
+from .model import SerializationError
+from .model import model_dump as dump_model
+from .model import model_dump_json as dump_model_json
+from .model import model_dump_json_with_serializers
+from .model import model_dump_with_serializers
+
+
+@attached_api_set
+class PydanticModelApi:
+    pass
+
+
+@attached_api_set
+class PydanticPlainModelApi:
+    pass
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticPlainModelApi",
+    public_name="model_dump",
+    receiver="immutable",
+    owner="T",
+)
+def attached_plain_model_dump[T: StaticProgram](
+    target: Self,
+) -> Result[dict[str, JsonValue], SerializationError | RustPanicError]:
+    return dump_model(target)
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticPlainModelApi",
+    public_name="model_dump_json",
+    receiver="immutable",
+    owner="T",
+)
+def attached_plain_model_dump_json[T: StaticProgram](
+    target: Self,
+) -> Result[bytes, SerializationError | RustPanicError]:
+    return dump_model_json(target)
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticPlainModelApi",
+    public_name="model_dump_options",
+    receiver="immutable",
+    owner="T",
+)
+def attached_plain_model_dump_options[T: StaticProgram](
+    target: Self,
+    include: list[str] | None,
+    exclude: list[str] | None,
+    by_alias: bool,
+    exclude_none: bool,
+    exclude_defaults: bool,
+) -> Result[dict[str, JsonValue], SerializationError | RustPanicError]:
+    return dump_model(
+        target,
+        include,
+        exclude,
+        by_alias,
+        exclude_none,
+        exclude_defaults,
+    )
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticPlainModelApi",
+    public_name="model_dump_json_options",
+    receiver="immutable",
+    owner="T",
+)
+def attached_plain_model_dump_json_options[T: StaticProgram](
+    target: Self,
+    include: list[str] | None,
+    exclude: list[str] | None,
+    by_alias: bool,
+    exclude_none: bool,
+    exclude_defaults: bool,
+) -> Result[bytes, SerializationError | RustPanicError]:
+    return dump_model_json(
+        target,
+        include,
+        exclude,
+        by_alias,
+        exclude_none,
+        exclude_defaults,
+    )
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticModelApi",
+    public_name="model_dump",
+    receiver="immutable",
+    owner="T",
+)
+def attached_model_dump[T: MethodSlots](
+    target: Self,
+) -> Result[dict[str, JsonValue], SerializationError | RustPanicError]:
+    return model_dump_with_serializers(target, NoContext())
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticModelApi",
+    public_name="model_dump_json",
+    receiver="immutable",
+    owner="T",
+)
+def attached_model_dump_json[T: MethodSlots](
+    target: Self,
+) -> Result[bytes, SerializationError | RustPanicError]:
+    return model_dump_json_with_serializers(target, NoContext())
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticModelApi",
+    public_name="model_dump_options",
+    receiver="immutable",
+    owner="T",
+)
+def attached_model_dump_options[T: MethodSlots](
+    target: Self,
+    include: list[str] | None,
+    exclude: list[str] | None,
+    by_alias: bool,
+    exclude_none: bool,
+    exclude_defaults: bool,
+) -> Result[dict[str, JsonValue], SerializationError | RustPanicError]:
+    return model_dump_with_serializers(
+        target,
+        NoContext(),
+        include,
+        exclude,
+        by_alias,
+        exclude_none,
+        exclude_defaults,
+    )
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticModelApi",
+    public_name="model_dump_json_options",
+    receiver="immutable",
+    owner="T",
+)
+def attached_model_dump_json_options[T: MethodSlots](
+    target: Self,
+    include: list[str] | None,
+    exclude: list[str] | None,
+    by_alias: bool,
+    exclude_none: bool,
+    exclude_defaults: bool,
+) -> Result[bytes, SerializationError | RustPanicError]:
+    return model_dump_json_with_serializers(
+        target,
+        NoContext(),
+        include,
+        exclude,
+        by_alias,
+        exclude_none,
+        exclude_defaults,
+    )
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticModelApi",
+    public_name="model_dump_with_context",
+    receiver="immutable",
+    owner="T",
+)
+def attached_model_dump_with_context[T: MethodSlots, C: Context](
+    target: Self,
+    mut context: C,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    by_alias: bool = False,
+    exclude_none: bool = False,
+    exclude_defaults: bool = False,
+) -> Result[dict[str, JsonValue], SerializationError | RustPanicError]:
+    return model_dump_with_serializers(
+        target,
+        context,
+        include,
+        exclude,
+        by_alias,
+        exclude_none,
+        exclude_defaults,
+    )
+
+
+@attached_api(
+    "pydantic_sifr.api",
+    "PydanticModelApi",
+    public_name="model_dump_json_with_context",
+    receiver="immutable",
+    owner="T",
+)
+def attached_model_dump_json_with_context[T: MethodSlots, C: Context](
+    target: Self,
+    mut context: C,
+    include: list[str] | None = None,
+    exclude: list[str] | None = None,
+    by_alias: bool = False,
+    exclude_none: bool = False,
+    exclude_defaults: bool = False,
+) -> Result[bytes, SerializationError | RustPanicError]:
+    return model_dump_json_with_serializers(
+        target,
+        context,
+        include,
+        exclude,
+        by_alias,
+        exclude_none,
+        exclude_defaults,
+    )

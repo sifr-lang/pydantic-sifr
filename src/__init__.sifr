@@ -6,11 +6,17 @@ from .declarations import Constraints
 from .declarations import Field
 from .declarations import RootModel
 from .declarations import field_validator
+from .declarations import field_serializer
+from .declarations import computed_field
 from .declarations import model_validator
+from .declarations import model_serializer
 from .model import JsonSchemaError
 from .model import SerializationError
 from .model import ValidationError
+from .model import model_dump
 from .model import model_dump_json
+from .model import model_dump_json_with_serializers
+from .model import model_dump_with_serializers
 from .model import model_json_schema
 from .model import model_validate
 from .model import model_validate_json

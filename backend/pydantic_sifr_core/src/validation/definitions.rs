@@ -264,6 +264,7 @@ mod tests {
             definition_scopes: Arc::new(Vec::new()),
             active_references: Vec::new(),
             callbacks: None,
+            skip_callbacks: false,
         };
         assert!(state.enter_reference(input.root(), "tests.Loop"));
         let error = match validate_reference(

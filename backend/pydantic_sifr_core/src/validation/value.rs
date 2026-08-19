@@ -5,6 +5,7 @@ use num_rational::BigRational;
 use sifr_runtime::interop::structural::{
     ShapeIdentity, StructuralKind, StructuralNodeEdge, primitive,
 };
+use std::collections::HashMap;
 
 use crate::{Arena, ArenaError, ArenaId};
 
@@ -245,6 +246,88 @@ impl ValidatedArena {
     pub(crate) fn into_parts(self) -> (ValueId, Vec<ValidatedValue>) {
         (self.root, self.values.into_values())
     }
+
+    pub(crate) fn selected(&self, root: ValueId) -> Option<Self> {
+        self.values.get(root)?;
+        let mut selected = self.clone();
+        selected.root = root;
+        Some(selected)
+    }
+
+    pub(crate) fn tuple_root_with_cloned_item(
+        &self,
+        first: ValueId,
+        cloned_item: ValueId,
+    ) -> Result<Self, ArenaError> {
+        self.values.get(first).ok_or(ArenaError::CapacityExceeded)?;
+        self.values
+            .get(cloned_item)
+            .ok_or(ArenaError::CapacityExceeded)?;
+        let mut selected = self.clone();
+        let cloned_item =
+            self.clone_subtree(cloned_item, &mut selected.values, &mut HashMap::new())?;
+        let root = selected
+            .values
+            .push(ValidatedValue::Tuple(vec![first, cloned_item]))?;
+        selected.root = root;
+        selected.descriptions = None;
+        selected.edges = None;
+        selected.moved.clear();
+        Ok(selected)
+    }
+
+    fn clone_subtree(
+        &self,
+        id: ValueId,
+        destination: &mut Arena<ValidatedValue>,
+        cloned: &mut HashMap<ValueId, ValueId>,
+    ) -> Result<ValueId, ArenaError> {
+        if let Some(id) = cloned.get(&id) {
+            return Ok(*id);
+        }
+        let mut value = self
+            .values
+            .get(id)
+            .cloned()
+            .ok_or(ArenaError::CapacityExceeded)?;
+        match &mut value {
+            ValidatedValue::Sequence(ids)
+            | ValidatedValue::Tuple(ids)
+            | ValidatedValue::Set(ids)
+            | ValidatedValue::FrozenSet(ids) => {
+                for child in ids {
+                    *child = self.clone_subtree(*child, destination, cloned)?;
+                }
+            }
+            ValidatedValue::Mapping(entries) => {
+                for (key, value) in entries {
+                    *key = self.clone_subtree(*key, destination, cloned)?;
+                    *value = self.clone_subtree(*value, destination, cloned)?;
+                }
+            }
+            ValidatedValue::Nullable(Some(child)) => {
+                *child = self.clone_subtree(*child, destination, cloned)?;
+            }
+            ValidatedValue::Enum(value) => {
+                value.discriminant = self.clone_subtree(value.discriminant, destination, cloned)?;
+            }
+            ValidatedValue::Union(value) => {
+                value.value = self.clone_subtree(value.value, destination, cloned)?;
+            }
+            ValidatedValue::Model(model) => {
+                for (_, child) in &mut model.fields {
+                    *child = self.clone_subtree(*child, destination, cloned)?;
+                }
+                for (_, child) in &mut model.extras {
+                    *child = self.clone_subtree(*child, destination, cloned)?;
+                }
+            }
+            _ => {}
+        }
+        let cloned_id = destination.push(value)?;
+        cloned.insert(id, cloned_id);
+        Ok(cloned_id)
+    }
 }
 
 impl ValidatedValue {
@@ -291,4 +374,41 @@ pub(crate) fn push_value(
     value: ValidatedValue,
 ) -> Result<ValueId, ArenaError> {
     arena.push(value)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tuple_root_clones_the_second_item_into_distinct_storage() {
+        let mut values = Arena::new();
+        let field = values
+            .push(ValidatedValue::String("value".to_owned()))
+            .unwrap_or_else(|error| panic!("test field does not fit in the arena: {error}"));
+        let model = values
+            .push(ValidatedValue::Model(ModelValue::new(
+                "test.Model",
+                vec![("value", field)],
+                Vec::new(),
+                1,
+            )))
+            .unwrap_or_else(|error| panic!("test model does not fit in the arena: {error}"));
+        let input = ValidatedArena::new(model, values);
+
+        let tuple = input
+            .tuple_root_with_cloned_item(model, field)
+            .unwrap_or_else(|error| panic!("test tuple does not fit in the arena: {error}"));
+        let ValidatedValue::Tuple(items) = tuple
+            .get(tuple.root())
+            .unwrap_or_else(|| panic!("tuple root is not addressable"))
+        else {
+            panic!("tuple helper must append a tuple root");
+        };
+
+        assert_eq!(items[0], model);
+        assert_ne!(items[1], field);
+        assert_eq!(tuple.get(items[1]), tuple.get(field));
+        assert_eq!(tuple.len(), 4, "only the selected subtree is cloned");
+    }
 }

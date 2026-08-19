@@ -1,0 +1,177 @@
+from .descriptors import PydanticDescriptor
+from .schema_types import SchemaShapeMethod, SchemaShapeNode, SchemaShapeParameter
+
+
+@const_eval
+def validator_targets(descriptor: PydanticDescriptor) -> list[str]:
+    output: list[str] = []
+    targets: list[str] | None = descriptor.validator_fields
+    if targets is not None:
+        selected: list[str] = targets
+        for target in selected:
+            output.append(target)
+    return output
+
+
+@const_eval
+def targets_field(descriptor: PydanticDescriptor, field: str) -> bool:
+    for target in validator_targets(descriptor):
+        if target == field:
+            return True
+    return False
+
+
+@const_eval
+def field_exists(node: SchemaShapeNode, target: str) -> bool:
+    for field in node.fields:
+        if field.name == target:
+            return True
+    return False
+
+
+@const_eval
+def same_shape_head(left: SchemaShapeNode, right: SchemaShapeNode) -> bool:
+    if left.kind != right.kind:
+        return False
+    if left.kind == "primitive" or left.kind == "fixed_integer":
+        return left.name == right.name
+    if (
+        left.kind == "nominal"
+        or left.kind == "enum"
+        or left.kind == "newtype"
+        or left.kind == "recursive_reference"
+    ):
+        return left.identity == right.identity
+    return True
+
+
+@const_eval
+def is_model_output(output: SchemaShapeNode, model: SchemaShapeNode) -> bool:
+    if same_shape_head(output, model):
+        return True
+    return output.kind == "recursive_reference" and output.identity == model.identity
+
+
+@const_eval
+def nested_validator_problem(node: SchemaShapeNode, is_root: bool) -> str | None:
+    if node.kind == "nominal":
+        if not is_root:
+            for method in node.methods:
+                descriptor: PydanticDescriptor | None = method.descriptor
+                if descriptor is not None:
+                    selected: PydanticDescriptor = descriptor
+                    if (
+                        selected.kind == "field-validator"
+                        or selected.kind == "model-validator"
+                    ):
+                        return "nested models with validators require their own validation boundary"
+        for field in node.fields:
+            problem: str | None = nested_validator_problem(field.type, False)
+            if problem is not None:
+                return problem
+    elif node.kind == "list" or node.kind == "set" or node.kind == "optional":
+        element: SchemaShapeNode | None = node.element
+        if element is not None:
+            problem: str | None = nested_validator_problem(element, False)
+            if problem is not None:
+                return problem
+    elif node.kind == "dictionary":
+        key: SchemaShapeNode | None = node.key
+        if key is not None:
+            problem: str | None = nested_validator_problem(key, False)
+            if problem is not None:
+                return problem
+        value: SchemaShapeNode | None = node.value
+        if value is not None:
+            problem: str | None = nested_validator_problem(value, False)
+            if problem is not None:
+                return problem
+    elif node.kind == "tuple" or node.kind == "union":
+        for member in node.members:
+            problem: str | None = nested_validator_problem(member, False)
+            if problem is not None:
+                return problem
+    elif node.kind == "newtype":
+        inner: SchemaShapeNode | None = node.inner
+        if inner is not None:
+            problem: str | None = nested_validator_problem(inner, False)
+            if problem is not None:
+                return problem
+    return None
+
+
+@const_eval
+def validator_problem(node: SchemaShapeNode, method: SchemaShapeMethod) -> str | None:
+    descriptor: PydanticDescriptor | None = method.descriptor
+    if descriptor is None:
+        return None
+    selected: PydanticDescriptor = descriptor
+    if selected.kind != "field-validator" and selected.kind != "model-validator":
+        return None
+    if method.is_async:
+        return "validator methods cannot be async"
+    if selected.kind == "field-validator":
+        targets: list[str] = validator_targets(selected)
+        for target in targets:
+            if not field_exists(node, target):
+                return "field validator target does not name a declared field"
+        if method.receiver is not None:
+            return "field validator cannot declare an instance receiver"
+        if method.kind != "class" and method.kind != "static":
+            return "field validator must be a class or static method"
+        if len(method.params) == 0:
+            return "field validator has no value input"
+        if len(method.params) > 2:
+            return "field validator has too many inputs"
+        parameter: SchemaShapeParameter | None = method.params[0]
+        if parameter is not None:
+            selected_parameter: SchemaShapeParameter = parameter
+            if selected_parameter.convention != "own":
+                return "field validator value input must be owned"
+        for target in targets:
+            for field in node.fields:
+                if field.name == target and not same_shape_head(
+                    method.output, field.type
+                ):
+                    return "field validator output does not match its field type"
+        mode: str | None = selected.validator_mode
+        if mode == "after":
+            after_parameter: SchemaShapeParameter | None = method.params[0]
+            if after_parameter is not None:
+                selected_parameter: SchemaShapeParameter = after_parameter
+                for target in targets:
+                    for field in node.fields:
+                        if field.name == target and not same_shape_head(
+                            selected_parameter.type, field.type
+                        ):
+                            return "field after validator input does not match its field type"
+    elif selected.kind == "model-validator":
+        mode: str | None = selected.validator_mode
+        if mode == "before":
+            if method.receiver is not None:
+                return "model before validator cannot declare an instance receiver"
+            if method.kind != "class" and method.kind != "static":
+                return "model before validator must be a class or static method"
+            if len(method.params) == 0:
+                return "model before validator has no structural input"
+            if len(method.params) > 2:
+                return "model before validator has too many inputs"
+            parameter: SchemaShapeParameter | None = method.params[0]
+            if parameter is not None:
+                selected_parameter: SchemaShapeParameter = parameter
+                if selected_parameter.convention != "own":
+                    return "model before validator input must be owned"
+                if selected_parameter.type.kind != "nominal":
+                    return "model before validator input must be a concrete structural type"
+            if method.output.kind != "nominal":
+                return (
+                    "model before validator output must be a concrete structural type"
+                )
+        elif mode == "after":
+            if method.kind != "regular" or method.receiver != "own":
+                return "model after validator must consume its model receiver"
+            if len(method.params) > 1:
+                return "model after validator has too many inputs"
+            if not is_model_output(method.output, node):
+                return "model after validator output must be its model type"
+    return None

@@ -35,7 +35,7 @@ pub use schema::{
     RelativeTimeConstraint, Schema, StringConstraints, StringPattern, TemporalKind, TemporalSchema,
     UrlConstraints,
 };
-pub(crate) use schema_view::{ExtraRef, FieldRef, ModelRef};
+pub(crate) use schema_view::{ExtraRef, FieldRef, ModelRef, StaticSerializer, static_serializers};
 pub use schema_view::{SchemaRef, SchemaTag};
 pub(crate) use static_sums::declared_values as static_declared_values;
 pub use sum_schema::{
@@ -154,6 +154,7 @@ pub(crate) fn validate_ref_with_callbacks<'input>(
             definition_scopes: Arc::new(Vec::new()),
             active_references: Vec::new(),
             enforce_strings_input: true,
+            skip_callbacks: false,
         },
         Some(callbacks),
     )
@@ -186,6 +187,27 @@ pub(crate) fn validate_at_depth(
     )
 }
 
+pub(crate) fn validate_ref_for_serialization(
+    schema: SchemaRef<'_>,
+    input: &InputArena,
+    options: ValidationOptions,
+) -> Result<ValidatedArena, ValidationError> {
+    validate_at_depth_with_context_mode(
+        schema,
+        input,
+        input.root(),
+        options,
+        0,
+        ValidationContext {
+            definition_scopes: Arc::new(Vec::new()),
+            active_references: Vec::new(),
+            enforce_strings_input: true,
+            skip_callbacks: true,
+        },
+        None,
+    )
+}
+
 pub(crate) fn validate_at_depth_with_context(
     schema: SchemaRef<'_>,
     input: &InputArena,
@@ -205,6 +227,7 @@ pub(crate) fn validate_at_depth_with_context(
             definition_scopes,
             active_references,
             enforce_strings_input: true,
+            skip_callbacks: false,
         },
         None,
     )
@@ -214,6 +237,7 @@ struct ValidationContext {
     definition_scopes: DefinitionScopes,
     active_references: Vec<(InputId, &'static str)>,
     enforce_strings_input: bool,
+    skip_callbacks: bool,
 }
 
 fn validate_at_depth_with_context_mode<'input>(
@@ -237,6 +261,7 @@ fn validate_at_depth_with_context_mode<'input>(
         definition_scopes: context.definition_scopes,
         active_references: context.active_references,
         callbacks,
+        skip_callbacks: context.skip_callbacks,
     };
     let root = state.validate_node(schema, root, start_depth)?;
     Ok(ValidatedArena::new(root, state.values))
@@ -271,6 +296,7 @@ pub(crate) struct ValidationState<'a> {
     definition_scopes: DefinitionScopes,
     active_references: Vec<(InputId, &'static str)>,
     callbacks: Option<&'a dyn ValidationCallbacks>,
+    skip_callbacks: bool,
 }
 
 impl ValidationState<'_> {
@@ -324,6 +350,15 @@ impl ValidationState<'_> {
                 | schema_view::SchemaTag::FunctionAfter
                 | schema_view::SchemaTag::FunctionPlain
         ) {
+            if self.skip_callbacks {
+                let child = match tag {
+                    schema_view::SchemaTag::FunctionAfter => schema.child(0)?,
+                    schema_view::SchemaTag::FunctionBefore
+                    | schema_view::SchemaTag::FunctionPlain => schema.child(1)?,
+                    _ => schema,
+                };
+                return self.validate_node(child, input_id, depth + 1);
+            }
             return function_validators::validate_function(self, schema, input_id, depth);
         }
         if matches!(
@@ -449,6 +484,7 @@ impl ValidationState<'_> {
             definition_scopes: Arc::clone(&self.definition_scopes),
             active_references: self.active_references.clone(),
             callbacks: self.callbacks,
+            skip_callbacks: self.skip_callbacks,
         };
         let root = state.validate_node(schema, root, start_depth)?;
         Ok(ValidatedArena::new(root, state.values))
@@ -472,6 +508,7 @@ impl ValidationState<'_> {
                 definition_scopes: Arc::clone(&self.definition_scopes),
                 active_references: Vec::new(),
                 enforce_strings_input: true,
+                skip_callbacks: self.skip_callbacks,
             },
             self.callbacks,
         )
@@ -494,6 +531,7 @@ impl ValidationState<'_> {
                 definition_scopes: Arc::clone(&self.definition_scopes),
                 active_references: Vec::new(),
                 enforce_strings_input: false,
+                skip_callbacks: self.skip_callbacks,
             },
             self.callbacks,
         )

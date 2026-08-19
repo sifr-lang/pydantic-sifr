@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use sifr_runtime::interop::structural::{
     NominalField, STATIC_PROGRAM_FORMAT_VERSION, STRUCTURAL_BRIDGE_CONTRACT_VERSION, ShapeIdentity,
-    StaticProgramType, StructuralType, binary_container, metadata, nominal_record, primitive,
-    tuple, unary_container,
+    StaticProgramType, StaticProgramValue, StructuralType, binary_container, metadata,
+    nominal_record, primitive, tuple, unary_container,
 };
 
 use crate::NativeValue;
@@ -423,6 +423,7 @@ impl ModelSchema {
 pub struct PreparedSchema<'schema> {
     schema: SchemaRef<'schema>,
     structural_identity: ShapeIdentity,
+    static_program: Option<&'static StaticProgramValue>,
 }
 
 impl<'schema> PreparedSchema<'schema> {
@@ -430,6 +431,7 @@ impl<'schema> PreparedSchema<'schema> {
         Ok(Self {
             schema: SchemaRef::owned(schema),
             structural_identity: schema.structural_identity_at(0)?,
+            static_program: None,
         })
     }
 
@@ -454,6 +456,7 @@ impl<'schema> PreparedSchema<'schema> {
         Ok(PreparedSchema {
             schema: SchemaRef::from_static_program(program.value())?,
             structural_identity: T::shape_identity(),
+            static_program: Some(program.value()),
         })
     }
 
@@ -465,6 +468,11 @@ impl<'schema> PreparedSchema<'schema> {
     #[must_use]
     pub const fn structural_identity(&self) -> ShapeIdentity {
         self.structural_identity
+    }
+
+    #[must_use]
+    pub(crate) const fn static_program(&self) -> Option<&'static StaticProgramValue> {
+        self.static_program
     }
 }
 

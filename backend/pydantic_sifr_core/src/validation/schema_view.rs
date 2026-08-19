@@ -9,8 +9,10 @@ use super::{
     StringConstraints, StringPattern, ValidationError, scalars::type_error,
 };
 
+mod serializers;
 mod sums;
 mod validators;
+pub(crate) use serializers::{StaticSerializer, static_serializers};
 pub(crate) use sums::{StaticMetadata, StaticVariant};
 
 #[derive(Clone, Copy, Debug)]

@@ -10,7 +10,7 @@ The conformance oracle is Pydantic commit
 Pydantic Core 2.47.0 and pytest 9.1.1.
 
 The package compiler and runtime source is Sifr commit
-`0ab08c47605b694e396a4c30c621fd1ae79b07e1`.
+`c1b41a6078cff5bb678bd94df5bbf4e8c7e0ec6c`.
 
 The total-set manifest contains 310 tracked upstream files and 12,754 collected
 test nodes. Its generated file SHA-256 is
@@ -87,7 +87,7 @@ compiler or runtime when this combination is unavailable.
 
 | Component | Certified identity |
 | --- | --- |
-| Sifr compiler and runtime source | `0ab08c47605b694e396a4c30c621fd1ae79b07e1` |
+| Sifr compiler and runtime source | `c1b41a6078cff5bb678bd94df5bbf4e8c7e0ec6c` |
 | Sifr CLI version | `0.0.0` |
 | Sifr package requirement | `>=0.3,<0.4` |
 | `pydantic_sifr` package | `0.1.0-beta.1` |
