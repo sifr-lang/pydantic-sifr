@@ -9,6 +9,11 @@ ROOT = Path(__file__).resolve().parents[2]
 LEDGER = ROOT / "tests/compatibility/ps10.toml"
 ANCHORS = ROOT / "tests/provenance/anchor_rules.toml"
 PUBLIC_MATRIX = ROOT / "docs/compatibility.md"
+STATUS_DOCUMENTS = (
+    ROOT / "README.md",
+    ROOT / "docs/quickstart.md",
+    ROOT / "docs/migration.md",
+)
 
 REQUIRED = {
     "api/base_model",
@@ -88,14 +93,32 @@ class Ps10CompatibilityTest(unittest.TestCase):
     def test_public_matrix_matches_every_machine_surface_status(self) -> None:
         matrix = PUBLIC_MATRIX.read_text(encoding="utf-8")
         payload = tomllib.loads(LEDGER.read_text(encoding="utf-8"))
-        documented: dict[str, str] = {}
+        documented: dict[str, tuple[str, str]] = {}
         for line in matrix.splitlines():
             cells = [cell.strip() for cell in line.strip().split("|")[1:-1]]
             if len(cells) != 5 or not cells[0].startswith("`"):
                 continue
-            documented[cells[0].strip("`")] = cells[2]
+            documented[cells[0].strip("`")] = (cells[2], cells[4])
         expected = {row["name"]: row["status"] for row in payload["surface"]}
-        self.assertEqual(documented, expected)
+        self.assertEqual(
+            {name: value[0] for name, value in documented.items()}, expected
+        )
+
+        serialization = next(
+            row for row in payload["surface"] if row["name"] == "api/serialization"
+        )
+        self.assertEqual(
+            documented["api/serialization"][1], f"`{serialization['evidence']}`"
+        )
+
+    def test_entry_docs_match_current_machine_status_set(self) -> None:
+        payload = tomllib.loads(LEDGER.read_text(encoding="utf-8"))
+        statuses = sorted({row["status"] for row in payload["surface"]})
+        self.assertEqual(statuses, ["adapted", "excluded"])
+        summary = "The current matrix uses `adapted` and `excluded` statuses."
+        for path in STATUS_DOCUMENTS:
+            document = " ".join(path.read_text(encoding="utf-8").split())
+            self.assertIn(summary, document)
 
 
 if __name__ == "__main__":
