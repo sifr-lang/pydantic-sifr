@@ -7,6 +7,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 PACKAGE_ROOT = ROOT / "src/__init__.sifr"
+ARCHITECTURE = ROOT / "docs/architecture.md"
 
 
 def package_root_exports(source: str) -> list[str]:
@@ -76,6 +77,12 @@ class PublicApiTest(unittest.TestCase):
                 "TypeAdapter",
             ],
         )
+
+    def test_architecture_names_every_package_root_export(self) -> None:
+        exports = package_root_exports(PACKAGE_ROOT.read_text(encoding="utf-8"))
+        architecture = ARCHITECTURE.read_text(encoding="utf-8")
+        for name in exports:
+            self.assertIn(f"`{name}`", architecture)
 
     def test_export_parser_exposes_aliases_and_fails_closed(self) -> None:
         source = "from sifr.meta import StaticProgram as VerifiedSchemaProgram\n"

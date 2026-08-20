@@ -9,8 +9,11 @@ Status meanings:
 - **adapted**: the behavior is available with the stated Sifr-specific API.
 - **blocked**: the public API is not available. The linked issue names the
   package-neutral compiler capability that is required.
+- **excluded**: the public API is intentionally unavailable. The terminal
+  reason does not depend on a later milestone.
 
-Blocked entries do not have a fallback, compatibility shim, or second runtime.
+Blocked and excluded entries do not have a fallback, compatibility shim, or
+second runtime.
 
 | API key | Surface | Status | Sifr contract | Evidence or blocker |
 | --- | --- | --- | --- | --- |
@@ -26,6 +29,26 @@ Blocked entries do not have a fallback, compatibility shim, or second runtime.
 | `api/field_metadata` | Field metadata | adapted | Typed descriptors define constraints, aliases, checked error overrides, and bounded JSON Schema annotations. | `src/declarations.sifr`; `src/schema_contract.sifr` |
 | `api/errors` | Validation errors | adapted | Validation failures are typed `Result` errors with stable codes, ordered locations, context, expected values, and truncation state. | `backend/pydantic_sifr_core/tests/validation_models.rs`; `src/errors.sifr` |
 | `api/json_schema` | JSON Schema | adapted | The attached `model_json_schema` type method emits Draft 2020-12 from the sealed static schema. It accepts mode, alias, and integer-profile options without a dummy model value. | `src/api.sifr`; `backend/pydantic_sifr_core/tests/json_schema_dialect.rs`; `demos/milestone_m11_model_operations` |
+| `excluded/metaclasses` | Python metaclasses and runtime class mutation | excluded | Classes and schema programs are finalized statically. Runtime mutation would invalidate checked layout and identity. | Terminal exclusion |
+| `excluded/create_model` | Dynamic `create_model` | excluded | Runtime type and schema creation conflicts with concrete compile-time type identity and sealed programs. | Terminal exclusion |
+| `excluded/syntax_tree_macros` | Arbitrary syntax-tree macros | excluded | Packages can use typed declarations and bounded plans. They cannot rewrite language semantics. | Terminal exclusion |
+| `excluded/runtime_schema` | Runtime schema construction | excluded | The build-time canonicalizer and sealed static program are the only schema authority. | Terminal exclusion |
+| `excluded/python_plugins` | Python plugins and custom Core Schema hooks | excluded | Released binaries contain no Python runtime. Open hooks would bypass the checked schema contract. | Terminal exclusion |
+| `excluded/pydantic_dataclasses` | Pydantic dataclasses | excluded | Ordinary Sifr classes replace dataclass discovery and generated initialization. | Terminal exclusion |
+| `excluded/private_attributes` | Private attributes | excluded | Models cannot add hidden storage outside their declared structural layout. | Terminal exclusion |
+| `excluded/validate_call` | `validate_call` | excluded | Arbitrary function-call interception requires a separate function-adaptation mechanism. | Terminal exclusion |
+| `excluded/model_construct` | `model_construct` | excluded | Construction cannot bypass the sealed validate-and-construct boundary. Use an ordinary Sifr constructor for trusted typed values. | Terminal exclusion |
+| `excluded/model_copy_updates` | Dynamic `model_copy` updates | excluded | Construct a new Sifr value. Use explicit cloning first when the value supports cloning. | Terminal exclusion |
+| `excluded/model_fields_rebuild` | Runtime `model_fields` and `model_rebuild` | excluded | Runtime reflection and schema rebuilding conflict with immutable compile-time shapes and programs. | Terminal exclusion |
+| `excluded/from_attributes` | ORM `from_attributes` | excluded | Arbitrary attribute probing is outside the typed structural-input contract. | Terminal exclusion |
+| `excluded/runtime_types` | Arbitrary runtime types | excluded | Every value needs a statically checked type and a structural or declared nominal mapping. | Terminal exclusion |
+| `excluded/multiple_data_inheritance` | Multiple data inheritance | excluded | One data parent preserves deterministic layout, construction, and field identity. | Terminal exclusion |
+| `excluded/mixed_adapter_providers` | Mixed class-adapter providers | excluded | Multiple providers would create ambiguous declaration, ordering, and cache authorities. | Terminal exclusion |
+| `excluded/assignment_validation` | Assignment-validation interception | excluded | Field mutation keeps ordinary Sifr assignment and ownership semantics. | Terminal exclusion |
+| `excluded/frozen_models` | Python-compatible frozen models | excluded | Use ordinary Sifr immutability and ownership contracts instead of a runtime flag. | Terminal exclusion |
+| `excluded/wrap_handlers` | Public wrap-handler continuations | excluded | A public continuation needs ownership, lifetime, and effect contracts that this phase does not add. | Terminal exclusion |
+| `excluded/wildcard_field_validator` | Wildcard `field_validator("*")` targets | excluded | Explicit field identities keep checking, diagnostics, inheritance, and ordering deterministic. | Terminal exclusion |
+| `excluded/unbound_generic_schema` | Schema generation for an unbound generic model | excluded | A schema program requires a concrete owner type, substituted fields, and a complete cache identity. | Terminal exclusion |
 
 The machine-readable source for this table is
 `tests/compatibility/ps10.toml`. Earlier milestone ledgers remain the detailed
