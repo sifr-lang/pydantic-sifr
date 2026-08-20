@@ -25,8 +25,8 @@ class Invoice(BaseModel):
     def serialize_amount(self, own value: int64) -> str:
         return "$" + str(value)
 
-    @field_serializer("note", when_used="json-unless-none")
     @staticmethod
+    @field_serializer("note", when_used="json-unless-none")
     def serialize_note(own value: str | None) -> str:
         if value is None:
             return "missing"
@@ -43,25 +43,25 @@ class PolicyModel(BaseModel):
     json_value: str
     json_unless_none_value: str | None
 
-    @field_serializer("always_value")
     @staticmethod
+    @field_serializer("always_value")
     def serialize_always(own value: str) -> str:
         return "always:" + value
 
-    @field_serializer("unless_none_value", when_used="unless-none")
     @staticmethod
+    @field_serializer("unless_none_value", when_used="unless-none")
     def serialize_unless_none(own value: str | None) -> str:
         if value is None:
             return "unexpected"
         return "unless:" + value
 
-    @field_serializer("json_value", when_used="json")
     @staticmethod
+    @field_serializer("json_value", when_used="json")
     def serialize_json(own value: str) -> str:
         return "json:" + value
 
-    @field_serializer("json_unless_none_value", when_used="json-unless-none")
     @staticmethod
+    @field_serializer("json_unless_none_value", when_used="json-unless-none")
     def serialize_json_unless_none(own value: str | None) -> str:
         if value is None:
             return "unexpected"
@@ -96,8 +96,8 @@ class Contextual(BaseModel):
 class Failing(BaseModel):
     value: str
 
-    @field_serializer("value")
     @staticmethod
+    @field_serializer("value")
     def reject(own value: str) -> Result[str, SerializerFailure]:
         raise SerializerFailure("serializer rejected " + value)
 
@@ -109,8 +109,8 @@ class Detail:
 class StructuredCallbacks(BaseModel):
     value: str
 
-    @field_serializer("value")
     @staticmethod
+    @field_serializer("value")
     def serialize_value(own value: str) -> Detail:
         return Detail("field:" + value)
 
