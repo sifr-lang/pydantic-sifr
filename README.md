@@ -10,8 +10,8 @@ schemas, one shared validation engine, typed model construction, and public
 JSON, structural, and strings entry points.
 
 The [compatibility matrix](docs/compatibility.md) lists every selected public
-surface as same, adapted, or blocked. Blocked entries are not implemented by a
-fallback or compatibility shim.
+surface. The current matrix uses `adapted` and `excluded` statuses. Excluded
+entries are terminal and have no fallback or compatibility shim.
 
 The [migration guide](docs/migration.md) maps Pydantic models, fields,
 configuration, validation calls, and errors to the supported Sifr API.

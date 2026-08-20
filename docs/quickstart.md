@@ -103,8 +103,9 @@ or a structural value whose mapping keys and scalar leaves are strings. All
 three methods use the same native validation engine.
 
 See the [migration guide](migration.md) for field and configuration mappings.
-See the [compatibility ledger](compatibility.md) for supported and blocked
-surfaces. See [certification](certification.md) for the exact release tuple and
+See the [compatibility ledger](compatibility.md) for supported behavior and
+terminal exclusions. The current matrix uses `adapted` and `excluded`
+statuses. See [certification](certification.md) for the exact release tuple and
 test procedure.
 
 The canonical single-file example is

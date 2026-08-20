@@ -4,7 +4,8 @@
 does not load Python or inspect runtime model objects.
 
 Read the [compatibility matrix](compatibility.md) before migration. The matrix
-identifies each adapted or blocked API.
+identifies delivered behavior and terminal exclusions. The current matrix uses
+`adapted` and `excluded` statuses.
 
 ## Declare a model
 
