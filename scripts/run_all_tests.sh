@@ -80,7 +80,7 @@ python3 scripts/check_static_program_roundtrip.py --sifr-bin "${sifr_bin}"
   "${sifr_bin}" fmt --check src
   "${sifr_bin}" run --locked
 )
-python3 scripts/check_model_operation_identity.py
+python3 scripts/check_model_operation_identity.py --sifr-bin "${sifr_bin}"
 python3 scripts/run_canonical_demo.py --sifr-bin "${sifr_bin}"
 
 if [[ -f Cargo.toml ]]; then
