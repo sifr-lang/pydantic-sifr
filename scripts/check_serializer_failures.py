@@ -23,8 +23,8 @@ CASES = {
         '''class Wildcard(BaseModel):
     value: str
 
-    @field_serializer("*")
     @staticmethod
+    @field_serializer("*")
     def reject_wildcard(own value: str) -> str:
         return value
 ''',
@@ -34,8 +34,8 @@ CASES = {
         '''class UnknownTarget(BaseModel):
     value: str
 
-    @field_serializer("missing")
     @staticmethod
+    @field_serializer("missing")
     def reject_unknown_target(own value: str) -> str:
         return value
 ''',
@@ -55,8 +55,8 @@ CASES = {
         '''class FieldInput(BaseModel):
     value: str
 
-    @field_serializer("value")
     @staticmethod
+    @field_serializer("value")
     def reject_input(own value: bool) -> str:
         return str(value)
 ''',
@@ -66,8 +66,8 @@ CASES = {
         '''class FieldBorrowedInput(BaseModel):
     value: str
 
-    @field_serializer("value")
     @staticmethod
+    @field_serializer("value")
     def reject_borrowed_input(value: str) -> str:
         return ""
 ''',
@@ -77,8 +77,8 @@ CASES = {
         '''class FieldWhenUsed(BaseModel):
     value: str
 
-    @field_serializer("value", when_used="sometimes")
     @staticmethod
+    @field_serializer("value", when_used="sometimes")
     def reject_when_used(own value: str) -> str:
         return value
 ''',
@@ -113,8 +113,8 @@ CASES = {
         '''class ComputedReceiver(BaseModel):
     value: str
 
-    @computed_field()
     @staticmethod
+    @computed_field()
     def reject_receiver() -> str:
         return ""
 ''',
@@ -154,8 +154,8 @@ CASES = {
         '''class AsyncSerializer(BaseModel):
     value: str
 
-    @field_serializer("value")
     @staticmethod
+    @field_serializer("value")
     async def reject_async(own value: str) -> str:
         return value
 ''',

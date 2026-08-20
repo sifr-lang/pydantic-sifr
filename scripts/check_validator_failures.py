@@ -108,8 +108,7 @@ CASES = {
     value: str
 
     @model_validator(mode="after")
-    @classmethod
-    def reject_model_after_receiver(cls) -> Self:
+    def reject_model_after_receiver(self) -> Self:
         return ModelAfterReceiver("")
 ''',
     ),
