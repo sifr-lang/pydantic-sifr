@@ -23,6 +23,26 @@ REQUIRED = {
     "api/type_adapter",
     "api/validators",
     "core/multi_host_url_serialization",
+    "excluded/assignment_validation",
+    "excluded/create_model",
+    "excluded/from_attributes",
+    "excluded/frozen_models",
+    "excluded/metaclasses",
+    "excluded/mixed_adapter_providers",
+    "excluded/model_construct",
+    "excluded/model_copy_updates",
+    "excluded/model_fields_rebuild",
+    "excluded/multiple_data_inheritance",
+    "excluded/private_attributes",
+    "excluded/pydantic_dataclasses",
+    "excluded/python_plugins",
+    "excluded/runtime_schema",
+    "excluded/runtime_types",
+    "excluded/syntax_tree_macros",
+    "excluded/unbound_generic_schema",
+    "excluded/validate_call",
+    "excluded/wildcard_field_validator",
+    "excluded/wrap_handlers",
 }
 PS10_ANCHORED = {
     "api/field_metadata",
@@ -43,7 +63,9 @@ class Ps10CompatibilityTest(unittest.TestCase):
         self.assertEqual(len(names), len(set(names)))
 
         for row in rows:
-            self.assertIn(row["status"], {"same", "adapted", "blocked"})
+            self.assertIn(
+                row["status"], {"same", "adapted", "blocked", "excluded"}
+            )
             self.assertTrue(row["difference"].strip() or row["status"] == "same")
             if row["status"] == "blocked":
                 self.assertEqual(row["evidence"], "")
@@ -51,6 +73,9 @@ class Ps10CompatibilityTest(unittest.TestCase):
                     row["blocker"],
                     r"^https://github\.com/sifr-lang/pydantic-sifr/issues/\d+$",
                 )
+            elif row["status"] == "excluded":
+                self.assertEqual(row["evidence"], "")
+                self.assertEqual(row["blocker"], "")
             else:
                 self.assertTrue((ROOT / row["evidence"]).is_file())
                 self.assertEqual(row["blocker"], "")
@@ -60,11 +85,17 @@ class Ps10CompatibilityTest(unittest.TestCase):
         fixtures = {row["fixture"] for row in anchors if row["milestone"] == "ps_10"}
         self.assertEqual(fixtures, PS10_ANCHORED)
 
-    def test_public_matrix_names_every_machine_surface(self) -> None:
+    def test_public_matrix_matches_every_machine_surface_status(self) -> None:
         matrix = PUBLIC_MATRIX.read_text(encoding="utf-8")
         payload = tomllib.loads(LEDGER.read_text(encoding="utf-8"))
-        for row in payload["surface"]:
-            self.assertIn(f"`{row['name']}`", matrix)
+        documented: dict[str, str] = {}
+        for line in matrix.splitlines():
+            cells = [cell.strip() for cell in line.strip().split("|")[1:-1]]
+            if len(cells) != 5 or not cells[0].startswith("`"):
+                continue
+            documented[cells[0].strip("`")] = cells[2]
+        expected = {row["name"]: row["status"] for row in payload["surface"]}
+        self.assertEqual(documented, expected)
 
 
 if __name__ == "__main__":

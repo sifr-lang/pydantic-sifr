@@ -23,9 +23,27 @@ The native core accepts the compiler's sealed static program through
 versions, program identity, and shape identity before the core reads a node.
 The package has no second envelope type, older format, or runtime fallback.
 
-The Sifr package root exports typed validation, serialization, and JSON Schema
-errors; `verify_schema`; three validation functions; `model_dump_json`; and
-`model_json_schema`. Schema payload classes and contract values are internal.
+The Sifr package root exports only these groups:
+
+- model types: `BaseModel`, `RootModel`, and `TypeAdapter`;
+- typed descriptors: `Field`, `ConfigDict`, `Constraints`, `AliasPath`, and
+  `AliasChoices`;
+- checked handlers: `field_validator`, `model_validator`, `field_serializer`,
+  `model_serializer`, and `computed_field`;
+- typed errors: `ValidationError`, `SerializationError`, `JsonSchemaError`, and
+  `SpecialValueError`;
+- validation functions: `model_validate`, `model_validate_json`,
+  `model_validate_strings`, `model_validate_with_validators`,
+  `model_validate_json_with_validators`, and
+  `model_validate_strings_with_validators`;
+- dump functions: `model_dump`, `model_dump_json`,
+  `model_dump_with_serializers`, and `model_dump_json_with_serializers`;
+- static schema construction: `verify_schema`; and
+- mapped public values: `Url`, `MultiHostUrl`, and `Pattern`.
+
+Attached `model_json_schema` and the attached validation and dump methods use
+the same checked package functions. Schema payload classes and contract values
+are internal.
 
 The round-trip gate emits a representative specialization with the released
 Sifr compiler. It compares the exact bytes and identity with checked-in
@@ -211,7 +229,8 @@ pending.
 ## PS10 compatibility matrix
 
 `tests/compatibility/ps10.toml` is the machine-readable source for the public
-matrix in `docs/compatibility.md`. It distinguishes delivered adaptations from
-compiler-blocked APIs. A blocked row must name an owning issue and cannot name
-local evidence as though the API were available. The unit gate also binds the
-selected PS10 upstream families to the pinned anchor ledger.
+matrix in `docs/compatibility.md`. It distinguishes delivered adaptations,
+blocked APIs, and terminal exclusions. A blocked row names an owning issue. An
+excluded row states a terminal reason and has no blocker. The unit gate checks
+status parity with the public table. It also binds the selected PS10 upstream
+families to the pinned anchor ledger.

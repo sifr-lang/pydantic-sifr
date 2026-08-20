@@ -28,15 +28,21 @@ class MigrationDocsTest(unittest.TestCase):
         self.assertNotIn("@const_specialize", guide)
         self.assertNotIn("@metadata", guide)
 
-    def test_guide_names_validators_and_the_remaining_blocked_surfaces(self) -> None:
+    def test_guide_names_handlers_and_terminal_replacements(self) -> None:
         guide = GUIDE.read_text(encoding="utf-8")
         for surface in (
             "field_validator",
             "model_validator",
-            "serializer decorators",
-            "computed fields",
+            "field_serializer",
+            "model_serializer",
+            "computed_field",
+            "model_construct",
+            "model_copy",
+            "ordinary Sifr constructor",
+            "explicit cloning",
         ):
             self.assertIn(surface, guide)
+        self.assertNotIn("does not publish serializer decorators", guide)
 
     def test_guide_does_not_introduce_a_versioned_or_legacy_api(self) -> None:
         guide = GUIDE.read_text(encoding="utf-8").lower()

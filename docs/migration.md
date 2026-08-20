@@ -111,6 +111,19 @@ Use the validator-aware validation functions when a handler needs typed
 context or when a model declares validators. Callback failures join the normal
 validation error. They keep the field or model location and package context.
 
+## Convert serializers and computed fields
+
+Use `field_serializer` for selected fields. Use `model_serializer` when the
+complete serialized result has a different structural type. Use
+`computed_field` for a checked, zero-argument instance method whose result is
+present only in serialized output.
+
+Each serializer declares a checked input and output type. The `when_used`
+argument selects always, unless-`None`, JSON, or JSON-unless-`None` execution.
+Use the serializer-aware dump methods when a callback needs typed context.
+
+The complete example is in `demos/milestone_m10_serializers`.
+
 ## Handle errors
 
 Pydantic raises `ValidationError`. Sifr returns a typed error through
@@ -153,9 +166,19 @@ locations.
 
 ## APIs that are not available
 
-The package does not publish serializer decorators or computed fields in this
-milestone. Validator wrap mode and wildcard field targets are also not
-available.
+`model_construct` is not available because it bypasses validation. Use an
+ordinary Sifr constructor when values are already trusted and typed.
+
+Dynamic `model_copy` updates are not available. Construct a new value with the
+ordinary Sifr constructor. Use explicit cloning first when the value and its
+fields support cloning.
+
+The package also excludes runtime model creation and schema rebuilding,
+attribute probing, private attributes, call interception, assignment
+interception, Python metaclasses and dataclasses, multiple data inheritance,
+and frozen-model emulation. Validator wrap mode and wildcard field targets are
+not available. The compatibility matrix records every terminal exclusion and
+its reason.
 
 Do not retain a Python model path beside the Sifr model. Choose one schema
 owner and one validation path for each migrated boundary.
@@ -166,10 +189,13 @@ owner and one validation path for each migrated boundary.
 2. Convert field rules to `Field` calls.
 3. Convert model configuration to `ConfigDict`.
 4. Convert selected validators to checked field or model handlers.
-5. Replace exception-based calls with `Result` return types.
-6. Select one input function for each input boundary.
-7. Compare each required API with the compatibility matrix.
-8. Remove the Python model path after the Sifr boundary passes its tests.
+5. Convert serializers and computed fields to checked handlers.
+6. Replace exception-based calls with `Result` return types.
+7. Select one input function for each input boundary.
+8. Replace dynamic construction and copy updates with ordinary construction or
+   explicit cloning.
+9. Compare each required API with the compatibility matrix.
+10. Remove the Python model path after the Sifr boundary passes its tests.
 
 The complete field and configuration example is in
 `demos/milestone_m8_fields_configuration`. The validator example is in
