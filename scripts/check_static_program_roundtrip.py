@@ -12,7 +12,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "tests/sifr/static_schema_contract.sifr"
-HARNESS = ROOT / "demos/milestone_m8_fields_configuration"
+HARNESS = ROOT / "demos/fields_and_configuration"
 PROGRAM_FIXTURE = ROOT / "tests/static_program/schema_contract_program.txt"
 IDENTITY_FIXTURE = ROOT / "tests/static_program/schema_contract_program.identity"
 

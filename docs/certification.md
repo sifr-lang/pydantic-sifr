@@ -18,7 +18,7 @@ test nodes. Its generated file SHA-256 is
 The Core Schema ledger contains 53 schema kinds and 4 field kinds. Its universe
 SHA-256 is
 `b221bebe7c78f5ac2eeac3c47e51f9097fc5ca068e25f4d3e7a380d243faff49`.
-No compatibility row is deferred to PS11.
+No compatibility row is deferred to a later phase.
 
 ## Differential validation
 

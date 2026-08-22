@@ -123,7 +123,7 @@ Each serializer declares a checked input and output type. The `when_used`
 argument selects always, unless-`None`, JSON, or JSON-unless-`None` execution.
 Use the serializer-aware dump methods when a callback needs typed context.
 
-The complete example is in `demos/milestone_m10_serializers`.
+The complete example is in `demos/serializers_and_computed_fields`.
 
 ## Handle errors
 
@@ -199,6 +199,6 @@ owner and one validation path for each migrated boundary.
 10. Remove the Python model path after the Sifr boundary passes its tests.
 
 The complete field and configuration example is in
-`demos/milestone_m8_fields_configuration`. The validator example is in
-`demos/milestone_m9_validators`. The serializer and computed-field example is
-in `demos/milestone_m10_serializers`.
+`demos/fields_and_configuration`. The validator example is in
+`demos/validators`. The serializer and computed-field example is in
+`demos/serializers_and_computed_fields`.

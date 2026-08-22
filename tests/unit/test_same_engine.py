@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEMO = ROOT / "demos/milestone_ps_6_demo/src/main.sifr"
+DEMO = ROOT / "demos/model_validation/src/main.sifr"
 
 
 class SameEngineTest(unittest.TestCase):
@@ -38,7 +38,7 @@ class SameEngineTest(unittest.TestCase):
             ],
         )
 
-    def test_ps6_demo_uses_the_attached_validation_surface(self) -> None:
+    def test_model_demo_uses_the_attached_validation_surface(self) -> None:
         source = DEMO.read_text(encoding="utf-8")
         self.assertIn("User.model_validate_json(payload)", source)
         self.assertIn("User.model_validate_strings(strings_input)", source)

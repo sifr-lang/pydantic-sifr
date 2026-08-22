@@ -45,37 +45,25 @@ python3 scripts/check_serializer_failures.py --sifr-bin "${sifr_bin}"
 python3 scripts/check_model_operation_failures.py --sifr-bin "${sifr_bin}"
 python3 scripts/check_static_program_roundtrip.py --sifr-bin "${sifr_bin}"
 (
-  cd demos/milestone_ps_6_demo
+  cd demos/model_validation
   "${sifr_bin}" fetch --locked
   "${sifr_bin}" fmt --check src
   "${sifr_bin}" run --locked
 )
 (
-  cd demos/milestone_ps_7_demo
+  cd demos/fields_and_configuration
   "${sifr_bin}" fetch --locked
   "${sifr_bin}" fmt --check src
   "${sifr_bin}" run --locked
 )
 (
-  cd demos/milestone_m8_fields_configuration
+  cd demos/validators
   "${sifr_bin}" fetch --locked
   "${sifr_bin}" fmt --check src
   "${sifr_bin}" run --locked
 )
 (
-  cd demos/milestone_m9_validators
-  "${sifr_bin}" fetch --locked
-  "${sifr_bin}" fmt --check src
-  "${sifr_bin}" run --locked
-)
-(
-  cd demos/milestone_m10_serializers
-  "${sifr_bin}" fetch --locked
-  "${sifr_bin}" fmt --check src
-  "${sifr_bin}" run --locked
-)
-(
-  cd demos/milestone_m11_model_operations
+  cd demos/serializers_and_computed_fields
   "${sifr_bin}" fetch --locked
   "${sifr_bin}" fmt --check src
   "${sifr_bin}" run --locked

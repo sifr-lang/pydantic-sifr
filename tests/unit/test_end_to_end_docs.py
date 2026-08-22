@@ -6,12 +6,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 DEMOS = (
-    "milestone_ps_6_demo",
-    "milestone_ps_7_demo",
-    "milestone_m8_fields_configuration",
-    "milestone_m9_validators",
-    "milestone_m10_serializers",
-    "milestone_m11_model_operations",
+    "model_validation",
+    "fields_and_configuration",
+    "validators",
+    "serializers_and_computed_fields",
 )
 
 

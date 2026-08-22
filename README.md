@@ -17,8 +17,7 @@ The [migration guide](docs/migration.md) maps Pydantic models, fields,
 configuration, validation calls, and errors to the supported Sifr API.
 
 The [quick start](docs/quickstart.md) shows the public package workflow. It
-also links the two checked end-to-end demos and explains the behavior that each
-demo verifies.
+also links the four checked end-to-end demos and explains each demo.
 
 ## Foundation contract
 
@@ -96,29 +95,20 @@ directly into the input arena and does not create a generic model tree. The
 adapter sorts unordered mappings and sets before validation, which keeps error
 order stable.
 
-The first end-to-end demo is a dependent package in
-[`demos/milestone_ps_6_demo`](demos/milestone_ps_6_demo). It shows nested
-models, defaults, constraints, aliases, alias paths, JSON input, strings input,
-structural input, and a stable public validation error.
+[`demos/model_validation`](demos/model_validation) shows the public model API.
+It covers all input profiles, errors, dumps, JSON Schema, root models, type
+adapters, and concrete generic models.
 
-[`demos/milestone_ps_7_demo`](demos/milestone_ps_7_demo) shows literals,
-payload-free enums, smart unions, field-discriminated tagged unions, recursive
-models, and labelled branch errors through the same public API.
+[`demos/fields_and_configuration`](demos/fields_and_configuration) shows fields
+and model configuration. It covers aliases, constraints, sums, recursion,
+schema annotations, and mapped special values.
 
-[`demos/milestone_m8_fields_configuration`](demos/milestone_m8_fields_configuration)
-shows the complete M8 declaration surface and mapped special values.
+[`demos/validators`](demos/validators) shows field and model validators for JSON
+and structural input. It also covers typed context and checked callback errors.
 
-[`demos/milestone_m9_validators`](demos/milestone_m9_validators) shows field
-and model validators for JSON and structural input. It also shows multiple
-field targets, typed context, and checked callback errors.
-
-[`demos/milestone_m10_serializers`](demos/milestone_m10_serializers) shows
-attached dump methods, field and model serializers, computed fields, typed
-context, selections, aliases, and checked callback errors.
-
-[`demos/milestone_m11_model_operations`](demos/milestone_m11_model_operations)
-shows attached validation and JSON Schema methods, string-structural input,
-`RootModel[T]`, `TypeAdapter[T]`, and concrete generic models.
+[`demos/serializers_and_computed_fields`](demos/serializers_and_computed_fields)
+shows dump methods, serializers, computed fields, typed context, selections,
+aliases, and checked callback errors.
 
 Sum declarations use package-owned metadata. Literal keys are
 `pydantic.literal.none|bool|int|str|bytes`. Enum fields use the corresponding
