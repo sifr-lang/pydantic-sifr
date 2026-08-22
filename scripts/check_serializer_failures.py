@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HARNESS = ROOT / "demos/milestone_m10_serializers"
+HARNESS = ROOT / "demos/serializers_and_computed_fields"
 HEADER = (
     "from pydantic_sifr import "
     "BaseModel, computed_field, field_serializer, model_serializer\n\n"

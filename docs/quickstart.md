@@ -52,48 +52,37 @@ the same static program as validation.
 Set `SIFR_BIN` to the certified compiler binary. Then run the dependent apps.
 
 ```bash
-cd demos/milestone_ps_6_demo
+cd demos/model_validation
 "$SIFR_BIN" fetch --locked
 "$SIFR_BIN" run --locked
 ```
 
 ```bash
-cd demos/milestone_ps_7_demo
+cd demos/fields_and_configuration
 "$SIFR_BIN" fetch --locked
 "$SIFR_BIN" run --locked
 ```
 
 ```bash
-cd demos/milestone_m8_fields_configuration
+cd demos/validators
 "$SIFR_BIN" fetch --locked
 "$SIFR_BIN" run --locked
 ```
 
 ```bash
-cd demos/milestone_m9_validators
+cd demos/serializers_and_computed_fields
 "$SIFR_BIN" fetch --locked
 "$SIFR_BIN" run --locked
 ```
 
-```bash
-cd demos/milestone_m10_serializers
-"$SIFR_BIN" fetch --locked
-"$SIFR_BIN" run --locked
-```
+The model-validation demo covers all input profiles, errors, dumps, JSON
+Schema, root models, type adapters, and concrete generic models.
 
-```bash
-cd demos/milestone_m11_model_operations
-"$SIFR_BIN" fetch --locked
-"$SIFR_BIN" run --locked
-```
+The fields-and-configuration demo covers aliases, constraints, sums, recursion,
+schema annotations, and mapped special values. The remaining demos cover
+validators, serializers, and computed fields.
 
-The PS6 demo covers inputs, constraints, aliases, defaults, and errors. The PS7
-demo covers sums and recursion. The M8 demo covers the declaration facade. The
-M9 demo covers checked field and model validators. The M10 demo covers attached
-dump methods, serializers, computed fields, selections, and typed context. The
-M11 demo covers attached model operations, root models, and type adapters.
-
-All six demos are mandatory in the package gates.
+All four demos are mandatory in the package gates.
 
 ## Select an input profile
 
@@ -108,7 +97,6 @@ terminal exclusions. The current matrix uses `adapted` and `excluded`
 statuses. See [certification](certification.md) for the exact release tuple and
 test procedure.
 
-The canonical single-file example is
-[`demos/pydantic_sifr_demo.sifr`](../demos/pydantic_sifr_demo.sifr). The gate
-runs that exact file in a dependent package and compares its output with the
-checked snapshot.
+The canonical example is
+[`demos/model_validation/src/main.sifr`](../demos/model_validation/src/main.sifr).
+The gate runs that exact file and compares its output with the checked snapshot.

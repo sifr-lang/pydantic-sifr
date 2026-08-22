@@ -5,7 +5,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-DEMO = ROOT / "demos/pydantic_sifr_demo.sifr"
+DEMO = ROOT / "demos/model_validation/src/main.sifr"
 
 
 class CanonicalDemoTest(unittest.TestCase):
@@ -17,14 +17,17 @@ class CanonicalDemoTest(unittest.TestCase):
             'python3 scripts/run_canonical_demo.py --sifr-bin "${sifr_bin}"',
             gate,
         )
-        self.assertIn("tests/snapshots/pydantic_sifr_demo.stdout", runner)
+        self.assertIn("tests/snapshots/model_validation.stdout", runner)
         self.assertIn("shutil.copy2(DEMO, project / \"src/main.sifr\")", runner)
 
     def test_demo_uses_the_public_api_and_checks_success_and_failure(self) -> None:
         source = DEMO.read_text(encoding="utf-8")
         for marker in (
-            "from pydantic_sifr import BaseModel, ConfigDict, Field, JsonSchemaError",
-            "from pydantic_sifr import ValidationError",
+            "BaseModel,",
+            "ConfigDict,",
+            "Field,",
+            "JsonSchemaError,",
+            "ValidationError,",
             "class User(BaseModel):",
             'model_config = ConfigDict(extra="forbid")',
             'Field(alias="user_id", gt=0)',

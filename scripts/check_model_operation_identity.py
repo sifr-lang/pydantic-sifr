@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Record one static-program identity for all M11 model operations."""
+"""Record one static-program identity for all demonstrated model operations."""
 
 from __future__ import annotations
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEMO = ROOT / "demos/milestone_m11_model_operations"
+DEMO = ROOT / "demos/model_validation"
 SOURCE = DEMO / "src/main.sifr"
 IDENTITY = re.compile(
     r"__SIFR_STATIC_PROGRAM_IDENTITY_USER_[A-Z0-9_]+: \[u8; 32\] = \[([^]]+)\];"
@@ -27,11 +27,11 @@ def main() -> int:
     source = SOURCE.read_text(encoding="utf-8")
     for operation in (
         "User.model_validate_json(",
-        "from_json.model_dump_json(",
+        "user.model_dump_json(",
         "User.model_json_schema(",
     ):
         if operation not in source:
-            raise SystemExit(f"M11 demo is missing {operation}")
+            raise SystemExit(f"model validation demo is missing {operation}")
     with tempfile.TemporaryDirectory(
         prefix="pydantic-sifr-model-operation-identity-", dir=ROOT / "demos"
     ) as raw:

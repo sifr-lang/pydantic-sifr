@@ -9,9 +9,9 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEMO = ROOT / "demos/pydantic_sifr_demo.sifr"
-HARNESS = ROOT / "demos/milestone_ps_6_demo"
-SNAPSHOT = ROOT / "tests/snapshots/pydantic_sifr_demo.stdout"
+DEMO = ROOT / "demos/model_validation/src/main.sifr"
+HARNESS = ROOT / "demos/model_validation"
+SNAPSHOT = ROOT / "tests/snapshots/model_validation.stdout"
 
 
 def run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[str]:

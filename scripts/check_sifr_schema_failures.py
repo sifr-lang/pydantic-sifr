@@ -10,7 +10,7 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-HARNESS = ROOT / "demos/milestone_m8_fields_configuration"
+HARNESS = ROOT / "demos/fields_and_configuration"
 CASES = {
     "tests/sifr/invalid_custom_error.sifr": (
         "custom error declaration is incomplete"

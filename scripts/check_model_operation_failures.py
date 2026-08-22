@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HARNESS = ROOT / "demos/milestone_m11_model_operations"
+HARNESS = ROOT / "demos/model_validation"
 SOURCE = """from pydantic_sifr import BaseModel
 
 

@@ -1,0 +1,116 @@
+scope = "validation_core"
+upstream_commit = "f59e929c999e8b2efc7b12fd0bc1685c1a186be3"
+
+[[family]]
+name = "core/json_values"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/json_foundation.rs"
+difference = "JSON integers stay exact. JSON fractional numbers use the documented f64 input boundary. Bytes can use explicit URL-safe base64 policy."
+
+[[family]]
+name = "validators/numeric"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = "Integer strings must use canonical decimal syntax. Fixed integers return typed overflow errors."
+
+[[family]]
+name = "validators/complex"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = "Complex values use two finite f64 components and Rust parsing rules."
+
+[[family]]
+name = "validators/text_bytes"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = "Patterns use bounded Rust regex syntax. String transforms have one fixed order."
+
+[[family]]
+name = "validators/temporal"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_special.rs"
+difference = "Temporal values preserve declared offsets. Relative checks use one caller-supplied clock."
+
+[[family]]
+name = "validators/collections"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_collections.rs"
+difference = "Strict native input keeps explicit list, tuple, set, frozen-set, object, and mapping kinds."
+
+[[family]]
+name = "validators/generator"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_collections.rs"
+difference = "ValidatedIterator reports each deferred error through its fallible next item."
+
+[[family]]
+name = "validators/embedded_json"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_collections.rs"
+difference = "Embedded JSON requires an explicit child schema and shares the caller's depth budget."
+
+[[family]]
+name = "validators/none"
+class = "same"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = ""
+
+[[family]]
+name = "validators/url"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_special.rs"
+difference = "URLs use the Rust url parser and return its canonical absolute representation."
+
+[[family]]
+name = "validators/uuid"
+class = "same"
+evidence = "backend/pydantic_sifr_core/tests/validation_special.rs"
+difference = ""
+
+[[family]]
+name = "core/fixed_integer"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = "Exact integers are unbounded. Fixed targets use explicit signed or unsigned widths."
+
+[[family]]
+name = "core/pattern_value"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_special.rs"
+difference = "Compiled patterns preserve source and supported flags without a Python regex fallback."
+
+[[family]]
+name = "core/string_pipeline_order"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = "The order is conversion, strip, ASCII, Unicode length, pattern, then case conversion."
+
+[[family]]
+name = "core/decimal_digit_counting"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = "Digit checks use exact normalized BigDecimal values and bounded exponents."
+
+[[family]]
+name = "core/fraction"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = "Fractions use normalized arbitrary-precision rational values."
+
+[[family]]
+name = "core/strings_profile"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = "The profile accepts structural containers with string scalar leaves only."
+
+[[family]]
+name = "core/validation_errors"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_collections.rs"
+difference = "Errors use Sifr locations, bounded aggregation, and an explicit truncation marker."
+
+[[family]]
+name = "core/json_limit_error"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_scalars.rs"
+difference = "Integer digit exhaustion fails before arbitrary-precision allocation."

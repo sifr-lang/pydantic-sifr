@@ -1,0 +1,190 @@
+from pydantic_sifr import (
+    BaseModel,
+    SerializationError,
+    computed_field,
+    field_serializer,
+    model_serializer,
+)
+from sifr.json import JsonValue
+
+
+class SerializerFailure(Error):
+    message: str
+
+
+class PlainModel(BaseModel):
+    value: int64
+    label: str
+
+
+class Invoice(BaseModel):
+    amount: int64
+    note: str | None
+
+    @field_serializer("amount")
+    def serialize_amount(self, own value: int64) -> str:
+        return "$" + str(value)
+
+    @staticmethod
+    @field_serializer("note", when_used="json-unless-none")
+    def serialize_note(own value: str | None) -> str:
+        if value is None:
+            return "missing"
+        return "note:" + value
+
+    @computed_field(alias="display")
+    def display_name(self) -> str:
+        return "invoice"
+
+
+class PolicyModel(BaseModel):
+    always_value: str
+    unless_none_value: str | None
+    json_value: str
+    json_unless_none_value: str | None
+
+    @staticmethod
+    @field_serializer("always_value")
+    def serialize_always(own value: str) -> str:
+        return "always:" + value
+
+    @staticmethod
+    @field_serializer("unless_none_value", when_used="unless-none")
+    def serialize_unless_none(own value: str | None) -> str:
+        if value is None:
+            return "unexpected"
+        return "unless:" + value
+
+    @staticmethod
+    @field_serializer("json_value", when_used="json")
+    def serialize_json(own value: str) -> str:
+        return "json:" + value
+
+    @staticmethod
+    @field_serializer("json_unless_none_value", when_used="json-unless-none")
+    def serialize_json_unless_none(own value: str | None) -> str:
+        if value is None:
+            return "unexpected"
+        return "json-unless:" + value
+
+
+class Envelope:
+    token: str
+
+
+class Replaced(BaseModel):
+    value: int64
+
+    @model_serializer()
+    def serialize_model(self) -> Envelope:
+        return Envelope("value-" + str(self.value))
+
+
+class SerializerContext:
+    suffix: str
+
+
+class Contextual(BaseModel):
+    value: str
+
+    @field_serializer("value")
+    @classmethod
+    def serialize_value(cls, own value: str, mut context: SerializerContext) -> str:
+        return value + context.suffix
+
+
+class Failing(BaseModel):
+    value: str
+
+    @staticmethod
+    @field_serializer("value")
+    def reject(own value: str) -> Result[str, SerializerFailure]:
+        raise SerializerFailure("serializer rejected " + value)
+
+
+class Detail:
+    label: str
+
+
+class StructuredCallbacks(BaseModel):
+    value: str
+
+    @staticmethod
+    @field_serializer("value")
+    def serialize_value(own value: str) -> Detail:
+        return Detail("field:" + value)
+
+    @computed_field()
+    def summary(self) -> Detail:
+        return Detail("computed:" + self.value)
+
+
+def main() -> Result[None, SerializationError | RustPanicError]:
+    try:
+        zero: int = 0
+        seven: int64 = 7
+        plain: PlainModel = PlainModel(seven, "plain")
+        plain_dump: dict[str, JsonValue] = plain.model_dump()
+        assert len(plain_dump) == 2
+        assert plain_dump.get("value") is not None
+
+        invoice: Invoice = Invoice(seven, None)
+        structural: dict[str, JsonValue] = invoice.model_dump_options(
+            None, None, True, False, False
+        )
+        assert structural.get("amount") is not None
+        assert structural.get("display") is not None
+        assert structural.get("note") is not None
+
+        json_bytes: bytes = invoice.model_dump_json()
+        assert json_bytes == b'{"amount":"$7","note":null,"display_name":"invoice"}'
+
+        policies: PolicyModel = PolicyModel("a", "u", "j", None)
+        policy_dump: dict[str, JsonValue] = policies.model_dump()
+        assert policy_dump.get("always_value") is not None
+        assert policy_dump.get("unless_none_value") is not None
+        assert policy_dump.get("json_value") is not None
+        policy_json: bytes = policies.model_dump_json()
+        assert (
+            policy_json
+            == b'{"always_value":"always:a","unless_none_value":"unless:u","json_value":"json:j","json_unless_none_value":null}'
+        )
+
+        replacement: Replaced = Replaced(seven)
+        replaced: bytes = replacement.model_dump_json()
+        assert replaced == b'{"token":"value-7"}'
+
+        context: SerializerContext = SerializerContext("!")
+        contextual: Contextual = Contextual("checked")
+        contextual_dump: bytes = contextual.model_dump_json_with_context(
+            context, None, None, False, False, False
+        )
+        assert contextual_dump == b'{"value":"checked!"}'
+
+        included: dict[str, JsonValue] = invoice.model_dump_options(
+            ["amount"], None, False, False, False
+        )
+        assert len(included) == 1
+        assert included.get("amount") is not None
+
+        structured_callbacks: StructuredCallbacks = StructuredCallbacks("nested")
+        structured_json: bytes = structured_callbacks.model_dump_json()
+        assert (
+            structured_json
+            == b'{"value":{"label":"field:nested"},"summary":{"label":"computed:nested"}}'
+        )
+
+        failed: bool = False
+        try:
+            rejected: dict[str, JsonValue] = Failing("bad").model_dump()
+            assert len(rejected) == zero
+        except SerializationError as error:
+            failed = error.message.find("serializer rejected bad") is not None
+        except RustPanicError as error:
+            raise error
+        assert failed
+    except SerializationError as error:
+        raise error
+    except RustPanicError as error:
+        raise error
+    return None

@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HARNESS = ROOT / "demos/milestone_m9_validators"
+HARNESS = ROOT / "demos/validators"
 HEADER = "from pydantic_sifr import BaseModel, field_validator, model_validator\n\n"
 
 CASES = {

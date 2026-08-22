@@ -1,0 +1,134 @@
+from pydantic_sifr import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    JsonSchemaError,
+    RootModel,
+    SerializationError,
+    TypeAdapter,
+    ValidationError,
+)
+
+
+class Address(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    city: str
+    postal_code: int64
+
+
+class AddressInput:
+    city: str
+    postal_code: str
+
+
+class UserInput:
+    user_id: str
+    name: str
+    address: AddressInput
+
+
+class User(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: int64 = Field(alias="user_id", gt=0)
+    name: str = Field(min_length=1, max_length=100)
+    address: Address
+    active: bool = True
+
+
+class Envelope[T](BaseModel):
+    value: T
+
+
+class ConcreteEnvelope(Envelope[int64]):
+    label: str
+
+
+class IntRoot(RootModel[int64]):
+    pass
+
+
+def main() -> Result[
+    None,
+    ValidationError | SerializationError | JsonSchemaError | RustPanicError,
+]:
+    try:
+        payload: bytes = (
+            b'{"user_id":7,"name":"Ada","address":{"city":"NY","postal_code":10001}}'
+        )
+        user: User = User.model_validate_json(payload)
+        expected_id: int64 = 7
+        expected_postal: int64 = 10001
+        assert user.id == expected_id
+        assert user.active
+        assert user.address.postal_code == expected_postal
+
+        strings_input: UserInput = UserInput(
+            "8",
+            "Lin",
+            AddressInput("SF", "94105"),
+        )
+        strings: User = User.model_validate_strings(strings_input)
+        expected_strings_id: int64 = 8
+        expected_strings_postal: int64 = 94105
+        assert strings.id == expected_strings_id
+        assert strings.address.postal_code == expected_strings_postal
+
+        structural: User = User.model_validate(
+            UserInput(
+                "9",
+                "Mira",
+                AddressInput("LA", "90001"),
+            )
+        )
+        expected_structural_id: int64 = 9
+        expected_structural_postal: int64 = 90001
+        assert structural.id == expected_structural_id
+        assert structural.address.postal_code == expected_structural_postal
+
+        dumped: bytes = user.model_dump_json()
+        assert (
+            dumped
+            == b'{"id":7,"name":"Ada","address":{"city":"NY","postal_code":10001},"active":true}'
+        )
+        schema: bytes = User.model_json_schema()
+        adapted_schema: bytes = TypeAdapter[User].model_json_schema()
+        assert schema == adapted_schema
+
+        adapted: User = TypeAdapter[User].model_validate_json(payload)
+        assert adapted.id == expected_id
+
+        rooted: IntRoot = IntRoot.model_validate_strings("41")
+        expected_root: int64 = 41
+        assert rooted.root == expected_root
+        root_dump: bytes = rooted.model_dump_json()
+        assert root_dump == b"41"
+
+        concrete: ConcreteEnvelope = ConcreteEnvelope.model_validate_json(
+            b'{"value":42,"label":"answer"}'
+        )
+        expected_concrete_value: int64 = 42
+        assert concrete.value == expected_concrete_value
+        concrete_dump: bytes = concrete.model_dump_json()
+        assert concrete_dump == b'{"value":42,"label":"answer"}'
+
+        error_seen: bool = False
+        try:
+            invalid: User = User.model_validate_json(
+                b'{"user_id":0,"name":"","address":{"city":"NY","postal_code":10001},"extra":true}'
+            )
+            assert invalid.id != expected_id
+        except ValidationError as error:
+            error_seen = error.message.startswith('{"errors":[{"code":"greater_than"')
+        except RustPanicError as error:
+            raise error
+        assert error_seen
+    except ValidationError as error:
+        raise error
+    except SerializationError as error:
+        raise error
+    except JsonSchemaError as error:
+        raise error
+    except RustPanicError as error:
+        raise error
+    print("pydantic-sifr model validation demo passed")
+    return None

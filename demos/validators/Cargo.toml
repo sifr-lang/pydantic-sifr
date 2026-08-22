@@ -1,0 +1,12 @@
+[package]
+name = "pydantic-sifr-validators"
+version = "0.0.0"
+edition = "2024"
+
+[package.metadata.sifr]
+manifest = "sifr.toml"
+
+[dependencies]
+pydantic-sifr = { path = "../.." }
+
+[workspace]

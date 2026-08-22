@@ -198,39 +198,34 @@ ordered details, typed locations, expected values, and the truncation fact.
 The bridge escapes all text before it writes this object. A contained Rust
 panic remains a distinct `RustPanicError`.
 
-## PS5 compatibility ledger
+## Validation core compatibility
 
-`tests/compatibility/ps5.toml` classifies every required PS5 fixture family as
-the same or adapted. Each row names executable local evidence and describes
-every adapted semantic difference. A unit gate checks total coverage against
-the pinned upstream anchor ledger.
+`tests/compatibility/validation_core.toml` classifies each required validation
+family as the same or adapted. Each row names local evidence and describes each
+adapted semantic difference. A unit gate compares the rows with the pinned
+upstream anchor ledger.
 
-## PS6 compatibility ledger
+## Model validation compatibility
 
-`tests/compatibility/ps6.toml` classifies each required PS6 fixture family.
-The ledger covers models, fields, defaults, nullable fields, aliases,
+`tests/compatibility/model_validation.toml` classifies each required model
+family. The ledger covers fields, defaults, nullable fields, aliases,
 configuration, constraints, structural input, and the public model API. A unit
-gate checks total coverage against the pinned upstream anchor ledger.
+gate compares the rows with the pinned upstream anchor ledger.
 
-## PS7 compatibility ledger
+## Sums and recursion compatibility
 
-`tests/compatibility/ps7.toml` records each delivered PS7 family. The current
-rows cover literals, enums, nullable and ordinary unions, field/path tagged
-unions, definitions and recursion, strictness controls, input-profile controls,
-typed chains, recursion limits, and smart-union ranking. Each adapted row states
-the Sifr type and ownership rules. A unit gate binds each upstream-derived row
-to the pinned anchor ledger. The Sifr-native recursion-limit and smart-ranking
-families have direct local evidence and do not claim upstream anchors. Typed
-callback discriminators, validator callbacks, and caller-owned context remain
-assigned to the later PS7 callback waves. The PS7 validator API,
-discriminated-union API, and generic-recursion API families also remain
-pending.
+`tests/compatibility/sums_and_recursion.toml` records each delivered family.
+The rows cover literals, enums, unions, tagged unions, definitions, recursion,
+strictness controls, input profiles, typed chains, and smart-union ranking.
+Each adapted row states the Sifr type and ownership rules. A unit gate binds
+each upstream-derived row to the pinned anchor ledger. Sifr-native families use
+direct local evidence and do not claim upstream anchors.
 
-## PS10 compatibility matrix
+## Public API compatibility matrix
 
-`tests/compatibility/ps10.toml` is the machine-readable source for the public
+`tests/compatibility/public_api.toml` is the machine-readable source for the public
 matrix in `docs/compatibility.md`. It distinguishes delivered adaptations,
 blocked APIs, and terminal exclusions. A blocked row names an owning issue. An
 excluded row states a terminal reason and has no blocker. The unit gate checks
-status parity with the public table. It also binds the selected PS10 upstream
+status parity with the public table. It also binds the selected upstream
 families to the pinned anchor ledger.

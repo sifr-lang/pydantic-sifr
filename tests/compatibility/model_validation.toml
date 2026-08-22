@@ -1,0 +1,80 @@
+scope = "model_validation"
+upstream_commit = "f59e929c999e8b2efc7b12fd0bc1685c1a186be3"
+
+[[family]]
+name = "core/json_models"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_models.rs"
+difference = "Model schemas construct ordinary typed Sifr classes from one checked JSON arena."
+
+[[family]]
+name = "validators/model_fields"
+class = "same"
+evidence = "backend/pydantic_sifr_core/tests/validation_models.rs"
+difference = ""
+
+[[family]]
+name = "core/model_error_locations"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_models.rs"
+difference = "Errors use typed Sifr field, alias, index, and mapping-key location segments."
+
+[[family]]
+name = "core/strings_profile_models"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_models.rs"
+difference = "Strings mode accepts only structural containers whose terminal scalar leaves are strings."
+
+[[family]]
+name = "validators/typed_dict"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_models.rs"
+difference = "A declared Sifr class supplies the fixed record shape and typed construction target."
+
+[[family]]
+name = "validators/dataclasses"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/typed_model_construction.rs"
+difference = "Ordinary Sifr classes replace Python dataclass reflection and generated initializer behavior."
+
+[[family]]
+name = "validators/defaults"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_models.rs"
+difference = "The compiler seals immutable declared defaults in the static schema program."
+
+[[family]]
+name = "validators/nullable"
+class = "same"
+evidence = "backend/pydantic_sifr_core/tests/validation_models.rs"
+difference = ""
+
+[[family]]
+name = "api/base_model"
+class = "adapted"
+evidence = "demos/model_validation/src/main.sifr"
+difference = "Fallible generic functions and thin class methods replace Python exception-based model methods."
+
+[[family]]
+name = "api/aliases"
+class = "same"
+evidence = "demos/model_validation/src/main.sifr"
+difference = ""
+
+[[family]]
+name = "api/config_fields"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/validation_models.rs"
+difference = "Compiler-owned declaration metadata replaces runtime Python configuration objects."
+
+[[family]]
+name = "api/constraints"
+class = "adapted"
+evidence = "demos/model_validation/src/main.sifr"
+difference = "Compiler-owned field metadata supplies static integer and string constraints."
+
+[[family]]
+name = "core/structural_models"
+class = "adapted"
+evidence = "backend/pydantic_sifr_core/tests/structural_input.rs"
+difference = "Compiler-generated structural visitation writes the checked input arena directly."
